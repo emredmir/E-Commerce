@@ -1,0 +1,43 @@
+<h1>Hesap Sayfası</h1>
+
+{% if user.is_authenticated %}
+    <!-- Giriş yapmış kullanıcıya gösterilecek -->
+    <p>Merhaba, {{ user.username }}</p>
+{% else %}
+    <!-- Giriş yapmamışsa "Giriş Yap" butonu -->
+    <a href="{% url 'accounts:login' %}" class="btn btn-primary">Giriş Yap</a>
+{% endif %}
+
+<hr>
+
+<a href="{% url 'core:home' %}" class="btn btn-primary">Ana Sayfa</a>
+
+<ul>
+    <!-- Siparişlerim -->
+    <li>
+        <a href="{% if user.is_authenticated %}{% url 'accounts:profile' %}{% else %}{% url 'accounts:login' %}?next={% url 'accounts:profile' %}{% endif %}">
+            Siparişlerim
+        </a>
+    </li>
+
+    <!-- Listelerim -->
+    <li>
+        <a href="{% if user.is_authenticated %}{% url 'accounts:profile' %}{% else %}{% url 'accounts:login' %}?next={% url 'accounts:profile' %}{% endif %}">
+            Listelerim
+        </a>
+    </li>
+
+    <!-- Adreslerim -->
+    <li>
+        <a href="{% if user.is_authenticated %}{% url 'accounts:profile' %}{% else %}{% url 'accounts:login' %}?next={% url 'accounts:profile' %}{% endif %}">
+            Adreslerim
+        </a>
+    </li>
+
+    <!-- Satıcı Ol -->
+    <li>
+        <a href="{% if user.is_authenticated %}{% url 'accounts:profile' %}{% else %}{% url 'accounts:login' %}?next={% url 'accounts:profile' %}{% endif %}">
+            Satıcı Ol
+        </a>
+    </li>
+</ul>
