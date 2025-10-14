@@ -1,0 +1,12 @@
+# Ortak gizli dosyalar
+.env
+*.pyc
+__pycache__/
+db.sqlite3
+*.log
+
+# VSCode ayarları
+.vscode/
+
+# Virtual environment
+venv/

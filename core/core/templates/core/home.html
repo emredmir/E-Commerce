@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title> {% block title %} XXX - E-Ticaret {% endblock %}</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+    body {
+        margin: 0;
+        font-family: 'Segoe UI', sans-serif;
+        background-color: #f8f9fa;
+    }
+
+    /* --- 1. Üst Bar --- */
+    .top-bar {
+        background: linear-gradient(90deg, #00b4d8, #0096c7);
+        padding: 10px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: white;
+    }
+
+    .site-name {
+        font-size: 1.5rem;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .location {
+        position: relative;
+    }
+
+    .location-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255,255,255,0.15);
+        border: none;
+        color: white;
+        padding: 6px 12px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 0.9rem;
+    }
+
+    .location-dropdown {
+        display: none;
+        position: absolute;
+        left: 0;
+        background: white;
+        color: black;
+        width: 200px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        border-radius: 6px;
+        z-index: 10;
+    }
+
+    .location-dropdown a {
+        display: block;
+        padding: 10px;
+        text-decoration: none;
+        color: black;
+    }
+
+    .location-dropdown a:hover {
+        background: #f1f1f1;
+    }
+
+    .location:hover .location-dropdown {
+        display: block;
+    }
+
+    .search-bar {
+        display: flex;
+        flex: 1;
+        max-width: 600px;
+        background: white;
+        border-radius: 25px;
+        overflow: hidden;
+        margin: 0 20px;
+    }
+
+    .category-select {
+        border: none;
+        background: #e9ecef;
+        padding: 10px;
+        font-size: 0.9rem;
+    }
+
+    .search-input {
+        flex: 1;
+        border: none;
+        padding: 10px;
+        outline: none;
+    }
+
+    .search-btn {
+        background: #0077b6;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        cursor: pointer;
+    }
+
+    .account-cart {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .dropdown {
+        position: relative;
+    }
+
+    .dropdown-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: none;
+        border: none;
+        color: white;
+        cursor: pointer;
+        font-size: 0.95rem;
+    }
+
+    .dropdown-content {
+        display: none;
+        position: absolute;
+        right: 0;
+        background: white;
+        color: black;
+        min-width: 200px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        border-radius: 6px;
+        z-index: 100;
+    }
+
+    .dropdown-content a {
+        display: block;
+        padding: 10px;
+        text-decoration: none;
+        color: black;
+    }
+
+    .dropdown-content a:hover {
+        background: #f2f2f2;
+    }
+
+    .dropdown:hover .dropdown-content {
+        display: block;
+    }
+
+    /* --- 2. Kategori Bar --- */
+    .category-bar {
+        background: white;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 10px 20px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+
+    .category-dropdown {
+        position: relative;
+    }
+
+    .category-btn {
+        background: #00b4d8;
+        color: white;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 6px;
+        cursor: pointer;
+      	font-size: 0.95rem;
+    }
+
+    .category-list {
+        display: none;
+        position: absolute;
+        left: 0;
+        background: white;
+        width: 600px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        border-radius: 6px;
+        padding: 10px;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        z-index: 50;
+    }
+
+    .category-list a {
+        display: block;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 6px;
+        text-decoration: none;
+        color: black;
+        text-align: center;
+        transition: background 0.2s;
+    }
+
+    .category-list a:hover {
+        background: #e0f7fa;
+    }
+
+    .category-dropdown:hover .category-list {
+        display: grid;
+    }
+
+    .category-bar a {
+        color: #333;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    /* --- 3. Öne Çıkanlar --- */
+    .featured {
+        display: flex;
+        gap: 20px;
+        padding: 20px;
+        background: linear-gradient(90deg, #e0f7fa, #f8f9fa);
+        overflow-x: auto;
+    }
+
+    .featured-item {
+        min-width: 180px;
+        background: white;
+        padding: 15px;
+        text-align: center;
+        border-radius: 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        cursor: pointer;
+        transition: transform 0.2s ease;
+    }
+
+    .featured-item:hover {
+        transform: translateY(-4px);
+    }
+
+    /* --- Ürün Bölümleri --- */
+    .section {
+        margin: 20px;
+        background: rgba(255,255,255,0.7);
+        border-radius: 12px;
+        padding: 15px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+
+    .section h2 {
+        margin-bottom: 15px;
+        color: #0077b6;
+    }
+
+    .products {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 15px;
+    }
+
+    .product {
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+        position: relative;
+        transition: transform 0.2s ease;
+    }
+
+    .product:hover {
+        transform: translateY(-4px);
+    }
+
+    .product img {
+        width: 100%;
+        display: block;
+    }
+
+    .product-info {
+        padding: 10px;
+        text-align: center;
+    }
+
+    .product-info h3 {
+        font-size: 1rem;
+        margin: 5px 0;
+        color: #333;
+    }
+
+    .product-info p {
+        color: #0096c7;
+        font-weight: bold;
+    }
+
+    .add-cart {
+        display: none;
+        position: absolute;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #00b4d8;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 0.9rem;
+    }
+
+    .product:hover .add-cart {
+        display: block;
+    }
+
+    /* --- Reklam Alanı --- */
+    .ad-section {
+        text-align: center;
+        padding: 50px;
+        background: #eee;
+        margin: 20px;
+        border-radius: 12px;
+        font-weight: bold;
+    }
+
+    /* --- Footer --- */
+    footer {
+        background: #0077b6;
+        color: white;
+        padding: 20px;
+        text-align: center;
+        margin-top: 30px;
+    }
+</style>
+</head>
+<body>
+
+<!-- 1. Üst Bar -->
+<div class="top-bar">
+    <div class="site-name">XXX</div>
+
+    <div class="location">
+        <button class="location-btn"><i class="fa-solid fa-location-dot"></i> Konum Seç</button>
+        <div class="location-dropdown">
+            <a href="#">Adreslerim</a>
+            <a href="#">Yeni Adres Ekle</a>
+        </div>
+    </div>
+
+    <div class="search-bar">
+        <select class="category-select">
+            <option>Kategoriler</option>
+            <option>Elektronik</option>
+            <option>Moda</option>
+            <option>Spor</option>
+        </select>
+        <input type="text" class="search-input" placeholder="Ürün ara...">
+        <button class="search-btn">Ara</button>
+    </div>
+
+    <div class="account-cart">
+        <div class="dropdown">
+            {% if user.is_authenticated %}
+                <button class="dropdown-btn"><i class="fa-solid fa-user"></i> Hesabım<br>{{ user.first_name }}</button>
+                <div class="dropdown-content">
+                    <a href="{% url 'accounts:profile' %}">Hesabım</a>
+                    <a href="#">Siparişlerim</a>
+                    <a href="#">Listelerim</a>
+                    <a href="{% url 'accounts:logout' %}">Çıkış Yap</a>
+                </div>
+            {% else %}
+                <button class="dropdown-btn"><i class="fa-solid fa-user"></i> Giriş Yap<br>Üye Ol</button>
+                <div class="dropdown-content">
+                    <a href="{% url 'accounts:login' %}">Giriş Yap</a>
+                    <a href="{% url 'accounts:register' %}">Üye Ol</a>
+                    <a href="{% url 'accounts:profile' %}">Hesabım</a>
+                    <a href="#">Siparişlerim</a>
+                    <a href="#">Listelerim</a>
+                </div>
+            {% endif %}
+        </div>
+        <a href="#" style="color:white; text-decoration:none; display:flex; align-items:center; gap:6px;">
+            <i class="fa-solid fa-cart-shopping"></i> Sepetim (0)
+        </a>
+    </div>
+</div>
+
+<!-- 2. Kategori Bar -->
+<div class="category-bar">
+    <div class="category-dropdown">
+        <button class="category-btn">Tüm Kategoriler</button>
+        <div class="category-list">
+            <a href="#">Elektronik</a>
+            <a href="#">Moda</a>
+            <a href="#">Spor</a>
+            <a href="#">Kitap</a>
+            <a href="#">Ev & Yaşam</a>
+            <a href="#">Hobi</a>
+        </div>
+    </div>
+    <a href="#">Elektronik</a>
+    <a href="#">Moda</a>
+    <a href="#">Spor</a>
+    <a href="#">Kitap</a>
+</div>
+
+{% block content %}
+
+<!-- 3. Öne Çıkanlar -->
+<div class="featured">
+    <div class="featured-item">Uygulama İndirimleri</div>
+    <div class="featured-item">Günün Fırsatları</div>
+    <div class="featured-item">En Popüler</div>
+    <div class="featured-item">Yeni Gelenler</div>
+</div>
+
+<!-- 4. Ürün Bölümleri -->
+<div class="section">
+    <h2>500 TL Altı Ürünler</h2>
+    <div class="products">
+        <div class="product">
+            <img src="https://dummyimage.com/200x200/cccccc/000000&text=Resim" alt="">
+            <div class="product-info">
+                <h3>Ürün 1</h3>
+                <p>₺499</p>
+            </div>
+            <button class="add-cart">Sepete Ekle</button>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h2>1000 TL Altı Ürünler</h2>
+    <div class="products">
+        <div class="product">
+            <img src="https://dummyimage.com/200x200/cccccc/000000&text=Resim" alt="">
+            <div class="product-info">
+                <h3>Ürün 2</h3>
+                <p>₺899</p>
+            </div>
+            <button class="add-cart">Sepete Ekle</button>
+        </div>
+    </div>
+</div>
+
+<div class="ad-section">
+    📢 Reklam Alanı
+</div>
+
+<div class="section">
+    <h2>Moda</h2>
+    <div class="products">
+        <div class="product">
+            <img src="https://dummyimage.com/200x200/cccccc/000000&text=Resim" alt="">
+            <div class="product-info">
+                <h3>Ürün 3</h3>
+                <p>₺299</p>
+            </div>
+            <button class="add-cart">Sepete Ekle</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+<footer>
+    © 2025 XXX E-Ticaret | Hakkımızda | İletişim | Gizlilik
+</footer>
+
+</body>
+</html>
