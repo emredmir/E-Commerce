@@ -1,0 +1,27 @@
+{% extends 'store/store_dashboard_base.html' %}
+
+{% block dashboard_content %}
+    <h2 style="margin-top: 0; color: var(--primary-dark);">Mağaza Yönetimi</h2>
+    <p class="text-muted">Hoşgeldin, buradan <strong>{{ store.store_name }}</strong> mağazanı yönetebilirsin.</p>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 30px;">
+        
+        <div style="background: var(--background-color); padding: 20px; border-radius: 8px; text-align: center;">
+            <i class="fas fa-lira-sign" style="font-size: 2rem; color: var(--primary-color); margin-bottom: 10px;"></i>
+            <h3 style="margin: 5px 0;">0 ₺</h3>
+            <span style="color: #666;">Toplam Satış</span>
+        </div>
+
+        <div style="background: var(--background-color); padding: 20px; border-radius: 8px; text-align: center;">
+            <i class="fas fa-box-open" style="font-size: 2rem; color: var(--primary-color); margin-bottom: 10px;"></i>
+            <h3 style="margin: 5px 0;">0</h3>
+            <span style="color: #666;">Aktif Ürün</span>
+        </div>
+
+        <div style="background: var(--background-color); padding: 20px; border-radius: 8px; text-align: center;">
+            <i class="fas fa-shopping-cart" style="font-size: 2rem; color: var(--primary-color); margin-bottom: 10px;"></i>
+            <h3 style="margin: 5px 0;">0</h3>
+            <span style="color: #666;">Bekleyen Sipariş</span>
+        </div>
+    </div>
+{% endblock %}

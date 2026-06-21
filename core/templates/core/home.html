@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>XXX - E-Ticaret</title>
+<title> {% block title %} XXX - E-Ticaret {% endblock %}</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
     body {
@@ -403,6 +403,8 @@
     <a href="#">Kitap</a>
 </div>
 
+{% block content %}
+
 <!-- 3. Öne Çıkanlar -->
 <div class="featured">
     <div class="featured-item">Uygulama İndirimleri</div>
@@ -416,7 +418,7 @@
     <h2>500 TL Altı Ürünler</h2>
     <div class="products">
         <div class="product">
-            <img src="https://via.placeholder.com/200" alt="">
+            <img src="https://dummyimage.com/200x200/cccccc/000000&text=Resim" alt="">
             <div class="product-info">
                 <h3>Ürün 1</h3>
                 <p>₺499</p>
@@ -430,7 +432,7 @@
     <h2>1000 TL Altı Ürünler</h2>
     <div class="products">
         <div class="product">
-            <img src="https://via.placeholder.com/200" alt="">
+            <img src="https://dummyimage.com/200x200/cccccc/000000&text=Resim" alt="">
             <div class="product-info">
                 <h3>Ürün 2</h3>
                 <p>₺899</p>
@@ -448,7 +450,7 @@
     <h2>Moda</h2>
     <div class="products">
         <div class="product">
-            <img src="https://via.placeholder.com/200" alt="">
+            <img src="https://dummyimage.com/200x200/cccccc/000000&text=Resim" alt="">
             <div class="product-info">
                 <h3>Ürün 3</h3>
                 <p>₺299</p>
@@ -457,6 +459,8 @@
         </div>
     </div>
 </div>
+
+{% endblock %}
 
 <footer>
     © 2025 XXX E-Ticaret | Hakkımızda | İletişim | Gizlilik

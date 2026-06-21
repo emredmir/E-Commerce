@@ -1,0 +1,82 @@
+{% extends "accounts/profile.html" %}
+{% block title %}XXX - Şifre Değiştir{% endblock %}
+
+{% block main_content %}
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h2 class="text-center">{{ form_title }}</h2>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                        <div class="mb-3">
+                            {% for message in messages %}
+                                <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        {% if pending_request %}
+    <div style="background-color: #e0f7fa; border-left: 5px solid #00b4d8; padding: 20px; margin-bottom: 25px; border-radius: 4px;">
+        <h4 style="color: #0077b6; margin-top: 0; font-size: 1.1rem;">
+            <i class="fas fa-clock"></i> Onay Bekleyen Değişiklikleriniz Var
+        </h4>
+        <p style="margin-bottom: 15px; font-size: 0.95rem; color: #555;">
+            Aşağıdaki değişiklikler admin onayı bekliyor. İşleminiz onaylanana kadar eski bilgileriniz sistemde geçerli olmaya devam edecektir.
+        </p>
+        
+        <ul style="margin-bottom: 0; padding-left: 20px; color: #333; font-size: 0.95rem;">
+            {% if pending_request.new_company_name and pending_request.new_company_name != seller_profile.company_name %}
+                <li style="margin-bottom: 5px;">
+                    <strong>Şirket Adı:</strong> <del style="color: #999;">{{ seller_profile.company_name }}</del> 
+                    <i class="fas fa-arrow-right mx-2" style="color: #00b4d8;"></i> 
+                    <span style="color: #28a745; font-weight: 500;">{{ pending_request.new_company_name }}</span>
+                </li>
+            {% endif %}
+            
+            {% if pending_request.new_iban and pending_request.new_iban != seller_profile.iban %}
+                <li style="margin-bottom: 5px;">
+                    <strong>IBAN:</strong> <del style="color: #999;">{{ seller_profile.iban }}</del> 
+                    <i class="fas fa-arrow-right mx-2" style="color: #00b4d8;"></i> 
+                    <span style="color: #28a745; font-weight: 500;">{{ pending_request.new_iban }}</span>
+                </li>
+            {% endif %}
+
+            {% if pending_request.new_company_phone and pending_request.new_company_phone != seller_profile.company_phone %}
+                <li style="margin-bottom: 5px;">
+                    <strong>Telefon:</strong> <del style="color: #999;">{{ seller_profile.company_phone|default:"-" }}</del> 
+                    <i class="fas fa-arrow-right mx-2" style="color: #00b4d8;"></i> 
+                    <span style="color: #28a745; font-weight: 500;">{{ pending_request.new_company_phone }}</span>
+                </li>
+            {% endif %}
+
+            {% if pending_request.new_company_address and pending_request.new_company_address != seller_profile.company_address %}
+                <li style="margin-bottom: 5px;">
+                    <strong>Adres:</strong> <del style="color: #999;">{{ seller_profile.company_address }}</del> 
+                    <i class="fas fa-arrow-right mx-2" style="color: #00b4d8;"></i> 
+                    <span style="color: #28a745; font-weight: 500;">{{ pending_request.new_company_address }}</span>
+                </li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+
+
+                        {{ form.as_p }}
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                {{ form_title }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends "core/home.html" %}
+
+{% block title %}Mağazalarım{% endblock %}
+
+{% block content %}
+<div style="max-width: 1200px; margin: 40px auto; padding: 0 20px;">
+    
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+        <div>
+            <h1 style="color: #333; margin: 0; font-weight: 700;">Mağazalarım</h1>
+            <p style="color: #666; margin-top: 5px;">Yönetmek istediğiniz mağazayı seçin veya yeni bir tane açın.</p>
+        </div>
+        <a href="{% url 'store:create_store' %}" style="background-color: #00b4d8; color: white; padding: 12px 24px; border-radius: 30px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 6px rgba(0,180,216, 0.2);">
+            <i class="fas fa-plus"></i> Yeni Mağaza Aç
+        </a>
+    </div>
+
+    {% if stores %}
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 30px;">
+        {% for store in stores %}
+        <div style="background: white; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; transition: transform 0.2s;">
+            
+            <div style="padding: 20px; text-align: center; background: #f8f9fa; border-bottom: 1px solid #eee;">
+                {% if store.logo %}
+                    <img src="{{ store.logo.url }}" style="width: 80px; height: 80px; object-fit: contain; background: white; border-radius: 50%; padding: 5px;">
+                {% else %}
+                    <div style="width: 80px; height: 80px; margin: 0 auto; background: #ddd; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #555;">
+                        <i class="fas fa-store"></i>
+                    </div>
+                {% endif %}
+                </div>
+            </div>
+
+            <div style="padding: 50px 20px 20px 20px; text-align: center; flex-grow: 1; display: flex; flex-direction: column;">
+                <h3 style="margin: 0 0 10px 0; color: #333; font-size: 1.25rem;">{{ store.store_name }}</h3>
+                
+                <div style="margin-bottom: 20px;">
+                     {% if store.status == 'approved' %}
+                        <span style="background: #d4edda; color: #155724; padding: 5px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 500;"><i class="fas fa-check-circle"></i> Yayında</span>
+                     {% elif store.status == 'pending' %}
+                        <span style="background: #fff3cd; color: #856404; padding: 5px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 500;"><i class="fas fa-clock"></i> Onay Bekliyor</span>
+                     {% elif store.status == 'suspended' %}
+                        <span style="background: #f8d7da; color: #721c24; padding: 5px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 500;"><i class="fas fa-ban"></i> Askıya Alındı</span>
+                     {% else %}
+                        <span style="background: #e2e3e5; color: #383d41; padding: 5px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 500;">{{ store.get_status_display }}</span>
+                     {% endif %}
+                </div>
+                
+                <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px; flex-grow: 1;">
+                    {{ store.description|truncatechars:80|default:"Açıklama girilmemiş." }}
+                </p>
+
+                <a href="{% url 'store:store_dashboard' store.slug %}" style="display: block; width: 100%; padding: 12px; background: #00b4d8; color: white; text-align: center; text-decoration: none; border-radius: 25px; font-weight: 600; transition: background 0.2s;">
+                    Yönetim Paneli
+                </a>
+                
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+        <div style="text-align: center; padding: 60px 20px; background: white; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-top: 20px;">
+            <div style="width: 100px; height: 100px; background: #e0f7fa; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto;">
+                <i class="fas fa-store" style="font-size: 3rem; color: #00b4d8;"></i>
+            </div>
+            <h3 style="color: #333; margin-bottom: 10px;">Henüz bir mağazanız yok.</h3>
+            <p style="color: #666; max-width: 500px; margin: 0 auto 30px auto;">Satış yapmaya başlamak ve milyonlarca müşteriye ulaşmak için hemen ilk mağazanızı oluşturun. Kurulum sadece birkaç dakika sürer.</p>
+            <a href="{% url 'store:create_store' %}" style="background-color: #28a745; color: white; padding: 15px 30px; border-radius: 30px; text-decoration: none; font-weight: 600; font-size: 1.1rem; box-shadow: 0 4px 10px rgba(40,167,69, 0.3);">
+                Hemen Mağaza Oluştur
+            </a>
+        </div>
+    {% endif %}
+
+</div>
+
+
+{% endblock %}

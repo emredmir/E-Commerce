@@ -1,43 +1,323 @@
-<h1>Hesap Sayfası</h1>
+{% extends "core/home.html" %}
 
-{% if user.is_authenticated %}
-    <!-- Giriş yapmış kullanıcıya gösterilecek -->
-    <p>Merhaba, {{ user.username }}</p>
-{% else %}
-    <!-- Giriş yapmamışsa "Giriş Yap" butonu -->
-    <a href="{% url 'accounts:login' %}" class="btn btn-primary">Giriş Yap</a>
-{% endif %}
+{% block title %}XXX - Hesabım{% endblock %}
 
-<hr>
+{% block content %}
 
-<a href="{% url 'core:home' %}" class="btn btn-primary">Ana Sayfa</a>
+<!-- Font Awesome 6 (ikonlar için) -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 
-<ul>
-    <!-- Siparişlerim -->
-    <li>
-        <a href="{% if user.is_authenticated %}{% url 'accounts:profile' %}{% else %}{% url 'accounts:login' %}?next={% url 'accounts:profile' %}{% endif %}">
-            Siparişlerim
+<style>
+/* Stil kodları mevcut haliyle bırakılmıştır, sadece HTML bölümü güncellenmiştir. */
+:root {
+  --primary-color: #00b4d8;
+  --primary-dark: #0096c7;
+  --background-color: #f8f9fa;
+  --card-background: #ffffff;
+  --text-color: #333;
+  --light-gray: #e9ecef;
+  --border-radius: 8px;
+  --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+}
+
+.page-container {
+  display: flex;
+  min-height: calc(100vh - 100px);
+  max-width: 1200px;
+  margin: 20px auto;
+  padding: 0 20px;
+  gap: 20px;
+}
+
+/* Sol menü barı */
+.sidebar {
+  width: 280px;
+  padding: 24px;
+  background-color: var(--card-background);
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  height: fit-content;
+}
+
+.user-info {
+  text-align: center;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--light-gray);
+}
+
+.user-info .user-name {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--primary-dark);
+  margin: 0;
+}
+
+.menu-list {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0 0;
+}
+
+.menu-list-item {
+  margin-bottom: 8px;
+}
+
+.menu-list-item a {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  text-decoration: none;
+  color: var(--text-color);
+  border-radius: var(--border-radius);
+  transition: background-color 0.3s, color 0.3s;
+  font-weight: 500;
+  border: 2px solid transparent;
+}
+
+/* Hover efekti: Hafif bir arka plan ve renk değişimi */
+.menu-list-item a:hover {
+  background-color: var(--light-gray);
+  color: var(--primary-color);
+}
+
+/* Seçili olan menü öğesi: Alt çizgi olmadan sadece renk değişimi */
+.menu-list-item a.selected {
+  background-color: transparent;
+  background-color: var(--light-gray); 
+  color: var(--primary-color);
+  font-weight: bold; /* Seçili olanı vurgulamak için kalın yazı */
+
+}
+
+/* Seçili olan alt menü öğesi: Gri arka plan ve renk değişimi */
+.collapsible-menu a.selected {
+    background-color: var(--light-gray);
+}
+
+/* İkonlar */
+.menu-list-item a i.left-icon {
+  margin-right: 12px;
+  font-size: 1.2rem;
+}
+
+.menu-list-item a i.right-icon {
+  margin-left: auto;
+  transition: transform 0.3s ease;
+}
+
+.menu-list-item a.open .right-icon {
+  transform: rotate(180deg);
+}
+
+/* Açılabilir Menü (Hesabım) */
+.collapsible-menu {
+  overflow: hidden;
+  transition: max-height 0.4s ease-out;
+  max-height: 0;
+  padding-left: 20px;
+  list-style: none;
+}
+
+.collapsible-menu.open {
+  max-height: 500px;
+}
+
+.collapsible-menu a {
+  position: relative;
+  padding-left: 36px;
+  font-size: 0.95rem;
+}
+
+/* Alt menü öğeleri için şık dikey çubuk (isteğe bağlı, kaldırabilirsiniz) */
+.collapsible-menu a::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 4px;
+  background-color: var(--primary-color);
+  border-radius: 50%;
+}
+
+/* Sağ içerik bölümü */
+.content-area {
+  flex-grow: 1;
+  background-color: var(--card-background);
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  padding: 30px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.2rem;
+  color: #6c757d;
+}
+</style>
+
+<div class="page-container">
+  <div class="sidebar">
+    <div class="user-info">
+      <div class="user-name">{{ user.first_name }} {{ user.last_name }}</div>
+    </div>
+
+    <ul class="menu-list">
+      <li class="menu-list-item">
+        <a href="#" data-page-name="siparislerim">
+          <i class="fas fa-box-open left-icon"></i> Siparişlerim
+        </a>
+      </li>
+      <li class="menu-list-item">
+        <a href="#" data-page-name="degerlendirmelerim">
+          <i class="fas fa-star left-icon"></i> Değerlendirmelerim
+        </a>
+      </li>
+    </ul>
+
+    <ul class="menu-list">
+      <li class="menu-list-item" id="hesabim-toggle">
+        <a href="#">
+          <i class="fas fa-user-cog left-icon"></i> Hesabım <i class="fas fa-chevron-down right-icon"></i>
+        </a>
+        <ul class="collapsible-menu" id="hesabim-menu">
+          <li class="menu-list-item">
+            <a href="{% url 'accounts:profile_update' %}" data-page-name="bilgilerim">
+              <i class="fas fa-user-circle left-icon"></i> Bilgilerim
+            </a>
+          </li>
+          <li class="menu-list-item">
+            <a href="{% url 'accounts:password_change' %}" data-page-name="guvenlik">
+              <i class="fas fa-shield-alt left-icon"></i> Güvenlik
+            </a>
+          </li>
+          <li class="menu-list-item">
+            <a href="{% url 'accounts:address_list' %}" data-page-name="adreslerim">
+              <i class="fas fa-map-marker-alt left-icon"></i> Adreslerim
+            </a>
+          </li>
+          <li class="menu-list-item">
+            <a href="#" data-page-name="kayitli-kartlarim">
+              <i class="fas fa-credit-card left-icon"></i> Kayıtlı Kartlarım
+            </a>
+          </li>
+        </ul>
+      </li>
+    </ul>
+
+    <ul class="menu-list">
+      <li class="menu-list-item">
+        <a href="#" data-page-name="soru-taleplerim">
+          <i class="fas fa-question-circle left-icon"></i> Soru ve Taleplerim
+        </a>
+      </li>
+      {% if user.is_seller %}
+      <li class="menu-list-item">
+        <a href="{% url 'store:store_list' %}">
+          <i class="fas fa-store left-icon"></i> Mağazalarım
+        </a>
+      </li>
+      {% endif %}
+
+      {% if user.has_seller_profile %}
+      <li class="menu-list-item">
+        <a href="{% url 'accounts:seller_form' %}">
+          <i class="fas fa-clock left-icon"></i> Satıcı Bilgilerim
+        </a>
+      </li>
+
+      {% else %}
+      <li class="menu-list-item">
+        <a href="{% url 'accounts:seller_form' %}">
+          <i class="fas fa-store left-icon"></i> Satıcı Ol
         </a>
     </li>
-
-    <!-- Listelerim -->
-    <li>
-        <a href="{% if user.is_authenticated %}{% url 'accounts:profile' %}{% else %}{% url 'accounts:login' %}?next={% url 'accounts:profile' %}{% endif %}">
-            Listelerim
+      {% endif %}
+      <li class="menu-list-item">
+        <a href="#" data-page-name="yardim">
+          <i class="fas fa-info-circle left-icon"></i> Yardım
         </a>
-    </li>
+      </li>
+    </ul>
+  </div>
 
-    <!-- Adreslerim -->
-    <li>
-        <a href="{% if user.is_authenticated %}{% url 'accounts:profile' %}{% else %}{% url 'accounts:login' %}?next={% url 'accounts:profile' %}{% endif %}">
-            Adreslerim
-        </a>
-    </li>
+  <div class="content-area">
+    {% block main_content %}
+      Sol menüden bir öğe seçerek hesabınızı yönetebilirsiniz.
+    {% endblock %}
+  </div>
+</div>
 
-    <!-- Satıcı Ol -->
-    <li>
-        <a href="{% if user.is_authenticated %}{% url 'accounts:profile' %}{% else %}{% url 'accounts:login' %}?next={% url 'accounts:profile' %}{% endif %}">
-            Satıcı Ol
-        </a>
-    </li>
-</ul>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const menuItems = document.querySelectorAll('.sidebar a[data-page-name]');
+    const hesabimToggleItem = document.getElementById('hesabim-toggle');
+    const hesabimToggleLink = hesabimToggleItem.querySelector('a');
+    const hesabimMenu = document.getElementById('hesabim-menu');
+
+    const getPageNameFromUrl = () => {
+        const path = window.location.pathname.split('/').filter(Boolean);
+        return path[path.length - 1] || 'bilgilerim';
+    };
+
+    const setActiveMenuItem = () => {
+        const currentPageName = getPageNameFromUrl();
+        let isChildPageSelected = false;
+
+        // Tüm menü öğelerindeki 'selected' sınıfını temizle
+        menuItems.forEach(item => {
+            item.classList.remove('selected');
+        });
+        
+        // Üst menü öğesindeki 'selected' sınıfını ve 'open' sınıfını temizle
+        hesabimToggleLink.classList.remove('selected');
+        hesabimMenu.classList.remove('open');
+        hesabimToggleLink.classList.remove('open');
+
+        // Mevcut sayfayı bul ve vurgula
+        menuItems.forEach(item => {
+            const pageName = item.getAttribute('data-page-name');
+            if (pageName === currentPageName) {
+                item.classList.add('selected');
+                if (hesabimMenu.contains(item)) {
+                    isChildPageSelected = true;
+                }
+            }
+        });
+
+        // Eğer bir alt menü öğesi seçiliyse, üst menü öğesini de vurgula ve menüyü aç
+        if (isChildPageSelected) {
+            hesabimMenu.classList.add('open');
+            hesabimToggleLink.classList.add('selected'); // Üst öğeye 'selected' sınıfını ekle
+        }
+    };
+
+    setActiveMenuItem();
+
+    // Tıklama olaylarını dinle
+    menuItems.forEach(item => {
+        item.addEventListener('click', () => {
+            setActiveMenuItem(); // Her tıklamada vurgulama mantığını yeniden çalıştır
+        });
+    });
+
+    hesabimToggleLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        hesabimMenu.classList.toggle('open');
+        this.classList.toggle('open');
+    });
+});
+</script>
+
+
+
+{% endblock %}
