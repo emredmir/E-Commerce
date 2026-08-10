@@ -1,0 +1,53 @@
+<div class="pw-image-group" data-group-id="{{ group.id }}">
+    
+    <!-- Grup Başlığı (Header) -->
+    <div class="pw-image-group-header">
+        <h3 class="pw-image-group-title">
+            {% if group.visual_attribute_values.exists %}
+                {% for val in group.visual_attribute_values.all %}
+                    <span class="pw-image-group-badge">
+                        <strong>{{ val.attribute.name }}:</strong> {{ val.value }}
+                    </span>
+                {% endfor %}
+            {% else %}
+                <span class="pw-image-group-badge">
+                    <i class="fa-solid fa-globe"></i> Tüm Varyantlar İçin Ortak Görseller
+                </span>
+            {% endif %}
+        </h3>
+
+        <!-- Ortak grup değilse (Yani görsel özellikleri varsa) VE birden fazla varyant varsa Sil butonunu göster -->
+        {% if group.visual_attribute_values.exists and has_multiple_variants %}
+            <button 
+                type="button" 
+                class="pw-image-delete js-delete-group" 
+                data-url="{% url 'products:image_group_delete' store_slug=store.slug draft_id=draft.id group_id=group.id %}" 
+                title="Grubu Sil"
+            >
+                <i class="fa-solid fa-trash-can"></i>
+            </button>
+        {% endif %}
+    </div>
+
+    <div class="pw-image-group-body">
+        
+        <!-- Sürükle Bırak (Drag & Drop) Yükleme Alanı -->
+        <div class="pw-upload-zone js-upload-zone" data-group-id="{{ group.id }}">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <div class="pw-upload-zone-text">Görselleri sürükleyip bırakın veya tıklayarak seçin</div>
+            <div class="pw-upload-zone-subtext">JPG, PNG veya WEBP. Her biri en fazla 10MB.</div>
+            
+            <!-- Görünmez Dosya Input'u (Tüm alana tıklamayı sağlar) -->
+            <form class="js-upload-form" action="{% url 'products:image_upload' store_slug=store.slug draft_id=draft.id group_id=group.id %}" method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="file" name="images" class="pw-upload-input js-file-input" multiple accept="image/jpeg, image/png, image/webp">
+            </form>
+        </div>
+
+        <!-- Yüklenen Görsellerin Görüntüleneceği AJAX Container -->
+        <div class="js-image-list-container" data-group-id="{{ group.id }}">
+            {% include "products/seller/wizard/image_list.html" %}
+        </div>
+        
+    </div>
+</div>

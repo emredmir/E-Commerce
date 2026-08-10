@@ -1,0 +1,1306 @@
+{% extends "core/home.html" %}
+{% load static %}
+
+{% block title %}
+Yeni Ürün Oluştur — {{ store.store_name }}
+{% endblock %}
+
+{% block content %}
+
+<style>
+    :root{
+        --teal-50:#e6fffb;
+        --teal-100:#c7f9f4;
+        --teal-500:#14b8a6;
+        --teal-600:#0d9488;
+        --teal-700:#0f766e;
+
+        --gray-50:#fafafa;
+        --gray-100:#f4f4f5;
+        --gray-200:#e4e4e7;
+        --gray-400:#a1a1aa;
+        --gray-600:#52525b;
+        --gray-700:#3f3f46;
+        --gray-800:#27272a;
+
+        --red:#dc2626;
+
+        --radius:14px;
+        --shadow:0 8px 30px rgba(0,0,0,.05);
+    }
+
+    .pw-wrapper{
+        max-width:900px;
+        margin:40px auto;
+        padding:0 20px;
+    }
+
+    .pw-breadcrumb{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        font-size:.88rem;
+        color:var(--gray-400);
+        margin-bottom:26px;
+    }
+
+    .pw-breadcrumb a{
+        text-decoration:none;
+        color:var(--teal-700);
+    }
+
+    .pw-breadcrumb a:hover{
+        text-decoration:underline;
+    }
+
+    /* --------------------------------------------------
+        Wizard Progress
+    -------------------------------------------------- */
+
+    .pw-steps{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:16px;
+
+        margin-bottom:28px;
+        padding:18px 22px;
+
+        background:#fff;
+        border-radius:var(--radius);
+        box-shadow:var(--shadow);
+    }
+
+    .pw-step{
+        flex:1;
+
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        gap:10px;
+
+        position:relative;
+
+        color:var(--gray-400);
+        font-size:.85rem;
+        font-weight:600;
+        text-align:center;
+    }
+
+    .pw-step:not(:last-child)::after{
+
+        content:"";
+
+        position:absolute;
+
+        top:18px;
+        left:50%;
+        right:auto;
+
+        width:100%;
+        height:2px;
+
+        background:var(--gray-200);
+
+        z-index:0;
+
+    }
+
+    .pw-number{
+
+        width:36px;
+        height:36px;
+
+        border-radius:50%;
+
+        display:flex;
+        align-items:center;
+        justify-content:center;
+
+        background:var(--gray-200);
+        color:var(--gray-600);
+        font-weight:700;
+        transition:.25s;
+
+        position:relative;
+        z-index:1;
+
+    }
+
+    .pw-step.active{
+
+        color:var(--teal-700);
+
+    }
+
+    .pw-step.active .pw-number{
+
+        background:var(--teal-500);
+        color:white;
+
+    }
+    .pw-step.current-step .pw-number { box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.2); transform: scale(1.1); }
+
+    /* --------------------------------------------------
+        Info Box
+    -------------------------------------------------- */
+
+    .pw-info{
+
+        display:flex;
+        gap:18px;
+        align-items:flex-start;
+        padding:18px 22px;
+        margin-bottom:24px;
+        background:var(--teal-50);
+        border:1px solid var(--teal-100);
+        border-radius:var(--radius);
+
+    }
+
+    .pw-info i{
+
+        font-size:1.4rem;
+        color:var(--teal-600);
+        margin-top:2px;
+
+    }
+
+    .pw-info strong{
+
+        display:block;
+        margin-bottom:6px;
+        color:var(--gray-800);
+
+    }
+
+    .pw-info p{
+
+        margin:0;
+        color:var(--gray-600);
+        font-size:.92rem;
+        line-height:1.6;
+
+    }
+
+    /* --------------------------------------------------
+       Card
+    -------------------------------------------------- */
+
+    .pw-card{
+
+        background:#fff;
+        border-radius:var(--radius);
+        box-shadow:var(--shadow);
+        overflow:hidden;
+        margin-bottom:24px;
+
+    }
+
+    .pw-card-header{
+
+        display:flex;
+        align-items:center;
+        gap:16px;
+        padding:22px 26px;
+        border-bottom:1px solid var(--gray-200);
+
+    }
+
+    .pw-card-icon{
+
+        width:48px;
+        height:48px;
+        border-radius:12px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:var(--teal-50);
+        color:var(--teal-600);
+        font-size:1.2rem;
+
+    }
+
+    .pw-card-title{
+
+        margin:0;
+        font-size:1.1rem;
+        color:var(--gray-800);
+
+    }
+
+    .pw-card-subtitle{
+
+        margin-top:4px;
+        color:var(--gray-400);
+        font-size:.88rem;
+
+    }
+
+    .pw-card-body{
+
+        padding:28px;
+
+    }
+
+    /* --------------------------------------------------
+       Form
+    -------------------------------------------------- */
+
+    .pw-field{
+
+        margin-bottom:22px;
+
+    }
+
+    .pw-grid{
+
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:20px;
+
+    }
+
+    .pw-label{
+
+        display:block;
+        margin-bottom:8px;
+        font-size:.9rem;
+        font-weight:600;
+        color:var(--gray-800);
+
+    }
+
+    .pw-required{
+
+        color:var(--red);
+
+    }
+
+    .pw-help{
+
+        margin-top:6px;
+        font-size:.82rem;
+        color:var(--gray-400);
+
+    }
+
+    .pw-help a{
+        color:var(--teal-600);
+        font-weight:600;
+        text-decoration:none;
+    }
+
+    .pw-help a:hover{
+        text-decoration:underline;
+    }
+
+    .pw-errors{
+
+        margin-top:8px;
+
+    }
+
+    .pw-error{
+
+        color:var(--red);
+        font-size:.85rem;
+        margin-top:4px;
+
+    }
+
+    .pw-card input,
+    .pw-card select,
+    .pw-card textarea,
+    
+    .pw-modal input,
+    .pw-modal textarea,
+    .pw-modal select{
+
+        width:100%;
+        padding:11px 14px;
+        border:1px solid var(--gray-200);
+        border-radius:10px;
+        font-size:.95rem;
+        font-family:inherit;
+        transition:.2s;
+        box-sizing:border-box;
+
+    }
+
+    .pw-card textarea{
+
+        resize:vertical;
+        min-height:140px;
+
+    }
+
+    .pw-card input:focus,
+    .pw-card select:focus,
+    .pw-card textarea:focus,
+    
+    .pw-modal input:focus,
+    .pw-modal select:focus,
+    .pw-modal textarea:focus{
+
+        outline:none;
+        border-color:var(--teal-500);
+        box-shadow:0 0 0 4px rgba(20,184,166,.12);
+
+    }
+
+    /* --------------------------------------------------
+       Info Box
+    -------------------------------------------------- */
+
+    .pw-info-box{
+
+        display:flex;
+
+        align-items:flex-start;
+
+        gap:16px;
+
+        padding:18px;
+
+        background:var(--teal-50);
+
+        border:1px solid var(--teal-100);
+
+        border-radius:10px;
+
+    }
+
+    .pw-info-box i{
+
+        color:var(--teal-600);
+
+        font-size:1.25rem;
+
+        margin-top:2px;
+
+    }
+
+    .pw-info-box strong{
+
+        display:block;
+
+        margin-bottom:6px;
+
+        color:var(--gray-800);
+
+    }
+
+    .pw-info-box p{
+
+        margin:0;
+
+        color:var(--gray-700);
+
+        line-height:1.6;
+
+    }
+
+    .pw-footer{
+        
+
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:16px;
+
+        padding:24px 28px;
+        border-top:1px solid var(--gray-200);
+    }
+
+    .pw-btn{
+
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        gap:8px;
+        white-space:nowrap;
+
+        padding:12px 22px;
+
+        border:none;
+        border-radius:10px;
+
+        text-decoration:none;
+        cursor:pointer;
+
+        font-weight:600;
+
+        transition:.2s;
+
+    }
+
+    .pw-btn:hover{
+        transform:translateY(-1px);
+        opacity:.95;
+    }
+
+    .pw-btn:active{
+        transform:translateY(0);
+    }
+
+    .pw-btn-primary{
+
+        background:var(--teal-600);
+        color:white;
+
+    }
+
+    .pw-btn-primary:hover{
+
+        background:var(--teal-700);
+
+    }
+
+    .pw-btn-outline{
+
+        background:white;
+        color:var(--teal-700);
+
+        border:1px solid var(--teal-600);
+
+    }
+
+    .pw-message{
+
+        display:flex;
+        align-items:flex-start;
+        gap:12px;
+
+        padding:16px 18px;
+
+        margin-bottom:20px;
+
+        border-radius:12px;
+
+    }
+
+    .pw-message-error{
+
+        background:#fef2f2;
+        color:#b91c1c;
+        border:1px solid #fecaca;
+
+    }
+
+    .pw-message-success{
+
+        background:#ecfdf5;
+        color:#166534;
+        border:1px solid #bbf7d0;
+
+    }
+
+    @media (max-width:768px){
+
+        .pw-grid{
+            grid-template-columns:1fr;
+        }
+
+        .pw-steps{
+            flex-direction:column;
+            align-items:stretch;
+        }
+
+        .pw-step{
+            width:100%;
+        }
+
+        .pw-step::after{
+            display:none;
+        }
+
+        .pw-card-body{
+            padding:20px;
+        }
+
+        .pw-footer{
+            flex-direction:column-reverse;
+        }
+
+        .pw-btn{
+            width:100%;
+        }
+
+    }
+
+    .pw-modal{
+        position:fixed;
+        inset:0;
+
+        display:flex;
+        align-items:center;
+        justify-content:center;
+
+        background:rgba(0,0,0,.45);
+        z-index:1000;
+    }
+
+    .pw-modal[hidden]{
+        display:none;
+    }
+
+    .pw-modal-content{
+
+        width:min(600px,95%);
+
+        background:white;
+        border-radius:14px;
+
+        overflow:hidden;
+
+        box-shadow:0 25px 60px rgba(0,0,0,.15);
+
+    }
+
+    .pw-modal-header{
+
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+
+        padding:20px 24px;
+
+        border-bottom:1px solid var(--gray-200);
+
+    }
+
+    .pw-modal-header h3{
+        margin:0;
+    }
+
+    .pw-modal-header button{
+
+        border:none;
+        background:none;
+
+        cursor:pointer;
+
+        font-size:1.4rem;
+
+    }
+
+    .pw-modal-body{
+        padding:24px;
+    }
+
+    .pw-modal-footer{
+
+        display:flex;
+        justify-content:flex-end;
+        gap:12px;
+
+        padding:20px 24px;
+
+        border-top:1px solid var(--gray-200);
+
+    }
+
+    [hidden]{
+        display:none !important;
+    }
+
+    .pw-match-note{
+        margin-top:20px;
+    }
+
+    #wizard-toast-container{
+        position:fixed;
+        top:24px;
+        right:24px;
+
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+
+        width:360px;
+        max-width:calc(100vw - 40px);
+
+        z-index:99999;
+
+        pointer-events:none;
+    }
+
+    .wizard-toast{
+
+        display:flex;
+        align-items:flex-start;
+        gap:12px;
+
+        padding:16px 18px;
+
+        border-radius:12px;
+
+        box-shadow:0 12px 30px rgba(0,0,0,.15);
+
+        color:#fff;
+
+        opacity:0;
+        transform:translateY(-10px);
+
+        transition:
+            opacity .25s ease,
+            transform .25s ease;
+
+        pointer-events:auto;
+    }
+
+    .wizard-toast.show{
+        opacity:1;
+        transform:none;
+    }
+    
+    .wizard-toast-success{
+        background:#16a34a;
+    }
+    
+    .wizard-toast-error{
+        background:#dc2626;
+    }
+    
+    .wizard-toast-warning{
+        background:#d97706;
+    }
+    
+    .wizard-toast-info{
+        background:#2563eb;
+    }
+    
+    .wizard-toast i{
+        margin-top:2px;
+    }
+
+    .wizard-toast > div{
+        flex:1;
+    }
+
+    .wizard-toast-close{
+
+        margin-left:auto;
+
+        border:none;
+        background:none;
+
+        color:inherit;
+
+        cursor:pointer;
+
+        font-size:1.2rem;
+        line-height:1;
+
+        opacity:.7;
+
+        transition:opacity .2s;
+
+    }
+
+    .wizard-toast-close:hover{
+
+        opacity:1;
+
+    }
+
+    body.modal-open {
+        overflow:hidden;
+    }
+
+
+</style>
+
+<div class="pw-wrapper">
+    <div id="wizard-toast-container"></div>
+
+    <!-- Breadcrumb -->
+    <nav class="pw-breadcrumb">
+        <a href="{% url 'store:store_list' %}">
+            Mağazalarım
+        </a>
+
+        <i class="fas fa-chevron-right"></i>
+
+        <a href="{% url 'products:store_product_list' store_slug=store.slug %}">
+            {{ store.store_name }}
+        </a>
+
+        <i class="fas fa-chevron-right"></i>
+
+        <span>Ürün Bilgileri</span>
+    </nav>
+
+
+    <!-- Wizard Steps -->
+
+    <div class="pw-steps">
+
+        <div class="pw-step active">
+            <span class="pw-number">1</span>
+
+            <div>
+                <strong>Ürün Bilgileri</strong><br>
+                <small>Temel bilgiler</small>
+            </div>
+        </div>
+
+        <div class="pw-step">
+            <span class="pw-number">2</span>
+
+            <div>
+                <strong>Varyantlar</strong><br>
+                <small>Ürün seçenekleri</small>
+            </div>
+        </div>
+
+        <div class="pw-step">
+            <span class="pw-number">3</span>
+
+            <div>
+                <strong>Görseller</strong><br>
+                <small>Fotoğraflar</small>
+            </div>
+        </div>
+
+        <div class="pw-step">
+            <span class="pw-number">4</span>
+
+            <div>
+                <strong>Satış</strong><br>
+                <small>Fiyat • Stok</small>
+            </div>
+        </div>
+
+        <div class="pw-step">
+            <span class="pw-number">5</span>
+            <div><strong>Yayınla</strong><br><small>Önizleme</small></div>
+        </div>
+
+    </div>
+
+
+{% if draft %}
+<form id="wizard-step1-form" method="post" novalidate action="{% url 'products:wizard_step1_edit' store_slug=store.slug draft_id=draft.id %}">
+
+{% else %}
+<form id="wizard-step1-form" method="post" novalidate action="{% url 'products:wizard_step1' store_slug=store.slug %}">
+{% endif %}
+
+    {{ form.media }}
+    {% csrf_token %}
+
+
+    {% if form.errors %}
+    <div class="pw-info">
+        <i class="fas fa-circle-exclamation"></i>
+        <div>
+            <strong>Formda hatalar var.</strong>
+            <p>Lütfen kırmızı ile işaretlenen alanları kontrol edin.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if form.non_field_errors %}
+        <div class="pw-message pw-message-error">
+            <i class="fas fa-circle-exclamation"></i>
+
+            <div>
+                {% for error in form.non_field_errors %}
+                    <div>{{ error }}</div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+    <div class="pw-card">
+
+    <div class="pw-card-header">
+        <div class="pw-card-icon">
+            <i class="fas fa-box"></i>
+        </div>
+
+        <div>
+            <h2 class="pw-card-title">Temel Ürün Bilgileri</h2>
+            <p class="pw-card-subtitle">
+                Ürün taslağının temel bilgilerini girin.
+            </p>
+        </div>
+    </div>
+
+    <div class="pw-card-body">
+
+        <!-- Ürün Adı -->
+
+        <div class="pw-field">
+
+            <label
+                class="pw-label"
+                for="{{ form.name.id_for_label }}"
+            >
+                {{ form.name.label }}
+                <span class="pw-required">*</span>
+            </label>
+
+            {{ form.name }}
+
+            {% if form.name.errors %}
+                <div class="pw-errors">
+                    {% for error in form.name.errors %}
+                        <div class="pw-error">
+                            <i class="fas fa-circle-exclamation"></i>
+                            {{ error }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+        </div>
+
+
+        <!-- Kategori + Marka -->
+
+        <div class="pw-grid">
+
+            <!-- Ana Kategori -->
+
+            <div class="pw-field">
+            
+                <label
+                    class="pw-label"
+                    for="{{ form.parent_category.id_for_label }}"
+                >
+                    {{ form.parent_category.label }}
+                    <span class="pw-required">*</span>
+                </label>
+            
+                {{ form.parent_category }}
+
+            
+                {% if form.parent_category.errors %}
+                    <div class="pw-errors">
+                        {% for error in form.parent_category.errors %}
+                            <div class="pw-error">
+                                <i class="fas fa-circle-exclamation"></i>
+                                {{ error }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                
+            </div>
+        
+        
+            <!-- Alt Kategori -->
+        
+            <div class="pw-field">
+            
+                <label
+                    class="pw-label"
+                    for="{{ form.category.id_for_label }}"
+                >
+                    {{ form.category.label }}
+                    <span class="pw-required">*</span>
+                </label>
+            
+                {{ form.category }}
+            
+                {% if form.category.errors %}
+                    <div class="pw-errors">
+                        {% for error in form.category.errors %}
+                            <div class="pw-error">
+                                <i class="fas fa-circle-exclamation"></i>
+                                {{ error }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                
+            </div>
+        
+        </div>
+
+        <div class="pw-field">
+
+            <label
+                class="pw-label"
+                for="{{ form.brand.id_for_label }}"
+            >
+                {{ form.brand.label }}
+            </label>
+        
+            {{ form.brand }}
+        
+            <div class="pw-help">
+                Marka listesi seçtiğiniz kategoriye göre otomatik güncellenir.
+            </div>
+
+            <div class="pw-help">
+                Aradığınız marka listede yoksa: 
+                <a href="#" id="request-brand-link">
+                    Yeni Marka Talep Et
+                </a>
+            </div>
+        
+            {% if form.brand.errors %}
+                <div class="pw-errors">
+                    {% for error in form.brand.errors %}
+                        <div class="pw-error">
+                            <i class="fas fa-circle-exclamation"></i>
+                            {{ error }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            
+        </div>
+
+
+        <!-- Açıklama -->
+
+        <div class="pw-field">
+
+            <label
+                class="pw-label"
+                for="{{ form.description.id_for_label }}"
+            >
+                {{ form.description.label }}
+                <span class="pw-required">*</span>
+            </label>
+
+            {{ form.description }}
+
+            {% if form.description.errors %}
+                <div class="pw-errors">
+                    {% for error in form.description.errors %}
+                        <div class="pw-error">
+                            <i class="fas fa-circle-exclamation"></i>
+                            {{ error }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+        </div>
+
+    </div>
+
+</div>
+
+<div class="pw-card">
+
+    <div class="pw-card-body">
+
+        <div class="pw-info-box">
+
+            <i class="fas fa-circle-info"></i>
+
+            <div>
+
+                <strong>Sonraki adımlar</strong>
+
+                <p>
+                    Bu adım tamamlandıktan sonra ürün taslak olarak kaydedilecektir.
+                    Bir sonraki adımda ürünün varyantlarını (renk, beden vb.)
+                    oluşturabileceksiniz.
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+<div class="pw-card">
+
+    <div class="pw-footer">
+
+        <a
+            href="{% url 'products:product_search' store_slug=store.slug %}"
+            class="pw-btn pw-btn-outline"
+        >
+            <i class="fas fa-arrow-left"></i>
+
+            Vazgeç
+        </a>
+
+
+        <button
+            type="submit"
+            class="pw-btn pw-btn-primary"
+        >
+
+            Taslağı Kaydet ve Devam Et
+
+            <i class="fas fa-arrow-right"></i>
+
+        </button>
+
+    </div>
+
+</div>
+
+
+</form>
+
+<div
+    id="duplicate-product-modal"
+    class="pw-modal"
+    hidden
+>
+
+    <div class="pw-modal-content">
+
+        <div class="pw-modal-header">
+
+            <h3>
+                Benzer Ürün Bulundu
+            </h3>
+
+            <button
+                type="button"
+                id="close-duplicate-modal"
+            >
+        &times;
+    </button>
+
+        </div>
+
+        <div class="pw-modal-body">
+
+            <div class="pw-info-box">
+
+                <i class="fas fa-circle-info"></i>
+
+                <div>
+
+                    <p>
+                        Sistemde benzer bir ürün bulundu.
+                    </p>
+                    
+                    <ul class="pw-match-list">
+                    
+                        <li>
+                            <strong>Mevcut ürünü kullan</strong>
+                            seçerseniz yalnızca kendi satış teklifinizi oluşturursunuz.
+                        </li>
+                    
+                        <li>
+                            <strong>Yeni ürün oluşturmaya devam et</strong>
+                            seçerseniz yeni bir katalog ürünü oluşturabilirsiniz.
+                        </li>
+                    
+                    </ul>
+
+
+                </div>
+            </div>
+
+            <div class="pw-match-box" id="match-box" hidden>
+                <p class="pw-match-text">
+                    Aşağıdaki ürün katalogda bulundu:
+                </p>
+            
+                <strong id="match-product-name">-</strong>
+            
+                <div>
+                    <strong>Marka:</strong>
+                    <span id="match-product-brand">-</span>
+                </div>
+            
+                <div>
+                    <strong>Kategori:</strong>
+                    <span id="match-product-category">-</span>
+                </div>
+            
+            </div>
+
+        
+        </div>
+
+        <div class="pw-modal-footer">
+
+            <button
+                type="button"
+                id="continue-new-product"
+                class="pw-btn pw-btn-outline"
+            >
+                Yeni Ürün Oluşturmaya Devam Et
+            </button>
+
+            <button
+                type="button"
+                id="use-existing-product-btn"
+                class="pw-btn pw-btn-primary"
+            >
+                Mevcut Ürünü Kullan
+            </button>
+
+            <button
+                type="button"
+                id="cancel-duplicate-modal"
+                class="pw-btn pw-btn-outline"
+            >
+                İptal
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- Brand Request Modal -->
+<div
+    id="brand-request-modal"
+    class="pw-modal"
+    hidden
+>
+
+    <div class="pw-modal-content">
+
+        <div class="pw-modal-header">
+
+            <h3>Yeni Marka Talebi</h3>
+
+            <button
+                type="button"
+                id="close-brand-modal"
+            >
+                &times;
+            </button>
+
+        </div>
+        
+
+        <form id="brand-request-form">
+
+            {% csrf_token %}
+
+            <div class="pw-modal-body">
+            
+                <div class="pw-field">
+                
+                    <label
+                        class="pw-label"
+                        for="brand-name"
+                    >
+                        Marka Adı
+                    </label>
+                
+                    <input
+                        type="text"
+                        id="brand-name"
+                        name="brand_name"
+                        required
+                        placeholder="Örn: Anker"
+                    >
+                
+                </div>
+            
+                <div class="pw-field">
+                
+                    <label
+                        class="pw-label"
+                        for="brand-note"
+                    >
+                        Açıklama
+                    </label>
+                
+                    <textarea
+                        id="brand-note"
+                        name="note"
+                        rows="4"
+                        placeholder="Varsa marka hakkında ek bilgi yazabilirsiniz."
+                    ></textarea>
+                
+                </div>
+            
+            </div>
+        
+            <div class="pw-modal-footer">
+            
+                <button
+                    type="button"
+                    class="pw-btn pw-btn-outline"
+                    id="cancel-brand-request"
+                >
+                    İptal
+                </button>
+            
+                <button
+                    type="submit"
+                    class="pw-btn pw-btn-primary"
+                >
+                    Talep Gönder
+                </button>
+            
+            </div>
+        
+        </form>
+
+    </div>
+
+</div>
+
+<div
+    id="wizard-api"
+    data-category-url="/products/api/categories/__id__/children/"
+    data-brand-url="/products/api/categories/__id__/brands/"
+    data-brand-request-url="/products/api/brand-requests/__id__/"
+    data-match-action-url="/products/api/{{ store.slug }}/drafts/__id__/match/"
+    >
+</div>
+
+
+
+
+<div
+    id="wizard-confirm-modal"
+    class="pw-modal"
+    hidden
+>
+    <div class="pw-modal-content">
+
+        <div class="pw-modal-header">
+            <h3 data-modal-title></h3>
+        </div>
+
+        <div class="pw-modal-body">
+            <p data-modal-message></p>
+        </div>
+
+        <div class="pw-modal-footer">
+
+            <button
+                type="button"
+                class="pw-btn pw-btn-outline"
+                data-modal-cancel
+            >
+                Vazgeç
+            </button>
+
+            <button
+                type="button"
+                class="pw-btn pw-btn-primary"
+                data-modal-confirm
+            >
+                Onayla
+            </button>
+
+        </div>
+
+    </div>
+</div>
+</div>
+
+<script src="{% static 'products/js/wizard_ui.js' %}"></script>
+<script src="{% static 'products/js/step1.js' %}"></script>
+
+{% endblock %}
+

@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'core',
     'accounts.apps.AccountsConfig', #apps değiştiği için
     'store',
+    'products',
 ]
 
 MIDDLEWARE = [

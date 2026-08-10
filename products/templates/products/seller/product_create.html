@@ -1,0 +1,608 @@
+{% extends "core/home.html" %}
+
+{% block title %}Yeni Ürün Oluştur — {{ store.store_name }}{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --teal-600: #00b4d8;
+        --teal-700: #0096c7;
+        --teal-800: #0077b6;
+        --teal-50:  #e0f7fa;
+        --gray-50:  #f8f9fa;
+        --gray-100: #e9ecef;
+        --gray-200: #dee2e6;
+        --gray-500: #adb5bd;
+        --gray-700: #495057;
+        --gray-900: #212529;
+        --red-tx:   #dc3545;
+        --red-bg:   #f8d7da;
+        --radius:   10px;
+        --shadow:   0 2px 8px rgba(0,0,0,0.07);
+    }
+
+    .pc-wrapper {
+        max-width: 860px;
+        margin: 36px auto;
+        padding: 0 20px;
+    }
+
+    /* Breadcrumb */
+    .pc-breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.85rem;
+        color: var(--gray-500);
+        margin-bottom: 24px;
+    }
+
+    .pc-breadcrumb a {
+        color: var(--teal-700);
+        text-decoration: none;
+    }
+
+    .pc-breadcrumb a:hover { text-decoration: underline; }
+
+    /* Adım göstergesi */
+    .pc-steps {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        margin-bottom: 28px;
+        background: white;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+    }
+
+    .pc-step {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 20px;
+        font-size: 0.88rem;
+        font-weight: 500;
+        color: var(--gray-500);
+        border-right: 1px solid var(--gray-100);
+        position: relative;
+    }
+
+    .pc-step:last-child { border-right: none; }
+
+    .pc-step.active {
+        color: var(--teal-800);
+        background: var(--teal-50);
+        font-weight: 700;
+    }
+
+    .pc-step-num {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--gray-200);
+        color: var(--gray-500);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+
+    .pc-step.active .pc-step-num {
+        background: var(--teal-600);
+        color: white;
+    }
+
+    /* Form Kartı */
+    .pc-card {
+        background: white;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        margin-bottom: 16px;
+    }
+
+    .pc-card-header {
+        padding: 18px 24px;
+        border-bottom: 1px solid var(--gray-100);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .pc-card-header-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: var(--teal-50);
+        color: var(--teal-700);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+
+    .pc-card-header h2 {
+        margin: 0 0 2px 0;
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--gray-900);
+    }
+
+    .pc-card-header p {
+        margin: 0;
+        font-size: 0.82rem;
+        color: var(--gray-500);
+    }
+
+    .pc-card-body { padding: 24px; }
+
+    /* Form alanları */
+    .pc-field {
+        margin-bottom: 18px;
+    }
+
+    .pc-label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--gray-700);
+        margin-bottom: 6px;
+    }
+
+    .pc-label .required {
+        color: var(--red-tx);
+        margin-left: 2px;
+    }
+
+    .pc-label .optional {
+        color: var(--gray-500);
+        font-weight: 400;
+        font-size: 0.8rem;
+        margin-left: 4px;
+    }
+
+    .pc-input,
+    .pc-select,
+    .pc-textarea {
+        width: 100%;
+        border: 1.5px solid var(--gray-200);
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 0.9rem;
+        color: var(--gray-900);
+        outline: none;
+        transition: border-color 0.2s;
+        box-sizing: border-box;
+        font-family: inherit;
+    }
+
+    .pc-input:focus,
+    .pc-select:focus,
+    .pc-textarea:focus {
+        border-color: var(--teal-600);
+        box-shadow: 0 0 0 3px rgba(0,180,216,0.1);
+    }
+
+    .pc-textarea { resize: vertical; min-height: 100px; }
+
+    /* İki kolonlu grid */
+    .pc-grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    /* Alan hatası */
+    .pc-field-errors {
+        margin-top: 5px;
+    }
+
+    .pc-field-error {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--red-tx);
+        font-size: 0.82rem;
+        margin-top: 3px;
+    }
+
+    /* Checkbox grubu (attribute_values) */
+    .pc-checkbox-group {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 8px;
+        max-height: 220px;
+        overflow-y: auto;
+        border: 1.5px solid var(--gray-200);
+        border-radius: 8px;
+        padding: 12px;
+    }
+
+    .pc-checkbox-group label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.88rem;
+        color: var(--gray-700);
+        cursor: pointer;
+        padding: 6px 8px;
+        border-radius: 6px;
+        transition: background 0.15s;
+    }
+
+    .pc-checkbox-group label:hover { background: var(--teal-50); }
+
+    .pc-checkbox-group input[type="checkbox"] {
+        accent-color: var(--teal-600);
+        width: 15px;
+        height: 15px;
+    }
+
+    /* Görsel yükleme */
+    .pc-file-input {
+        width: 100%;
+        border: 2px dashed var(--gray-200);
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.2s, background 0.2s;
+        box-sizing: border-box;
+    }
+
+    .pc-file-input:hover {
+        border-color: var(--teal-600);
+        background: var(--teal-50);
+    }
+
+    .pc-file-input input[type="file"] {
+        display: none;
+    }
+
+    .pc-file-label {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        color: var(--gray-500);
+        cursor: pointer;
+        font-size: 0.88rem;
+    }
+
+    .pc-file-label i { font-size: 1.8rem; color: var(--gray-300); }
+
+    .pc-file-label strong { color: var(--teal-700); }
+
+    #imagePreview {
+        margin-top: 12px;
+        display: none;
+        justify-content: center;
+    }
+
+    #imagePreview img {
+        max-width: 160px;
+        max-height: 160px;
+        border-radius: 8px;
+        border: 1px solid var(--gray-200);
+        object-fit: contain;
+    }
+
+    /* Genel hata kutusu */
+    .pc-error-box {
+        background: var(--red-bg);
+        color: var(--red-tx);
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-size: 0.88rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    /* Alt butonlar */
+    .pc-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 24px;
+        border-top: 1px solid var(--gray-100);
+    }
+
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 10px 22px;
+        border-radius: 9px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        text-decoration: none;
+        transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .btn:hover  { opacity: 0.9; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+
+    .btn-primary {
+        background: linear-gradient(135deg, var(--teal-600), var(--teal-800));
+        color: white;
+    }
+
+    .btn-outline {
+        background: white;
+        color: var(--teal-700);
+        border: 1px solid var(--teal-600);
+    }
+</style>
+
+<div class="pc-wrapper">
+
+    <!-- Breadcrumb -->
+    <nav class="pc-breadcrumb">
+        <a href="{% url 'store:store_list' %}">Mağazalarım</a>
+        <i class="fas fa-chevron-right" style="font-size:0.7rem;"></i>
+        <a href="{% url 'products:store_product_list' store_slug=store.slug %}">{{ store.store_name }}</a>
+        <i class="fas fa-chevron-right" style="font-size:0.7rem;"></i>
+        <a href="{% url 'products:product_search' store_slug=store.slug %}">Ürün Ara</a>
+        <i class="fas fa-chevron-right" style="font-size:0.7rem;"></i>
+        <span>Yeni Ürün</span>
+    </nav>
+
+    <!-- Adım Göstergesi -->
+    <div class="pc-steps">
+        <div class="pc-step active">
+            <span class="pc-step-num">1</span>
+            Ürün Bilgileri
+        </div>
+        <div class="pc-step">
+            <span class="pc-step-num">2</span>
+            Fiyat &amp; Stok
+        </div>
+    </div>
+
+    <!-- Genel Hata -->
+    {% if messages %}
+        {% for message in messages %}
+        {% if 'error' in message.tags %}
+        <div class="pc-error-box">
+            <i class="fas fa-exclamation-circle"></i> {{ message }}
+        </div>
+        {% endif %}
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <!-- Kart 1: Ürün Bilgileri -->
+        <div class="pc-card">
+            <div class="pc-card-header">
+                <div class="pc-card-header-icon">
+                    <i class="fas fa-box"></i>
+                </div>
+                <div>
+                    <h2>Ürün Bilgileri</h2>
+                    <p>Kataloga eklenecek ürünün genel bilgileri</p>
+                </div>
+            </div>
+            <div class="pc-card-body">
+
+                <!-- Ürün Adı -->
+                <div class="pc-field">
+                    <label class="pc-label" for="{{ product_form.name.id_for_label }}">
+                        Ürün Adı <span class="required">*</span>
+                    </label>
+                    <input type="text"
+                           id="{{ product_form.name.id_for_label }}"
+                           name="{{ product_form.name.html_name }}"
+                           class="pc-input"
+                           value="{{ product_form.name.value|default:'' }}"
+                           placeholder="Örn: iPhone 15 Pro 256GB">
+                    {% if product_form.name.errors %}
+                    <div class="pc-field-errors">
+                        {% for error in product_form.name.errors %}
+                        <p class="pc-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Kategori + Marka -->
+                <div class="pc-grid-2">
+                    <div class="pc-field">
+                        <label class="pc-label" for="{{ product_form.category.id_for_label }}">
+                            Kategori <span class="required">*</span>
+                        </label>
+                        <select id="{{ product_form.category.id_for_label }}"
+                                name="{{ product_form.category.html_name }}"
+                                class="pc-select">
+                            <option value="">— Seçiniz —</option>
+                            {% for choice in product_form.category.field.queryset %}
+                            <option value="{{ choice.pk }}"
+                                {% if product_form.category.value|stringformat:"s" == choice.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ choice.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if product_form.category.errors %}
+                        <div class="pc-field-errors">
+                            {% for error in product_form.category.errors %}
+                            <p class="pc-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="pc-field">
+                        <label class="pc-label" for="{{ product_form.brand.id_for_label }}">
+                            Marka <span class="optional">(opsiyonel)</span>
+                        </label>
+                        <select id="{{ product_form.brand.id_for_label }}"
+                                name="{{ product_form.brand.html_name }}"
+                                class="pc-select">
+                            <option value="">— Seçiniz —</option>
+                            {% for choice in product_form.brand.field.queryset %}
+                            <option value="{{ choice.pk }}"
+                                {% if product_form.brand.value|stringformat:"s" == choice.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ choice.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Açıklama -->
+                <div class="pc-field">
+                    <label class="pc-label" for="{{ product_form.description.id_for_label }}">
+                        Genel Açıklama <span class="required">*</span>
+                    </label>
+                    <textarea id="{{ product_form.description.id_for_label }}"
+                              name="{{ product_form.description.html_name }}"
+                              class="pc-textarea"
+                              placeholder="Ürün hakkında genel bilgi girin...">{{ product_form.description.value|default:'' }}</textarea>
+                    {% if product_form.description.errors %}
+                    <div class="pc-field-errors">
+                        {% for error in product_form.description.errors %}
+                        <p class="pc-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Kart 2: Varyant -->
+        <div class="pc-card">
+            <div class="pc-card-header">
+                <div class="pc-card-header-icon">
+                    <i class="fas fa-layer-group"></i>
+                </div>
+                <div>
+                    <h2>Varyant Bilgileri</h2>
+                    <p>Ürünün renk, beden gibi seçenekleri</p>
+                </div>
+            </div>
+            <div class="pc-card-body">
+
+                <!-- Barkod -->
+                <div class="pc-field">
+                    <label class="pc-label" for="{{ variant_form.barcode.id_for_label }}">
+                        Barkod <span class="optional">(opsiyonel)</span>
+                    </label>
+                    <input type="text"
+                           id="{{ variant_form.barcode.id_for_label }}"
+                           name="{{ variant_form.barcode.html_name }}"
+                           class="pc-input"
+                           value="{{ variant_form.barcode.value|default:'' }}"
+                           placeholder="EAN / UPC barkod numarası">
+                    {% if variant_form.barcode.errors %}
+                    <div class="pc-field-errors">
+                        {% for error in variant_form.barcode.errors %}
+                        <p class="pc-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Özellikler -->
+                <div class="pc-field">
+                    <label class="pc-label">
+                        Özellikler <span class="optional">(opsiyonel)</span>
+                    </label>
+                    <div class="pc-checkbox-group">
+                        {% for choice in variant_form.attribute_values %}
+                        <label>
+                            {{ choice.tag }}
+                            {{ choice.choice_label }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                    {% if variant_form.attribute_values.errors %}
+                    <div class="pc-field-errors">
+                        {% for error in variant_form.attribute_values.errors %}
+                        <p class="pc-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Kart 3: Görsel -->
+        <div class="pc-card">
+            <div class="pc-card-header">
+                <div class="pc-card-header-icon">
+                    <i class="fas fa-image"></i>
+                </div>
+                <div>
+                    <h2>Ürün Görseli</h2>
+                    <p>Kapak fotoğrafı — maksimum 5MB, JPEG veya PNG</p>
+                </div>
+            </div>
+            <div class="pc-card-body">
+                <div class="pc-file-input">
+                    <label class="pc-file-label" for="id_image">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <strong>Görsel seçmek için tıklayın</strong>
+                        <span>veya sürükleyip bırakın</span>
+                    </label>
+                    <input type="file"
+                           id="id_image"
+                           name="{{ image_form.image.html_name }}"
+                           accept="image/*">
+                </div>
+                <div id="imagePreview">
+                    <img id="previewImg" src="" alt="Önizleme">
+                </div>
+                {% if image_form.image.errors %}
+                <div class="pc-field-errors" style="margin-top:8px;">
+                    {% for error in image_form.image.errors %}
+                    <p class="pc-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Alt Butonlar -->
+        <div class="pc-card">
+            <div class="pc-footer">
+                <a href="{% url 'products:product_search' store_slug=store.slug %}"
+                   class="btn btn-outline">
+                    <i class="fas fa-arrow-left"></i> Geri Dön
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    Devam Et — Fiyat &amp; Stok
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+
+    </form>
+</div>
+
+<script>
+// Görsel önizleme
+document.getElementById('id_image').addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('previewImg').src = e.target.result;
+        document.getElementById('imagePreview').style.display = 'flex';
+    };
+    reader.readAsDataURL(file);
+});
+</script>
+
+{% endblock %}

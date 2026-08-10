@@ -1,0 +1,685 @@
+{% extends "core/home.html" %}
+
+{% block title %}Ürün Düzenle — {{ product.name }}{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --teal-600: #00b4d8;
+        --teal-700: #0096c7;
+        --teal-800: #0077b6;
+        --teal-50:  #e0f7fa;
+        --gray-50:  #f8f9fa;
+        --gray-100: #e9ecef;
+        --gray-200: #dee2e6;
+        --gray-500: #adb5bd;
+        --gray-700: #495057;
+        --gray-900: #212529;
+        --red-tx:   #dc3545;
+        --red-bg:   #f8d7da;
+        --green-bg: #d4edda;
+        --green-tx: #155724;
+        --radius:   10px;
+        --shadow:   0 2px 8px rgba(0,0,0,0.07);
+    }
+
+    .pu-wrapper {
+        max-width: 900px;
+        margin: 36px auto;
+        padding: 0 20px;
+    }
+
+    /* Breadcrumb */
+    .pu-breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.85rem;
+        color: var(--gray-500);
+        margin-bottom: 24px;
+    }
+
+    .pu-breadcrumb a { color: var(--teal-700); text-decoration: none; }
+    .pu-breadcrumb a:hover { text-decoration: underline; }
+
+    /* Kart */
+    .pu-card {
+        background: white;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        margin-bottom: 16px;
+    }
+
+    .pu-card-header {
+        padding: 18px 24px;
+        border-bottom: 1px solid var(--gray-100);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .pu-card-header-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: var(--teal-50);
+        color: var(--teal-700);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+
+    .pu-card-header h2 {
+        margin: 0 0 2px 0;
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--gray-900);
+    }
+
+    .pu-card-header p {
+        margin: 0;
+        font-size: 0.82rem;
+        color: var(--gray-500);
+    }
+
+    .pu-card-body { padding: 24px; }
+
+    /* Form alanları */
+    .pu-field { margin-bottom: 18px; }
+
+    .pu-label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--gray-700);
+        margin-bottom: 6px;
+    }
+
+    .pu-label .readonly-tag {
+        background: var(--gray-100);
+        color: var(--gray-500);
+        font-size: 0.72rem;
+        font-weight: 500;
+        padding: 1px 7px;
+        border-radius: 10px;
+        margin-left: 6px;
+        vertical-align: middle;
+    }
+
+    .pu-input,
+    .pu-select,
+    .pu-textarea {
+        width: 100%;
+        border: 1.5px solid var(--gray-200);
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 0.9rem;
+        color: var(--gray-900);
+        outline: none;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        box-sizing: border-box;
+        font-family: inherit;
+    }
+
+    .pu-input:focus,
+    .pu-select:focus,
+    .pu-textarea:focus {
+        border-color: var(--teal-600);
+        box-shadow: 0 0 0 3px rgba(0,180,216,0.1);
+    }
+
+    .pu-input[readonly] {
+        background: var(--gray-50);
+        cursor: not-allowed;
+        color: var(--gray-500);
+    }
+
+    .pu-textarea { resize: vertical; min-height: 120px; }
+
+    .pu-grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    /* Alan hatası */
+    .pu-field-error {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--red-tx);
+        font-size: 0.82rem;
+        margin-top: 4px;
+    }
+
+    /* Genel hata */
+    .pu-error-box {
+        background: var(--red-bg);
+        color: var(--red-tx);
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-size: 0.88rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    /* Görsel Formset */
+    .pu-images-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    .pu-image-card {
+        border: 1.5px solid var(--gray-200);
+        border-radius: 10px;
+        overflow: hidden;
+        transition: border-color 0.2s;
+        position: relative;
+    }
+
+    .pu-image-card:hover { border-color: var(--teal-600); }
+
+    .pu-image-card.marked-delete {
+        opacity: 0.4;
+        border-color: var(--red-tx);
+        border-style: dashed;
+    }
+
+    /* Görsel önizleme alanı */
+    .pu-image-preview {
+        height: 140px;
+        background: var(--gray-50);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .pu-image-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    .pu-image-preview-placeholder {
+        color: var(--gray-300);
+        font-size: 2.5rem;
+    }
+
+    .pu-main-badge {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        background: var(--teal-600);
+        color: white;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 10px;
+    }
+
+    /* Görsel kart alt kısım */
+    .pu-image-controls {
+        padding: 10px 12px;
+        background: white;
+        border-top: 1px solid var(--gray-100);
+    }
+
+    .pu-image-controls-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+    }
+
+    .pu-image-file-input {
+        width: 100%;
+        font-size: 0.8rem;
+        color: var(--gray-700);
+    }
+
+    .pu-image-file-input input[type="file"] {
+        width: 100%;
+        font-size: 0.78rem;
+        margin-top: 4px;
+    }
+
+    .pu-checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.8rem;
+        color: var(--gray-700);
+        margin-top: 6px;
+    }
+
+    .pu-checkbox-row input[type="checkbox"] {
+        accent-color: var(--teal-600);
+    }
+
+    .pu-delete-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: rgba(220,53,69,0.85);
+        color: white;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        transition: background 0.15s;
+    }
+
+    .pu-delete-btn:hover { background: var(--red-tx); }
+
+    .pu-delete-overlay {
+        display: none;
+        position: absolute;
+        inset: 0;
+        background: rgba(220,53,69,0.1);
+        align-items: center;
+        justify-content: center;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--red-tx);
+    }
+
+    .pu-image-card.marked-delete .pu-delete-overlay {
+        display: flex;
+    }
+
+    /* Yeni görsel ekle kartı */
+    .pu-add-image-card {
+        border: 2px dashed var(--gray-200);
+        border-radius: 10px;
+        height: 220px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        color: var(--gray-500);
+        cursor: pointer;
+        transition: border-color 0.2s, background 0.2s;
+        text-align: center;
+        padding: 16px;
+    }
+
+    .pu-add-image-card:hover {
+        border-color: var(--teal-600);
+        background: var(--teal-50);
+        color: var(--teal-700);
+    }
+
+    .pu-add-image-card i { font-size: 2rem; }
+
+    .pu-add-image-card span { font-size: 0.85rem; font-weight: 500; }
+
+    /* Sort order input */
+    .pu-sort-input {
+        width: 56px;
+        border: 1px solid var(--gray-200);
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 0.8rem;
+        text-align: center;
+        outline: none;
+    }
+
+    .pu-sort-input:focus { border-color: var(--teal-600); }
+
+    /* Footer */
+    .pu-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 24px;
+        border-top: 1px solid var(--gray-100);
+    }
+
+    /* Butonlar */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 10px 22px;
+        border-radius: 9px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        text-decoration: none;
+        transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .btn:hover  { opacity: 0.9; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+
+    .btn-primary {
+        background: linear-gradient(135deg, var(--teal-600), var(--teal-800));
+        color: white;
+    }
+
+    .btn-outline {
+        background: white;
+        color: var(--teal-700);
+        border: 1px solid var(--teal-600);
+    }
+
+    .btn-sm { padding: 6px 12px; font-size: 0.82rem; }
+
+    /* Gizli formset */
+    .pu-hidden-forms { display: none; }
+</style>
+
+<div class="pu-wrapper">
+
+    <!-- Breadcrumb -->
+    <nav class="pu-breadcrumb">
+        <a href="{% url 'store:store_list' %}">Mağazalarım</a>
+        <i class="fas fa-chevron-right" style="font-size:0.7rem;"></i>
+        <a href="{% url 'products:store_product_list' store_slug=store.slug %}">{{ store.store_name }}</a>
+        <i class="fas fa-chevron-right" style="font-size:0.7rem;"></i>
+        <span>Ürün Düzenle</span>
+    </nav>
+
+    <!-- Hata -->
+    {% if messages %}
+        {% for message in messages %}
+        {% if 'error' in message.tags %}
+        <div class="pu-error-box">
+            <i class="fas fa-exclamation-circle"></i> {{ message }}
+        </div>
+        {% endif %}
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ formset.management_form }}
+
+        <!-- Ürün Bilgileri -->
+        <div class="pu-card">
+            <div class="pu-card-header">
+                <div class="pu-card-header-icon">
+                    <i class="fas fa-box"></i>
+                </div>
+                <div>
+                    <h2>Ürün Bilgileri</h2>
+                    <p>Başlık değiştirilemez — katalog bütünlüğü korunur</p>
+                </div>
+            </div>
+            <div class="pu-card-body">
+
+                <!-- Başlık — readonly -->
+                <div class="pu-field">
+                    <label class="pu-label">
+                        Ürün Adı
+                        <span class="readonly-tag"><i class="fas fa-lock"></i> Değiştirilemez</span>
+                    </label>
+                    <input type="text"
+                           class="pu-input"
+                           value="{{ product.name }}"
+                           readonly>
+                    <input type="hidden"
+                           name="{{ form.name.html_name }}"
+                           value="{{ product.name }}">
+                </div>
+
+                <!-- Kategori + Marka -->
+                <div class="pu-grid-2">
+                    <div class="pu-field">
+                        <label class="pu-label" for="{{ form.category.id_for_label }}">
+                            Kategori
+                        </label>
+                        <select id="{{ form.category.id_for_label }}"
+                                name="{{ form.category.html_name }}"
+                                class="pu-select">
+                            <option value="">— Seçiniz —</option>
+                            {% for choice in form.category.field.queryset %}
+                            <option value="{{ choice.pk }}"
+                                {% if form.category.value|stringformat:"s" == choice.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ choice.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if form.category.errors %}
+                            {% for error in form.category.errors %}
+                            <p class="pu-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+
+                    <div class="pu-field">
+                        <label class="pu-label" for="{{ form.brand.id_for_label }}">
+                            Marka
+                        </label>
+                        <select id="{{ form.brand.id_for_label }}"
+                                name="{{ form.brand.html_name }}"
+                                class="pu-select">
+                            <option value="">— Seçiniz —</option>
+                            {% for choice in form.brand.field.queryset %}
+                            <option value="{{ choice.pk }}"
+                                {% if form.brand.value|stringformat:"s" == choice.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ choice.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Açıklama -->
+                <div class="pu-field">
+                    <label class="pu-label" for="{{ form.description.id_for_label }}">
+                        Genel Açıklama
+                    </label>
+                    <textarea id="{{ form.description.id_for_label }}"
+                              name="{{ form.description.html_name }}"
+                              class="pu-textarea">{{ form.description.value|default:'' }}</textarea>
+                    {% if form.description.errors %}
+                        {% for error in form.description.errors %}
+                        <p class="pu-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Görseller -->
+        <div class="pu-card">
+            <div class="pu-card-header">
+                <div class="pu-card-header-icon">
+                    <i class="fas fa-images"></i>
+                </div>
+                <div>
+                    <h2>Ürün Görselleri</h2>
+                    <p>Silmek istediğiniz görselin üzerindeki ✕ butonuna basın</p>
+                </div>
+            </div>
+            <div class="pu-card-body">
+
+                <div class="pu-images-grid" id="imagesGrid">
+
+                    <!-- Mevcut görseller -->
+                    {% for image_form in formset %}
+                    <div class="pu-image-card" id="imageCard-{{ forloop.counter0 }}">
+
+                        <!-- Gizli form alanları -->
+                        {{ image_form.id }}
+
+                        <!-- Silme checkbox (gizli) -->
+                        <div style="display:none;">{{ image_form.DELETE }}</div>
+
+                        <!-- Önizleme -->
+                        <div class="pu-image-preview">
+                            {% if image_form.instance.pk and image_form.instance.image %}
+                                {% if image_form.instance.is_main %}
+                                <span class="pu-main-badge">
+                                    <i class="fas fa-star"></i> Kapak
+                                </span>
+                                {% endif %}
+                                <img src="{{ image_form.instance.image.url }}"
+                                     alt="Görsel {{ forloop.counter }}"
+                                     id="preview-{{ forloop.counter0 }}">
+                            {% else %}
+                                <div class="pu-image-preview-placeholder">
+                                    <i class="fas fa-image"></i>
+                                </div>
+                            {% endif %}
+                            <div class="pu-delete-overlay">
+                                <span><i class="fas fa-trash"></i> Silinecek</span>
+                            </div>
+                            <!-- Sil butonu -->
+                            {% if image_form.instance.pk %}
+                            <button type="button"
+                                    class="pu-delete-btn"
+                                    onclick="markDelete({{ forloop.counter0 }})"
+                                    title="Görseli Sil">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+
+                        <!-- Kontroller -->
+                        <div class="pu-image-controls">
+
+                            <!-- Yeni dosya seç (sadece yeni formlar için) -->
+                            {% if not image_form.instance.pk %}
+                            <div class="pu-image-file-input">
+                                <span style="font-size:0.78rem; color:var(--gray-500);">Görsel seç:</span>
+                                <input type="file"
+                                       name="{{ image_form.image.html_name }}"
+                                       accept="image/*"
+                                       onchange="previewNewImage(this, {{ forloop.counter0 }})">
+                            </div>
+                            {% endif %}
+
+                            <!-- Varyant seç -->
+                            <div style="margin-top: 6px;">
+                                <select name="{{ image_form.variant.html_name }}"
+                                        style="width:100%; font-size:0.78rem; border:1px solid var(--gray-200);
+                                               border-radius:6px; padding:4px 8px; outline:none;">
+                                    <option value="">Tüm varyantlar</option>
+                                    {% for variant in product.variants.all %}
+                                    <option value="{{ variant.pk }}"
+                                        {% if image_form.variant.value|stringformat:"s" == variant.pk|stringformat:"s" %}selected{% endif %}>
+                                        Varyant #{{ variant.pk }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="pu-image-controls-row" style="margin-top: 6px;">
+                                <!-- Kapak mı? -->
+                                <label class="pu-checkbox-row">
+                                    <input type="checkbox"
+                                           name="{{ image_form.is_main.html_name }}"
+                                           {% if image_form.is_main.value %}checked{% endif %}>
+                                    Kapak
+                                </label>
+
+                                <!-- Sıralama -->
+                                <label style="display:flex; align-items:center; gap:4px; font-size:0.78rem; color:var(--gray-500);">
+                                    Sıra:
+                                    <input type="number"
+                                           name="{{ image_form.sort_order.html_name }}"
+                                           class="pu-sort-input"
+                                           value="{{ image_form.sort_order.value|default_if_none:0 }}"
+                                           min="0">
+                                </label>
+                            </div>
+
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                    <!-- Yeni görsel ekle placeholder -->
+                    <label class="pu-add-image-card" for="addImageTrigger">
+                        <i class="fas fa-plus-circle"></i>
+                        <span>Yeni Görsel Ekle</span>
+                        <span style="font-size:0.75rem; color:var(--gray-500);">
+                            Max 5MB, JPEG veya PNG
+                        </span>
+                    </label>
+
+                </div>
+
+                {% if formset.non_form_errors %}
+                <div class="pu-error-box">
+                    {% for error in formset.non_form_errors %}
+                    <p><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="pu-card">
+            <div class="pu-footer">
+                <a href="{% url 'products:store_product_list' store_slug=store.slug %}"
+                   class="btn btn-outline">
+                    <i class="fas fa-arrow-left"></i> Geri Dön
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Değişiklikleri Kaydet
+                </button>
+            </div>
+        </div>
+
+    </form>
+</div>
+
+<script>
+// Mevcut görseli silmek için işaretle
+function markDelete(index) {
+    const card = document.getElementById('imageCard-' + index);
+    const deleteCheckbox = card.querySelector('input[type="checkbox"][name$="-DELETE"]');
+
+    if (!deleteCheckbox) return;
+
+    deleteCheckbox.checked = !deleteCheckbox.checked;
+    card.classList.toggle('marked-delete', deleteCheckbox.checked);
+}
+
+// Yeni eklenen görsel için önizleme
+function previewNewImage(input, index) {
+    if (!input.files || !input.files[0]) return;
+
+    const card = document.getElementById('imageCard-' + index);
+    const preview = card.querySelector('.pu-image-preview');
+    const placeholder = preview.querySelector('.pu-image-preview-placeholder');
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        // Placeholder'ı kaldır
+        if (placeholder) placeholder.style.display = 'none';
+
+        // Önizleme img ekle veya güncelle
+        let img = preview.querySelector('img');
+        if (!img) {
+            img = document.createElement('img');
+            preview.insertBefore(img, preview.firstChild);
+        }
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(input.files[0]);
+}
+</script>
+
+{% endblock %}

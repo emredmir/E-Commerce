@@ -1,0 +1,536 @@
+{% extends "core/home.html" %}
+
+{% block title %}{{ category.name }} Fiyatları ve Modelleri{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --primary: #f27a1a;
+        --primary-hover: #d96812;
+        --text-dark: #333333;
+        --text-muted: #666666;
+        --bg-light: #f5f5f5;
+        --border-color: #e2e8f0;
+        --card-radius: 8px;
+    }
+
+    body {
+        background-color: var(--bg-light);
+    }
+
+    .shop-container {
+        max-width: 1200px;
+        margin: 20px auto;
+        padding: 0 15px;
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+    }
+
+    /* --- Breadcrumb --- */
+    .breadcrumb-nav {
+        margin-bottom: 15px;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+    .breadcrumb-nav a {
+        color: var(--text-muted);
+        text-decoration: none;
+    }
+    .breadcrumb-nav a:hover {
+        color: var(--primary);
+    }
+    .breadcrumb-nav span.separator {
+        margin: 0 8px;
+        font-size: 0.75rem;
+    }
+    .breadcrumb-nav .current {
+        font-weight: 600;
+        color: var(--text-dark);
+    }
+
+    /* --- Sol Sidebar (Filtreler ve Alt Kategoriler) --- */
+    .sidebar {
+        width: 260px;
+        flex-shrink: 0;
+        background: #fff;
+        border-radius: var(--card-radius);
+        border: 1px solid var(--border-color);
+        padding: 20px;
+        position: sticky;
+        top: 20px;
+    }
+
+    .filter-group {
+        margin-bottom: 25px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .filter-group:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .filter-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--text-dark);
+        margin-bottom: 15px;
+    }
+
+    /* Kategori Ağacı */
+    .cat-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .cat-list li {
+        margin-bottom: 10px;
+    }
+    .cat-list a {
+        display: flex;
+        justify-content: space-between;
+        color: var(--text-dark);
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: color 0.2s;
+    }
+    .cat-list a:hover { color: var(--primary); }
+    .cat-list .count { color: var(--text-muted); font-size: 0.8rem; }
+
+    /* Form Elemanları */
+    .form-group { margin-bottom: 12px; }
+    .form-label {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        display: block;
+        margin-bottom: 5px;
+    }
+    .form-control {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 0.9rem;
+        outline: none;
+        box-sizing: border-box;
+    }
+    .form-control:focus { border-color: var(--primary); }
+    
+    .price-inputs {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .price-inputs span { color: var(--text-muted); }
+
+    .btn-filter {
+        width: 100%;
+        background: var(--primary);
+        color: white;
+        border: none;
+        padding: 10px;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 10px;
+        transition: background 0.2s;
+    }
+    .btn-filter:hover { background: var(--primary-hover); }
+
+    /* --- Sağ İçerik Alanı --- */
+    .main-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    /* Üst Bar (Sıralama ve Chipler) */
+    .top-bar {
+        background: #fff;
+        border-radius: var(--card-radius);
+        border: 1px solid var(--border-color);
+        padding: 15px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .active-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .filter-chip {
+        background: #fff1e6;
+        color: var(--primary);
+        border: 1px solid #ffd8b8;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .filter-chip button {
+        background: none;
+        border: none;
+        color: var(--primary);
+        cursor: pointer;
+        padding: 0;
+        font-size: 1rem;
+        line-height: 1;
+    }
+
+    .sorting-select {
+        padding: 8px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 0.9rem;
+        color: var(--text-dark);
+        outline: none;
+        cursor: pointer;
+    }
+
+    /* Ürün Grid */
+    .product-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 16px;
+    }
+
+    .product-card {
+        background: #fff;
+        border-radius: var(--card-radius);
+        border: 1px solid var(--border-color);
+        overflow: hidden;
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex;
+        flex-direction: column;
+    }
+    .product-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    }
+    .product-card a {
+        text-decoration: none;
+        color: inherit;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .pc-image {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background: #f9f9f9;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+    .pc-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        padding: 15px;
+        box-sizing: border-box;
+    }
+    .pc-no-image {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+
+    .pc-body {
+        padding: 15px;
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+    }
+    .pc-brand {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        font-weight: 600;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+    .pc-name {
+        font-size: 0.95rem;
+        font-weight: 500;
+        color: var(--text-dark);
+        margin: 0 0 10px 0;
+        line-height: 1.4;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        flex: 1;
+    }
+    
+    .pc-price-row {
+        margin-top: auto;
+    }
+    .pc-price {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--primary);
+    }
+    .pc-free-shipping {
+        font-size: 0.75rem;
+        color: #2e7d32;
+        background: #e8f5e9;
+        padding: 2px 6px;
+        border-radius: 4px;
+        display: inline-block;
+        margin-top: 5px;
+        font-weight: 600;
+    }
+
+    /* Paginasyon */
+    .pagination {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 40px;
+    }
+    .page-btn {
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--border-color);
+        background: #fff;
+        border-radius: 6px;
+        color: var(--text-dark);
+        text-decoration: none;
+        font-weight: 600;
+        transition: 0.2s;
+        cursor: pointer;
+    }
+    .page-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .page-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .page-btn.disabled { opacity: 0.5; pointer-events: none; }
+
+    /* Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        background: #fff;
+        border-radius: var(--card-radius);
+        border: 1px solid var(--border-color);
+    }
+    .empty-state i {
+        font-size: 3rem;
+        color: #cbd5e1;
+        margin-bottom: 15px;
+    }
+    .empty-state h3 { color: var(--text-dark); margin-bottom: 8px; }
+    .empty-state p { color: var(--text-muted); }
+
+    /* Mobil Uyum */
+    @media (max-width: 900px) {
+        .shop-container { flex-direction: column; }
+        .sidebar { width: 100%; position: static; }
+        .top-bar { flex-direction: column; gap: 15px; align-items: flex-start; }
+        .sorting-select { width: 100%; }
+        .product-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+    }
+</style>
+
+<div class="shop-container">
+
+    <!-- SOL SİDEBAR -->
+    <aside class="sidebar">
+        <!-- Kategoriye özel sayfa olduğumuz için ana kategoriyi başlık yapabiliriz -->
+        <h2 style="font-size: 1.2rem; margin: 0 0 20px 0; color: var(--primary);">{{ category.name }}</h2>
+
+        <form id="filterForm" method="get">
+            
+            <!-- Sayfalama için hidden input -->
+            <input type="hidden" name="page" id="pageInput" value="1">
+
+            <!-- Alt Kategoriler -->
+            {% if subcategories %}
+            <div class="filter-group">
+                <div class="filter-title">Alt Kategoriler</div>
+                <ul class="cat-list">
+                    {% for sub in subcategories %}
+                    <li>
+                        <a href="{% url 'products:category_product_list' slug=sub.slug %}">
+                            <span>{{ sub.name }}</span>
+                            <span class="count">({{ sub.product_count }})</span>
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <!-- Kategori Filtresi BURADAN KALDIRILDI çünkü zaten kategori sayfasındayız -->
+
+            <!-- Marka Filtresi -->
+            <div class="filter-group">
+                <div class="filter-title">Marka</div>
+                {{ filter_form.brand }}
+            </div>
+
+            <!-- Fiyat Filtresi -->
+            <div class="filter-group">
+                <div class="filter-title">Fiyat Aralığı (₺)</div>
+                <div class="price-inputs">
+                    <input type="number" name="min_price" class="form-control" placeholder="En Az" value="{{ request.GET.min_price }}">
+                    <span>-</span>
+                    <input type="number" name="max_price" class="form-control" placeholder="En Çok" value="{{ request.GET.max_price }}">
+                </div>
+            </div>
+
+            <button type="submit" class="btn-filter">
+                <i class="fas fa-search"></i> Sonuçları Getir
+            </button>
+        </form>
+    </aside>
+
+    <!-- SAĞ İÇERİK -->
+    <main class="main-content">
+        
+        <!-- Breadcrumb (Navigasyon Zinciri) -->
+        <nav class="breadcrumb-nav">
+            <a href="/">Anasayfa</a>
+            {% for crumb in breadcrumbs %}
+                <span class="separator"><i class="fas fa-chevron-right"></i></span>
+                {% if forloop.last %}
+                    <span class="current">{{ crumb.name }}</span>
+                {% else %}
+                    <a href="{% url 'products:category_product_list' slug=crumb.slug %}">{{ crumb.name }}</a>
+                {% endif %}
+            {% endfor %}
+        </nav>
+
+        <!-- Üst Bar (Chipler ve Sıralama) -->
+        <div class="top-bar">
+            <div class="active-filters">
+                {% if active_filters %}
+                    <span style="font-size: 0.85rem; color: var(--text-muted); margin-right: 5px; align-self: center;">Seçili Filtreler:</span>
+                    {% for key, value in active_filters.items %}
+                        <div class="filter-chip">
+                            {{ value }}
+                            <button type="button" onclick="removeFilter('{{ key }}')">&times;</button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+
+            <div class="sorting">
+                <select name="ordering" form="filterForm" class="sorting-select" onchange="document.getElementById('filterForm').submit();">
+                    <option value="-created"   {% if request.GET.ordering == '-created' or not request.GET.ordering %}selected{% endif %}>En Yeniler</option>
+                    <option value="min_price"  {% if request.GET.ordering == 'min_price' %}selected{% endif %}>En Düşük Fiyat</option>
+                    <option value="-min_price" {% if request.GET.ordering == '-min_price' %}selected{% endif %}>En Yüksek Fiyat</option>
+                    <option value="-sold"      {% if request.GET.ordering == '-sold' %}selected{% endif %}>En Çok Satanlar</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Ürünler -->
+        {% if products %}
+            <div class="product-grid">
+                {% for product in products %}
+                <div class="product-card">
+                    <a href="{% url 'products:product_detail' slug=product.slug %}">
+                        
+                        <div class="pc-image">
+                            {% if product.main_images %}
+                                <img src="{{ product.main_images.0.image.url }}" alt="{{ product.name }}">
+                            {% else %}
+                                <div class="pc-no-image"><i class="fas fa-image fa-2x"></i></div>
+                            {% endif %}
+                        </div>
+
+                        <div class="pc-body">
+                            {% if product.brand %}
+                            <div class="pc-brand">{{ product.brand.name }}</div>
+                            {% endif %}
+                            
+                            <h3 class="pc-name">{{ product.name }}</h3>
+                            
+                            <div class="pc-price-row">
+                                <div class="pc-price">₺{{ product.min_price|floatformat:2 }}</div>
+                                <div class="pc-free-shipping">Kargo Bedava</div>
+                            </div>
+                        </div>
+
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Sayfalama (Pagination) -->
+            {% if page_obj.has_other_pages %}
+            <div class="pagination">
+                {% if page_obj.has_previous %}
+                    <button type="button" class="page-btn" onclick="goToPage('{{ page_obj.previous_page_number }}')">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                {% else %}
+                    <span class="page-btn disabled"><i class="fas fa-chevron-left"></i></span>
+                {% endif %}
+
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                        <span class="page-btn active">{{ num }}</span>
+                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <button type="button" class="page-btn" onclick="goToPage('{{ num }}')">{{ num }}</button>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                    <button type="button" class="page-btn" onclick="goToPage('{{ page_obj.next_page_number }}')">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                {% else %}
+                    <span class="page-btn disabled"><i class="fas fa-chevron-right"></i></span>
+                {% endif %}
+            </div>
+            {% endif %}
+
+        {% else %}
+            <!-- Boş Durum -->
+            <div class="empty-state">
+                <i class="fas fa-search"></i>
+                <h3>Ürün Bulunamadı</h3>
+                <p>Bu kategoride veya seçtiğiniz filtrelere uygun bir ürün şu an bulunmuyor.</p>
+                <button type="button" onclick="window.location.href='?'" class="btn-filter" style="width: auto; padding: 10px 24px; margin-top: 15px;">Filtreleri Temizle</button>
+            </div>
+        {% endif %}
+
+    </main>
+
+</div>
+
+<script>
+    function removeFilter(inputName) {
+        let form = document.getElementById('filterForm');
+        let input = form.querySelector(`[name="${inputName}"]`);
+        
+        if (input) {
+            input.value = '';
+        } else {
+            let hiddenInput = document.createElement("input");
+            hiddenInput.setAttribute("type", "hidden");
+            hiddenInput.setAttribute("name", inputName);
+            hiddenInput.setAttribute("value", "");
+            form.appendChild(hiddenInput);
+        }
+        form.submit();
+    }
+
+    function goToPage(pageNumber) {
+        document.getElementById('pageInput').value = pageNumber;
+        document.getElementById('filterForm').submit();
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,51 @@
+<div class="pw-image-card js-image-item" data-id="{{ image.id }}">
+    
+    <div class="pw-image-preview">
+        <!-- Kapak Görseliyse Etiket Bas -->
+        {% if image.is_main %}
+            <span class="pw-image-main-badge">
+                <i class="fa-solid fa-star"></i> Kapak
+            </span>
+        {% endif %}
+        
+        <img src="{{ image.image.url }}" alt="{{ image.alt_text|default:'Ürün görseli' }}">
+    </div>
+
+    <!-- Alt Aksiyon Çubuğu -->
+    <div class="pw-image-actions">
+        
+        <div class="pw-image-actions-group">
+            <!-- Kapak Yap Butonu -->
+            <button 
+                type="button" 
+                class="pw-btn-text js-make-main {% if image.is_main %}is-main{% endif %}" 
+                data-url="{% url 'products:image_update' store_slug=store.slug draft_id=draft.id image_id=image.id %}"
+                title="Kapak Görseli Yap"
+            >
+                <i class="fa-solid fa-star"></i> {% if image.is_main %}Kapak{% else %}Kapak Yap{% endif %}
+            </button>
+
+            <!-- Alt Metin (SEO) Düzenleme Butonu -->
+            <button 
+                type="button" 
+                class="pw-btn-text js-edit-alt {% if image.alt_text %}has-alt{% endif %}" 
+                data-url="{% url 'products:image_update' store_slug=store.slug draft_id=draft.id image_id=image.id %}"
+                data-current-alt="{{ image.alt_text }}"
+                title="{% if image.alt_text %}Mevcut Metin: {{ image.alt_text }}{% else %}SEO Alt Metin Ekle{% endif %}"
+            >
+                <i class="fa-solid fa-pen"></i> {% if image.alt_text %}Alt Metni Düzenle{% else %}Alt Metin Ekle{% endif %}
+            </button>
+        </div>
+
+        <!-- Silme Butonu -->
+        <button 
+            type="button" 
+            class="pw-image-delete js-delete-image" 
+            title="Görseli Sil"
+            data-url="{% url 'products:image_delete' store_slug=store.slug draft_id=draft.id image_id=image.id %}"
+        >
+            <i class="fa-solid fa-trash-can"></i>
+        </button>
+        
+    </div>
+</div>

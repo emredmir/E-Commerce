@@ -4,6 +4,7 @@ from django.utils.text import slugify
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 import uuid
+from django.db.models import Q
 
 
 
@@ -143,6 +144,17 @@ class StoreUpdateRequest(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True) 
     #Model ilk kez veritabanına kaydedildiği anı otomatik olarak yazar ve bir daha asla değişmez.
+
+    class Meta:
+        verbose_name = "Mağaza Güncelleme Talebi"
+        verbose_name_plural = "Mağaza Güncelleme Talepleri"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["store"],
+                condition=Q(status=StoreStatus.PENDING),
+                name="unique_pending_store_update_request",
+            ),
+        ]
     
     def __str__(self):
         return f"{self.store.store_name} - Değişiklik İsteği"
