@@ -1,0 +1,1008 @@
+{% extends "core/home.html" %}
+
+{% block title %}Teklif Düzenle — {{ store.store_name }}{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --teal-600: #00b4d8;
+        --teal-700: #0096c7;
+        --teal-800: #0077b6;
+        --teal-50:  #e0f7fa;
+        --gray-50:  #f8f9fa;
+        --gray-100: #e9ecef;
+        --gray-200: #dee2e6;
+        --gray-500: #adb5bd;
+        --gray-700: #495057;
+        --gray-900: #212529;
+        --green-bg: #d4edda;
+        --green-tx: #155724;
+        --yellow-bg:#fff3cd;
+        --yellow-tx:#856404;
+        --red-tx:   #dc3545;
+        --red-bg:   #f8d7da;
+        --muted-bg: #e2e3e5;
+        --muted-tx: #383d41;
+        --radius:   10px;
+        --shadow:   0 2px 8px rgba(0,0,0,0.07);
+    }
+
+    .ou-wrapper {
+        max-width: 860px;
+        margin: 36px auto;
+        padding: 0 20px;
+        display: grid;
+        grid-template-columns: 1fr 280px;
+        gap: 20px;
+        align-items: start;
+    }
+
+    /* Breadcrumb */
+    .ou-breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.85rem;
+        color: var(--gray-500);
+        margin-bottom: 24px;
+        grid-column: 1 / -1;
+    }
+
+    .ou-breadcrumb a { color: var(--teal-700); text-decoration: none; }
+    .ou-breadcrumb a:hover { text-decoration: underline; }
+
+    /* Sol: Form */
+    .ou-main {}
+
+    /* Kart */
+    .ou-card {
+        background: white;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        margin-bottom: 16px;
+    }
+
+    .ou-card-header {
+        padding: 18px 24px;
+        border-bottom: 1px solid var(--gray-100);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .ou-card-header-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: var(--teal-50);
+        color: var(--teal-700);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+
+    .ou-card-header h2 {
+        margin: 0 0 2px 0;
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--gray-900);
+    }
+
+    .ou-card-header p {
+        margin: 0;
+        font-size: 0.82rem;
+        color: var(--gray-500);
+    }
+
+    .ou-card-body { padding: 24px; }
+
+    /* Ürün özeti */
+    .ou-product-summary {
+        background: white;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 18px 20px;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        border-left: 4px solid var(--teal-600);
+        grid-column: 1 / -1;
+    }
+
+    .ou-product-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 9px;
+        background: var(--teal-50);
+        color: var(--teal-600);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        flex-shrink: 0;
+    }
+
+    .ou-product-info { flex: 1; min-width: 0; }
+
+    .ou-product-name {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--gray-900);
+        margin: 0 0 5px 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .ou-product-attrs {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .ou-attr-chip {
+        background: var(--teal-50);
+        color: var(--teal-800);
+        border-radius: 20px;
+        padding: 2px 10px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+
+    /* Status badge */
+    .ou-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .ou-badge.active       { background: var(--green-bg);  color: var(--green-tx);  }
+    .ou-badge.draft        { background: var(--muted-bg);  color: var(--muted-tx);  }
+    .ou-badge.out_of_stock { background: var(--yellow-bg); color: var(--yellow-tx); }
+    .ou-badge.archived     { background: var(--red-bg);    color: var(--red-tx);    }
+
+    /* Form alanları */
+    .ou-field { margin-bottom: 18px; }
+
+    .ou-label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--gray-700);
+        margin-bottom: 6px;
+    }
+
+    .ou-label .required { color: var(--red-tx); margin-left: 2px; }
+    .ou-label .optional {
+        color: var(--gray-500);
+        font-weight: 400;
+        font-size: 0.8rem;
+        margin-left: 4px;
+    }
+    .ou-label .hint {
+        color: var(--gray-500);
+        font-weight: 400;
+        font-size: 0.78rem;
+        margin-left: 6px;
+    }
+
+    .ou-input,
+    .ou-select,
+    .ou-textarea {
+        width: 100%;
+        border: 1.5px solid var(--gray-200);
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 0.9rem;
+        color: var(--gray-900);
+        outline: none;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        box-sizing: border-box;
+        font-family: inherit;
+    }
+
+    .ou-input:focus,
+    .ou-select:focus,
+    .ou-textarea:focus {
+        border-color: var(--teal-600);
+        box-shadow: 0 0 0 3px rgba(0,180,216,0.1);
+    }
+
+    .ou-textarea { resize: vertical; min-height: 90px; }
+
+    .ou-grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    /* Input prefix */
+    .ou-input-group {
+        display: flex;
+        border: 1.5px solid var(--gray-200);
+        border-radius: 8px;
+        overflow: hidden;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .ou-input-group:focus-within {
+        border-color: var(--teal-600);
+        box-shadow: 0 0 0 3px rgba(0,180,216,0.1);
+    }
+
+    .ou-input-prefix {
+        background: var(--gray-50);
+        border-right: 1.5px solid var(--gray-200);
+        padding: 10px 14px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--gray-700);
+        display: flex;
+        align-items: center;
+    }
+
+    .ou-input-group input {
+        flex: 1;
+        border: none;
+        padding: 10px 14px;
+        font-size: 0.9rem;
+        color: var(--gray-900);
+        outline: none;
+        font-family: inherit;
+        width: 100%;
+    }
+
+    /* Status radio */
+    .ou-status-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .ou-status-option { position: relative; }
+
+    .ou-status-option input[type="radio"] {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .ou-status-label {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        border: 2px solid var(--gray-200);
+        border-radius: 9px;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .ou-status-label:hover { border-color: var(--teal-500); }
+
+    .ou-status-option input:checked + .ou-status-label {
+        border-color: var(--teal-600);
+        background: var(--teal-50);
+    }
+
+    .ou-status-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
+        flex-shrink: 0;
+    }
+
+    .ou-status-icon.draft        { background: var(--muted-bg);  color: var(--muted-tx);  }
+    .ou-status-icon.active       { background: var(--green-bg);  color: var(--green-tx);  }
+    .ou-status-icon.out_of_stock { background: var(--yellow-bg); color: var(--yellow-tx); }
+
+    .ou-status-text strong {
+        display: block;
+        font-size: 0.86rem;
+        font-weight: 700;
+        color: var(--gray-900);
+    }
+
+    .ou-status-text span { font-size: 0.78rem; color: var(--gray-500); }
+
+    /* Alan hatası */
+    .ou-field-errors { margin-top: 5px; }
+
+    .ou-field-error {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--red-tx);
+        font-size: 0.82rem;
+        margin-top: 3px;
+    }
+
+    /* Genel hata */
+    .ou-error-box {
+        background: var(--red-bg);
+        color: var(--red-tx);
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-size: 0.88rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    /* Footer */
+    .ou-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 24px;
+        border-top: 1px solid var(--gray-100);
+    }
+
+    /* Sağ panel */
+    .ou-sidebar {}
+
+    /* Özet kutusu */
+    .ou-summary-card {
+        background: white;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        margin-bottom: 16px;
+    }
+
+    .ou-summary-card-header {
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--gray-100);
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--gray-700);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .ou-summary-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 18px;
+        border-bottom: 1px solid var(--gray-100);
+        font-size: 0.88rem;
+    }
+
+    .ou-summary-row:last-child { border-bottom: none; }
+
+    .ou-summary-label { color: var(--gray-500); }
+
+    .ou-summary-value {
+        font-weight: 600;
+        color: var(--gray-900);
+    }
+
+    .ou-summary-value.price { color: var(--teal-800); font-size: 1rem; }
+
+    .ou-stock-low  { color: var(--red-tx); }
+    .ou-stock-ok   { color: var(--green-tx); }
+
+    /* Fiyat Geçmişi */
+    .ou-price-history {}
+
+    .ou-ph-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 18px;
+        border-bottom: 1px solid var(--gray-100);
+        font-size: 0.82rem;
+    }
+
+    .ou-ph-item:last-child { border-bottom: none; }
+
+    .ou-ph-price { font-weight: 600; color: var(--gray-700); }
+
+    .ou-ph-date { color: var(--gray-500); }
+
+    /* Tehlikeli zone */
+    .ou-danger-card {
+        background: white;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        border: 1px solid var(--red-bg);
+    }
+
+    .ou-danger-header {
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--red-bg);
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--red-tx);
+    }
+
+    .ou-danger-body {
+        padding: 16px 18px;
+        font-size: 0.83rem;
+        color: var(--gray-500);
+    }
+
+    .ou-danger-body p { margin: 0 0 12px 0; }
+
+    /* Butonlar */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 10px 22px;
+        border-radius: 9px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        text-decoration: none;
+        transition: opacity 0.15s, transform 0.1s;
+        white-space: nowrap;
+    }
+
+    .btn:hover  { opacity: 0.9; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+
+    .btn-primary {
+        background: linear-gradient(135deg, var(--teal-600), var(--teal-800));
+        color: white;
+    }
+
+    .btn-outline {
+        background: white;
+        color: var(--teal-700);
+        border: 1px solid var(--teal-600);
+    }
+
+    .btn-danger {
+        background: white;
+        color: var(--red-tx);
+        border: 1px solid var(--red-tx);
+        width: 100%;
+        justify-content: center;
+    }
+
+    .btn-sm { padding: 7px 14px; font-size: 0.82rem; }
+
+    /* Modal */
+    .ou-modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.45);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .ou-modal-overlay.open { display: flex; }
+
+    .ou-modal {
+        background: white;
+        border-radius: 14px;
+        padding: 32px;
+        max-width: 400px;
+        width: 90%;
+        text-align: center;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    }
+
+    .ou-modal h3 {
+        margin: 0 0 10px 0;
+        color: var(--red-tx);
+        font-size: 1.1rem;
+    }
+
+    .ou-modal p {
+        color: var(--gray-700);
+        font-size: 0.9rem;
+        margin: 0 0 24px 0;
+    }
+
+    .ou-modal-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+    }
+</style>
+
+<div class="ou-wrapper">
+
+    <!-- Breadcrumb -->
+    <nav class="ou-breadcrumb">
+        <a href="{% url 'store:store_list' %}">Mağazalarım</a>
+        <i class="fas fa-chevron-right" style="font-size:0.7rem;"></i>
+        <a href="{% url 'products:store_product_list' store_slug=store.slug %}">{{ store.store_name }}</a>
+        <i class="fas fa-chevron-right" style="font-size:0.7rem;"></i>
+        <span>Teklif Düzenle</span>
+    </nav>
+
+    <!-- Ürün Özeti -->
+    <div class="ou-product-summary">
+        <div class="ou-product-icon">
+            <i class="fas fa-box"></i>
+        </div>
+        <div class="ou-product-info">
+            <p class="ou-product-name">{{ offer.variant.product.name }}</p>
+            <div class="ou-product-attrs">
+                {% for av in offer.variant.attribute_values.all %}
+                    <span class="ou-attr-chip">
+                        {{ av.attribute.name }}: {{ av.value|title }}
+                    </span>
+                {% empty %}
+                    <span style="font-size:0.82rem; color:var(--gray-500); font-style:italic;">
+                        Standart varyant
+                    </span>
+                {% endfor %}
+                {% if offer.sku %}
+                    <span class="ou-attr-chip" style="background:var(--gray-100); color:var(--gray-500);">
+                        <i class="fas fa-barcode"></i> SKU: {{ offer.sku }}
+                    </span>
+                {% elif offer.variant.barcode %}
+                    <span class="ou-attr-chip" style="background:var(--gray-100); color:var(--gray-500);">
+                        <i class="fas fa-barcode"></i> {{ offer.variant.barcode }}
+                    </span>
+                {% endif %}
+            </div>
+        </div>
+        <span class="ou-badge {{ offer.status }}">
+            {% if offer.status == 'active' %}<i class="fas fa-check-circle"></i>
+            {% elif offer.status == 'draft' %}<i class="fas fa-file"></i>
+            {% elif offer.status == 'out_of_stock' %}<i class="fas fa-exclamation-circle"></i>
+            {% endif %}
+            {{ offer.get_status_display }}
+        </span>
+    </div>
+
+    <!-- Ürün Detay Kartı -->
+    <div class="ou-card" style="margin-bottom: 16px; grid-column: 1 / -1;">
+        <div class="ou-card-header">
+            <div class="ou-card-header-icon">
+                <i class="fas fa-info-circle"></i>
+            </div>
+            <div>
+                <h2>Ürün Bilgileri</h2>
+                <p>Katalog bilgileri — Ürün ismini değiştirmek için yöneticiye başvurun</p>
+            </div>
+        </div>
+        <div class="ou-card-body">
+            <div style="display: flex; gap: 20px; align-items: flex-start;">
+            
+                <!-- Kapak Görseli -->
+                {% with image=offer.variant.product.main_images|first %}
+                <div style="flex-shrink: 0;">
+                    {% if image %}
+                        <img src="{{ image.image.url }}"
+                             alt="{{ offer.variant.product.name }}"
+                             style="width: 100px; height: 100px; object-fit: contain;
+                                    border-radius: 10px; border: 1px solid var(--gray-200);
+                                    background: var(--gray-50);">
+                    {% else %}
+                        <div style="width: 100px; height: 100px; border-radius: 10px;
+                                    background: var(--gray-100); display: flex;
+                                    align-items: center; justify-content: center;
+                                    color: var(--gray-500); font-size: 2rem;">
+                            <i class="fas fa-image"></i>
+                        </div>
+                    {% endif %}
+                </div>
+                {% endwith %}
+            
+                <!-- Bilgiler -->
+                <div style="flex: 1; min-width: 0;">
+                    <h3 style="margin: 0 0 8px 0; font-size: 1.05rem; color: var(--gray-900);">
+                        {{ offer.variant.product.name }}
+                    </h3>
+                
+                    <!-- Kategori & Marka -->
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;
+                                font-size: 0.83rem; color: var(--gray-500); margin-bottom: 10px;">
+                        {% if offer.variant.product.category %}
+                        <span>
+                            <i class="fas fa-tag"></i>
+                            {{ offer.variant.product.category.name }}
+                        </span>
+                        {% endif %}
+                        {% if offer.variant.product.brand %}
+                        <span>
+                            <i class="fas fa-building"></i>
+                            {{ offer.variant.product.brand.name }}
+                        </span>
+                        {% endif %}
+                    </div>
+                
+                    <!-- Varyant Özellikleri -->
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
+                        {% for av in offer.variant.attribute_values.all %}
+                            <span style="background: var(--teal-50); color: var(--teal-800);
+                                         border-radius: 20px; padding: 3px 12px;
+                                         font-size: 0.82rem; font-weight: 500;">
+                                {{ av.attribute.name }}: {{ av.value|title }}
+                            </span>
+                        {% empty %}
+                            <span style="font-size: 0.82rem; color: var(--gray-500);
+                                         font-style: italic;">
+                                Standart varyant
+                            </span>
+                        {% endfor %}
+                        {% if offer.variant.barcode %}
+                            <span style="background: var(--gray-100); color: var(--gray-500);
+                                         border-radius: 20px; padding: 3px 12px; font-size: 0.82rem;">
+                                <i class="fas fa-barcode"></i> {{ offer.variant.barcode }}
+                            </span>
+                        {% endif %}
+                    </div>
+                
+                    <!-- Açıklama -->
+                    {% if offer.variant.product.description %}
+                    <p style="margin: 0; font-size: 0.85rem; color: var(--gray-500);
+                               line-height: 1.5; display: -webkit-box;
+                               line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+                               overflow: hidden;">
+                        {{ offer.variant.product.description }}
+                    </p>
+                    {% endif %}
+
+                    <a href="{% url 'products:product_update' store_slug=store.slug product_slug=offer.variant.product.slug %}"
+                        class="btn btn-outline btn-sm"
+                        style="margin-top: 12px;">
+                        <i class="fas fa-edit"></i> Görsel &amp; Açıklama Düzenle
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sol: Form -->
+    <div class="ou-main">
+
+        <!-- Genel Hata -->
+        {% if messages %}
+            {% for message in messages %}
+            {% if 'error' in message.tags %}
+            <div class="ou-error-box">
+                <i class="fas fa-exclamation-circle"></i> {{ message }}
+            </div>
+            {% endif %}
+            {% endfor %}
+        {% endif %}
+
+        <form method="post" id="updateForm">
+            {% csrf_token %}
+
+            <!-- Fiyat & Stok -->
+            <div class="ou-card">
+                <div class="ou-card-header">
+                    <div class="ou-card-header-icon">
+                        <i class="fas fa-tag"></i>
+                    </div>
+                    <div>
+                        <h2>Fiyat &amp; Stok</h2>
+                        <p>Sadece kendi mağazanıza ait bilgiler</p>
+                    </div>
+                </div>
+                <div class="ou-card-body">
+
+                    <div class="ou-grid-2">
+                        <!-- Fiyat -->
+                        <div class="ou-field">
+                            <label class="ou-label">
+                                Satış Fiyatı <span class="required">*</span>
+                                <span class="hint">KDV dahil</span>
+                            </label>
+                            <div class="ou-input-group">
+                                <span class="ou-input-prefix">₺</span>
+                                <input type="number"
+                                       name="{{ form.price.html_name }}"
+                                       value="{{ form.price.value|default:'' }}"
+                                       step="0.01"
+                                       min="0.01"
+                                       placeholder="0.00">
+                            </div>
+                            {% if form.price.errors %}
+                            <div class="ou-field-errors">
+                                {% for error in form.price.errors %}
+                                <p class="ou-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Stok -->
+                        <div class="ou-field">
+                            <label class="ou-label">
+                                Stok Adedi <span class="required">*</span>
+                            </label>
+                            <input type="number"
+                                   name="{{ form.stock.html_name }}"
+                                   class="ou-input"
+                                   value="{{ form.stock.value|default_if_none:'' }}"
+                                   min="0"
+                                   placeholder="0">
+                            {% if form.stock.errors %}
+                            <div class="ou-field-errors">
+                                {% for error in form.stock.errors %}
+                                <p class="ou-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- SKU -->
+                    <div class="ou-field">
+                        <label class="ou-label">
+                            Stok Kodu (SKU) <span class="optional">(opsiyonel)</span>
+                        </label>
+                        <input type="text"
+                               name="{{ form.sku.html_name }}"
+                               class="ou-input"
+                               value="{{ form.sku.value|default:'' }}"
+                               placeholder="Kendi stok takip kodunuz">
+                        {% if form.sku.errors %}
+                        <div class="ou-field-errors">
+                            {% for error in form.sku.errors %}
+                            <p class="ou-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Satıcı Notu -->
+                    <div class="ou-field">
+                        <label class="ou-label">
+                            Ek Açıklama <span class="optional">(opsiyonel)</span>
+                        </label>
+                        <textarea name="{{ form.seller_notes.html_name }}"
+                                  class="ou-textarea"
+                                  placeholder="Ürün hakkında eklemek istediğiniz notlar...">{{ form.seller_notes.value|default:'' }}</textarea>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Yayın Durumu -->
+            <div class="ou-card">
+                <div class="ou-card-header">
+                    <div class="ou-card-header-icon">
+                        <i class="fas fa-toggle-on"></i>
+                    </div>
+                    <div>
+                        <h2>Yayın Durumu</h2>
+                        <p>Stok 0 olduğunda otomatik "Tükendi" durumuna geçer</p>
+                    </div>
+                </div>
+                <div class="ou-card-body">
+                    <div class="ou-status-group">
+
+                        {% for value, label in form.status.field.widget.choices %}
+                        <div class="ou-status-option">
+                            <input type="radio"
+                                   id="status_{{ value }}"
+                                   name="{{ form.status.html_name }}"
+                                   value="{{ value }}"
+                                   {% if form.status.value == value %}checked{% endif %}>
+                            <label class="ou-status-label" for="status_{{ value }}">
+                                <div class="ou-status-icon {{ value }}">
+                                    {% if value == 'active' %}<i class="fas fa-check-circle"></i>
+                                    {% elif value == 'draft' %}<i class="fas fa-file"></i>
+                                    {% elif value == 'out_of_stock' %}<i class="fas fa-exclamation-circle"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="ou-status-text">
+                                    <strong>{{ label }}</strong>
+                                    <span>
+                                        {% if value == 'active' %}Müşteriler görebilir
+                                        {% elif value == 'draft' %}Müşterilere görünmez
+                                        {% elif value == 'out_of_stock' %}Stok girince otomatik yayına alınır
+                                        {% endif %}
+                                    </span>
+                                </div>
+                            </label>
+                        </div>
+                        {% endfor %}
+
+                    </div>
+                    {% if form.status.errors %}
+                    <div class="ou-field-errors" style="margin-top:8px;">
+                        {% for error in form.status.errors %}
+                        <p class="ou-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="ou-card">
+                <div class="ou-footer">
+                    <a href="{% url 'products:store_product_list' store_slug=store.slug %}"
+                       class="btn btn-outline">
+                        <i class="fas fa-arrow-left"></i> Geri Dön
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Değişiklikleri Kaydet
+                    </button>
+                </div>
+            </div>
+
+        </form>
+    </div>
+
+    <!-- Sağ: Özet & Geçmiş -->
+    <aside class="ou-sidebar">
+
+        <!-- Mevcut Özet -->
+        <div class="ou-summary-card">
+            <div class="ou-summary-card-header">Mevcut Bilgiler</div>
+            <div class="ou-summary-row">
+                <span class="ou-summary-label">Fiyat</span>
+                <span class="ou-summary-value price">{{ offer.price }} ₺</span>
+            </div>
+            <div class="ou-summary-row">
+                <span class="ou-summary-label">Stok</span>
+                <span class="ou-summary-value {% if offer.stock <= 5 %}ou-stock-low{% else %}ou-stock-ok{% endif %}">
+                    {{ offer.stock }} adet
+                </span>
+            </div>
+            <div class="ou-summary-row">
+                <span class="ou-summary-label">Satılan</span>
+                <span class="ou-summary-value">{{ offer.sold_count }}</span>
+            </div>
+            {% if offer.sku %}
+            <div class="ou-summary-row">
+                <span class="ou-summary-label">SKU</span>
+                <span class="ou-summary-value" style="font-size:0.82rem;">{{ offer.sku }}</span>
+            </div>
+            {% endif %}
+            <div class="ou-summary-row">
+                <span class="ou-summary-label">Son Güncelleme</span>
+                <span class="ou-summary-value" style="font-size:0.82rem;">
+                    {{ offer.updated_at|date:"d.m.Y H:i" }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Fiyat Geçmişi -->
+        {% with history=offer.price_history.all|slice:":5" %}
+        {% if history %}
+        <div class="ou-summary-card">
+            <div class="ou-summary-card-header">
+                <i class="fas fa-history"></i> Fiyat Geçmişi
+            </div>
+            <div class="ou-price-history">
+                {% for entry in history %}
+                <div class="ou-ph-item">
+                    <span class="ou-ph-price">{{ entry.price }} ₺</span>
+                    <span class="ou-ph-date">{{ entry.created_at|date:"d.m.Y" }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <!-- Arşivleme -->
+        {% if offer.status != 'archived' %}
+        <div class="ou-danger-card">
+            <div class="ou-danger-header">
+                <i class="fas fa-exclamation-triangle"></i> Tehlikeli Bölge
+            </div>
+            <div class="ou-danger-body">
+                <p>Teklifinizi arşivlerseniz müşterilere gösterilmez. Veritabanından silinmez.</p>
+                <button onclick="openArchiveModal()" class="btn btn-danger btn-sm">
+                    <i class="fas fa-archive"></i> Teklifi Arşivle
+                </button>
+            </div>
+        </div>
+        {% endif %}
+
+    </aside>
+</div>
+
+<!-- Arşivleme Modalı -->
+<div id="archiveModal" class="ou-modal-overlay">
+    <div class="ou-modal">
+        <h3><i class="fas fa-archive"></i> Teklifi Arşivle</h3>
+        <p>
+            "<strong>{{ offer.variant.product.name }}</strong>" teklifinizi arşivlemek
+            istediğinize emin misiniz? Müşterilere gösterilmez.
+        </p>
+        <form method="post"
+              action="{% url 'products:offer_archive' store_slug=store.slug pk=offer.pk %}">
+            {% csrf_token %}
+            <div class="ou-modal-actions">
+                <button type="button"
+                        onclick="closeArchiveModal()"
+                        class="btn btn-outline">
+                    Vazgeç
+                </button>
+                <button type="submit"
+                        class="btn btn-primary"
+                        style="background:linear-gradient(135deg,#dc3545,#b02a37);">
+                    Arşivle
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Stok 0 Uyarı Modalı -->
+<div id="stockWarningModal" class="ou-modal-overlay">
+    <div class="ou-modal">
+        <h3 style="color: var(--yellow-tx);">
+            <i class="fas fa-exclamation-triangle"></i> Stok Sıfırlanıyor
+        </h3>
+        <p>
+            Stok adedini <strong>0</strong> olarak kaydederseniz teklifiniz
+            otomatik olarak <strong>"Tükendi"</strong> durumuna geçecek ve
+            müşterilere gösterilmeyecektir.
+        </p>
+        <p style="font-size: 0.82rem; color: var(--gray-500);">
+            Stok girdiğinizde otomatik yeniden yayına alınır.
+        </p>
+        <div class="ou-modal-actions">
+            <button type="button"
+                    onclick="document.getElementById('stockWarningModal').classList.remove('open')"
+                    class="btn btn-outline">
+                Geri Dön
+            </button>
+            <button type="button"
+                    id="confirmStockZero"
+                    class="btn btn-primary"
+                    style="background: linear-gradient(135deg, var(--yellow-tx), #6d4e00);">
+                Anladım, Kaydet
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function openArchiveModal() {
+    document.getElementById('archiveModal').classList.add('open');
+}
+
+function closeArchiveModal() {
+    document.getElementById('archiveModal').classList.remove('open');
+}
+
+document.getElementById('archiveModal').addEventListener('click', function(e) {
+    if (e.target === this) closeArchiveModal();
+});
+
+document.getElementById('updateForm').addEventListener('submit', function(e) {
+    const stock = parseInt(document.querySelector('input[name="stock"]').value) || 0;
+    const activeRadio = document.getElementById('status_active');
+    const isActive = activeRadio && activeRadio.checked;
+
+    // Stok 0 ve durum active ise uyar
+    if (stock === 0 && isActive) {
+        e.preventDefault();
+
+        document.getElementById('stockWarningModal').classList.add('open');
+
+        // Onay butonuna tıklayınca formu gönder
+        document.getElementById('confirmStockZero').onclick = function() {
+            document.getElementById('updateForm').submit();
+        };
+    }
+});
+</script>
+
+{% endblock %}

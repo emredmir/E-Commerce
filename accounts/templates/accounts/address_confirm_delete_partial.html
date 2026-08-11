@@ -1,0 +1,8 @@
+<div class="text-center">
+    <p><strong>{{ address.title }}</strong> adlı adresi silmek istediğinize emin misiniz?</p>
+    <form method="post" action="{% url 'accounts:address_delete' address.pk %}">
+        {% csrf_token %}
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+        <button type="submit" class="btn btn-danger">Evet, Sil</button>
+    </form>
+</div>

@@ -1,0 +1,602 @@
+{% extends "core/home.html" %}
+{% load static %}
+
+{% block title %}
+Teklif Ekle — {{ product.name }}
+{% endblock %}
+
+{% block content %}
+<!-- SweetAlert2 Kütüphanesi -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<style>
+    :root{
+        --teal-50:#e6fffb; --teal-100:#c7f9f4; --teal-500:#14b8a6; --teal-600:#0d9488; --teal-700:#0f766e;
+        --gray-50:#fafafa; --gray-100:#f4f4f5; --gray-200:#e4e4e7; --gray-300:#d4d4d8; --gray-400:#a1a1aa;
+        --gray-600:#52525b; --gray-700:#3f3f46; --gray-800:#27272a;
+        --red:#dc2626; --blue-50: #eff6ff; --blue-500: #3b82f6; --blue-700: #1d4ed8;
+        --radius:14px; --shadow:0 8px 30px rgba(0,0,0,.05);
+    }
+    .pw-wrapper{ max-width:1000px; margin:40px auto; padding:0 20px; }
+    
+    /* Breadcrumb & Toast */
+    .pw-breadcrumb{ display:flex; align-items:center; gap:10px; font-size:.88rem; color:var(--gray-400); margin-bottom:26px; }
+    .pw-breadcrumb a{ text-decoration:none; color:var(--teal-700); }
+    .pw-breadcrumb a:hover{ text-decoration:underline; }
+    
+    #wizard-toast-container{ position:fixed !important; top:24px !important; right:24px !important; display:flex; flex-direction:column; gap:12px; width:360px; max-width:calc(100vw - 40px); z-index:99999; pointer-events:none; }
+    .wizard-toast{ display:flex; align-items:flex-start; gap:12px; padding:16px 18px; border-radius:12px; box-shadow:0 12px 30px rgba(0,0,0,.15); color:#fff; opacity:0; transform:translateY(-10px); transition: opacity .25s ease, transform .25s ease; pointer-events:auto; }
+    .wizard-toast.show{ opacity:1; transform:none; }
+    .wizard-toast-success{ background:#16a34a; }
+    .wizard-toast-error{ background:#dc2626; }
+    .wizard-toast-info{ background:#2563eb; }
+    .wizard-toast i{ margin-top:2px; }
+    .wizard-toast > div{ flex:1; }
+    .wizard-toast-close{ margin-left:auto; border:none; background:none; color:inherit; cursor:pointer; font-size:1.2rem; line-height:1; opacity:.7; transition:opacity .2s; }
+    .wizard-toast-close:hover{ opacity:1; }
+
+    /* Product Highlight Card */
+    .pw-highlight { background: #fff; border-radius: var(--radius); padding: 24px; display: flex; gap: 24px; align-items: center; margin-bottom: 24px; box-shadow: var(--shadow); border: 1px solid var(--gray-200); }
+    .pw-highlight-img { width: 80px; height: 80px; border-radius: 10px; object-fit: contain; background: var(--gray-50); border: 1px solid var(--gray-200); flex-shrink: 0; padding: 4px;}
+    .pw-highlight-info h1 { margin: 0 0 6px 0; font-size: 1.25rem; color: var(--gray-800); line-height: 1.3; }
+    .pw-highlight-info p { margin: 0; font-size: 0.9rem; color: var(--gray-500); }
+    .pw-highlight-badge { background: var(--blue-50); color: var(--blue-700); padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; border: 1px solid #bfdbfe; display: inline-flex; align-items: center; gap: 6px; }
+
+    /* Cards */
+    .pw-card{ background:#fff; border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; margin-bottom:24px; }
+    .pw-card-header{ display:flex; align-items:center; justify-content: space-between; padding:22px 26px; border-bottom:1px solid var(--gray-200); }
+    .pw-card-header-left { display:flex; align-items:center; gap:16px; }
+    .pw-card-icon{ width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:var(--teal-50); color:var(--teal-600); font-size:1.2rem; }
+    .pw-card-title{ margin:0; font-size:1.1rem; color:var(--gray-800); }
+    .pw-card-subtitle{ margin-top:4px; color:var(--gray-400); font-size:.88rem; }
+    .pw-card-body{ padding:28px; }
+
+    .pw-alert-info { display: flex; align-items: center; gap: 12px; background: var(--blue-50); border: 1px solid #bfdbfe; color: var(--blue-700); padding: 14px 20px; border-radius: 8px; font-size: 0.95rem; margin-bottom: 24px; }
+    .pw-alert-info i { font-size: 1.4rem; color: var(--blue-500); flex-shrink: 0; }
+    .pw-alert-info strong { color: var(--blue-800); }
+
+    /* Bulk Apply Section */
+    .pw-bulk-section { background: var(--gray-50); border: 1px solid var(--teal-100); border-radius: 12px; padding: 20px 20px 10px 20px; margin-bottom: 28px; box-shadow: 0 4px 15px rgba(20, 184, 166, 0.08); }
+    .pw-bulk-header {display: flex; align-items: center; gap: 12px; color: var(--teal-700); font-weight: 600; margin-bottom: 16px; flex-wrap: wrap; }
+
+    .pw-bulk-title { font-size: 1rem; font-weight: 600; color: var(--gray-800); display: flex; align-items: center; gap: 8px; }
+    .pw-bulk-title i { color: var(--teal-600); }
+
+    /* Segmented Control (Toggle Hap) */
+    .pw-bulk-toggle { display: inline-flex; background: var(--gray-200); padding: 4px; border-radius: 8px; }
+    .pw-bulk-toggle input { display: none; }
+    .pw-bulk-toggle label { padding: 6px 14px; font-size: 0.85rem; font-weight: 600; color: var(--gray-600); cursor: pointer; border-radius: 6px; transition: 0.2s; }
+    .pw-bulk-toggle input:checked + label { background: #fff; color: var(--gray-800); box-shadow: 0 2px 4px rgba(0,0,0,0.06); }
+
+    /* Toplu İşlem Input Grid */
+
+    .pw-bulk-grid { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; align-items: start; }
+    .pw-bulk-field { flex: 1; min-width: 140px; padding-bottom: 22px; }
+    .pw-bulk-label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--gray-600); margin-bottom: 6px; }
+    .pw-bulk-input { width: 100%; padding: 10px 14px; border: 1px solid var(--teal-100); border-radius: 10px; font-family: inherit; font-size: 0.9rem; background: #fff; box-sizing: border-box;
+         }
+    .pw-bulk-input:focus { outline: none; border-color: var(--teal-500); box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.1); }
+
+    .pw-bulk-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-top: 16px; gap: 16px; border-top: 1px solid var(--gray-200); padding-top: 15px; }
+    .pw-bulk-modes { display: flex; background: var(--gray-100); border-radius: 10px; padding: 4px; gap: 4px; }
+    .pw-bulk-mode-label { text-align: center; padding: 10px 16px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; color: var(--gray-600); cursor: pointer; transition: .2s; }
+    .pw-bulk-mode-label input { display: none; }
+    .pw-bulk-mode-label:has(input:checked) { background: #fff; color: var(--teal-700); box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+    
+    .pw-btn-bulk-apply { height: 44px; padding: 0 24px; border-radius: 10px; }
+
+    .pw-bulk-options { display: flex; align-items: center; gap: 16px; margin-top: 16px; }
+
+    /* Sihirli Buton ve SKU Önizleme */
+    .pw-input-group { position: relative; display: flex; align-items: center; }
+    .pw-input-group .pw-bulk-input { padding-right: 40px; }
+    .pw-magic-btn { position: absolute; right: 6px; background: var(--teal-50); color: var(--teal-600); border: none; width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: .2s; }
+    .pw-magic-btn:hover { background: var(--teal-100); color: var(--teal-700); transform: scale(1.05); }
+    .pw-sku-field-wrapper { position: relative; padding-bottom: 18px; }
+    .pw-sku-preview { position: absolute; bottom: 0; left: 4px; font-size: 0.75rem; color: var(--teal-600); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 95%; display: none; }
+    .pw-sku-preview span { color: var(--gray-800); font-family: monospace; }
+
+    /* Variant Table */
+    .pw-table-wrapper { width: 100%; overflow-x: auto; border: 1px solid var(--gray-200); border-radius: 12px; background: #fff; }
+    .pw-table { width: 100%; min-width: 950px; border-collapse: collapse; text-align: left; }
+    .pw-table th { position: sticky; top: 0; background: var(--gray-100); padding: 14px 16px; font-weight: 600; color: var(--gray-700); font-size: .85rem; border-bottom: 1px solid var(--gray-200); white-space: nowrap; z-index: 10; }
+    .pw-table td { padding: 12px 16px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+    .pw-table tr:hover td { background: var(--gray-50); }
+    
+    /* CUSTOM VARYANT SATIRI */
+    .pw-row-custom td { background-color: #f8fafc; }
+    .pw-row-custom:hover td { background-color: #f0fdf4; }
+    .pw-row-custom td:first-child { border-left: 4px solid var(--teal-500); }
+
+    .pw-table-input { width: 100%; min-width: 90px; padding: 8px 12px; border: 1px solid var(--gray-200); border-radius: 8px; font-size: .9rem; background: #fff; transition: .2s; }
+    .pw-table-input:focus { border-color: var(--teal-500); outline: none; box-shadow: 0 0 0 3px rgba(20,184,166,.1); }
+    .pw-table-input.is-invalid { border-color: var(--red); background: #fef2f2; }
+    
+    .pw-variant-cell { display: flex; align-items: center; gap: 12px; min-width: 200px; }
+    .pw-variant-thumb { width: 44px; height: 44px; border-radius: 8px; border: 1px solid var(--gray-200); object-fit: cover; background: var(--gray-50); flex-shrink: 0; }
+    .pw-variant-name { font-weight: 600; color: var(--gray-800); font-size: 0.9rem; }
+    .pw-custom-badge { background: var(--teal-100); color: var(--teal-800); font-size: 0.7rem; padding: 3px 8px; border-radius: 6px; font-weight: bold; margin-top: 4px; display: inline-block; }
+
+    /* Çöp Kutusu Butonu */
+    .pw-btn-delete-variant { background: none; border: none; font-size: 1.1rem; color: var(--gray-400); cursor: pointer; padding: 8px; border-radius: 6px; transition: 0.2s; }
+    .pw-btn-delete-variant:hover { background: #fef2f2; color: var(--red); }
+
+    /* Add Row Button (Tfoot) */
+    .pw-add-row-btn { width: 100%; background: transparent; border: 2px dashed var(--gray-300); color: var(--gray-600); padding: 14px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: .2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .pw-add-row-btn:hover { border-color: var(--teal-500); color: var(--teal-700); background: var(--teal-50); }
+
+    /* Modals */
+    .pw-modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.5); z-index: 1000; }
+    .pw-modal[hidden] { display: none !important; }
+    .pw-modal-content { width: min(600px, 95%); background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 25px 60px rgba(0,0,0,.2); }
+    .pw-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid var(--gray-200); background: var(--gray-50); }
+    .pw-modal-header h3 { margin: 0; font-size: 1.1rem; color: var(--gray-800); display: flex; align-items: center; gap: 8px;}
+    .pw-modal-close { border: none; background: none; font-size: 1.5rem; cursor: pointer; color: var(--gray-500); }
+    .pw-modal-close:hover { color: var(--gray-800); }
+    .pw-modal-body { padding: 24px; max-height: 60vh; overflow-y: auto; }
+    .pw-modal-footer { display: flex; justify-content: flex-end; gap: 12px; padding: 20px 24px; border-top: 1px solid var(--gray-200); background: var(--gray-50); }
+
+    /* Modal Inputs */
+    .pw-form-group { margin-bottom: 16px; }
+    .pw-form-label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--gray-700); margin-bottom: 6px; }
+    .pw-form-control { width: 100%; padding: 10px 14px; border: 1px solid var(--gray-200); border-radius: 8px; font-size: 0.95rem; font-family: inherit; box-sizing: border-box; transition: .2s; }
+    .pw-form-control:focus { outline: none; border-color: var(--teal-500); box-shadow: 0 0 0 3px rgba(20,184,166,.1); }
+
+    /* 3- MODALA ÖZEL SÜRÜKLE BIRAK (DROPZONE) ALANI (Küçültüldü) */
+    .pw-upload-zone {
+        border: 2px dashed var(--gray-300);
+        border-radius: 10px;
+        padding: 20px 16px; /* Padding daraltıldı */
+        text-align: center;
+        background: var(--gray-50);
+        cursor: pointer;
+        transition: all .2s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+    .pw-upload-zone:hover, .pw-upload-zone.dragover {
+        border-color: var(--teal-500);
+        background: var(--teal-50);
+    }
+    .pw-upload-zone i {
+        font-size: 2rem; /* İkon küçültüldü */
+        color: var(--teal-500);
+        margin-bottom: 8px;
+    }
+    .pw-upload-zone-text {
+        font-weight: 600;
+        color: var(--gray-700);
+        font-size: 0.9rem;
+        margin-bottom: 4px;
+    }
+    .pw-upload-zone-subtext {
+        color: var(--gray-400);
+        font-size: 0.8rem;
+    }
+    .pw-upload-input {
+        display: none;
+    }
+
+    /* 4- MODALA ÖZEL GÖRSEL KARTLARI (Küçültüldü) */
+    .pw-image-grid {
+        display: grid;
+        position: relative;
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); /* 180px'den 110px'e düşürüldü */
+        gap: 12px;
+        margin-top: 16px;
+    }
+    .pw-image-card {
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        background: #fff;
+        overflow: hidden;
+        position: relative;
+        transition: all .2s ease;
+        display: flex;
+        flex-direction: column;
+        cursor: grab;
+    }
+    .pw-image-card:active { cursor: grabbing; }
+    .pw-image-card:hover {
+        border-color: var(--teal-500);
+        box-shadow: 0 4px 12px rgba(20,184,166,.15);
+        transform: translateY(-2px);
+    }
+    
+    .pw-image-preview {
+        width: 100%;
+        height: 110px; /* 180px'den 110px'e düşürüldü */
+        background: #f8f9fa;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .pw-image-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover; 
+        object-position: center;
+    }
+
+    /* Kapak Etiketi (Küçültüldü) */
+    .pw-image-main-badge {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        background: var(--teal-600);
+        color: #fff;
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 3px 6px;
+        border-radius: 4px;
+        z-index: 10;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    /* Aksiyon Çubuğu (Küçültüldü) */
+    .pw-image-actions {
+        background: #fff;
+        border-top: 1px solid var(--gray-100);
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        padding: 6px 8px; /* Daraltıldı */
+    }
+    .pw-image-actions-group {
+        display: flex; 
+        align-items: center; 
+        gap: 6px;
+    }
+    .pw-btn-text {
+        background: none;
+        border: none;
+        padding: 4px;
+        cursor: pointer;
+        font-size: 0.75rem; /* Text ve ikonlar ufaltıldı */
+        font-weight: 500;
+        color: var(--gray-600);
+        transition: color .2s;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .pw-btn-text:hover { opacity: 0.7; }
+    .pw-btn-text.is-main,
+    .pw-btn-text.has-alt { color: var(--teal-700); font-weight: 700; }
+    
+    /* Çöp Kutusu Butonu (Küçültüldü) */
+    .pw-image-delete {
+        background: #fee2e2;
+        color: #dc2626;
+        border: none;
+        width: 24px; /* 32px'den 24px'e düşürüldü */
+        height: 24px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        transition: 0.2s;
+    }
+    .pw-image-delete:hover { background: #ef4444; color: white; }
+
+    .sortable-ghost {
+        opacity: 0.4;
+        background: var(--teal-50);
+        border: 2px dashed var(--teal-500);
+    }
+
+    /* Buttons & Footer */
+    .pw-footer { position: sticky; bottom: 0; background: white; z-index: 50; box-shadow: 0 -10px 20px rgba(0,0,0,0.02); border-radius: var(--radius); display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 24px 28px; border-top: 1px solid var(--gray-200); margin-top: 24px; }
+    .pw-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; padding: 12px 22px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; transition: .2s; }
+    .pw-btn:disabled { opacity: .6; cursor: not-allowed; }
+    .pw-btn:hover:not(:disabled) { transform: translateY(-1px); opacity: .95; }
+    .pw-btn-primary { background: var(--teal-600); color: white; }
+    .pw-btn-outline { background: white; color: var(--teal-700); border: 1px solid var(--teal-600); }
+    .pw-btn-ghost { background: transparent; color: var(--gray-600); border: 1px solid var(--gray-300); text-decoration: none; }
+    .pw-btn-ghost:hover { background: var(--gray-100); color: var(--gray-800); }
+
+    @media (max-width: 768px) {
+        .pw-highlight { flex-direction: column; align-items: flex-start; gap: 16px; }
+        .pw-bulk-grid { grid-template-columns: 1fr; }
+        .pw-footer { flex-direction: column-reverse; }
+        .pw-btn { width: 100%; }
+        .pw-card-header { flex-direction: column; align-items: flex-start; gap: 16px; }
+    }
+</style>
+
+<div id="wizard-toast-container"></div>
+
+<div class="pw-wrapper">
+    <!-- Breadcrumb -->
+    <nav class="pw-breadcrumb">
+        <a href="{% url 'store:store_list' %}">Mağazalarım</a>
+        <i class="fas fa-chevron-right"></i>
+        <a href="{% url 'products:store_product_list' store_slug=store.slug %}">{{ store.store_name }}</a>
+        <i class="fas fa-chevron-right"></i>
+        <span>Kataloğa Teklif Ekle</span>
+    </nav>
+
+    <!-- Highlighted Product Card -->
+    <div class="pw-highlight">
+        <img src="{% if main_product_image_url %}{{ main_product_image_url }}{% else %}{% static 'core/images/placeholder.png' %}{% endif %}" alt="Product Image" class="pw-highlight-img">
+        <div class="pw-highlight-info">
+            <div class="pw-highlight-badge"><i class="fa-solid fa-book-open"></i> Mevcut Katalog Ürünü</div>
+            <h1 style="margin-top: 10px;">{{ product.name }}</h1>
+            <p>{{ product.brand.name|default:"Genel Marka" }} • {{ product.category.name }}</p>
+        </div>
+    </div>
+
+    <!-- Variants Card -->
+    <div class="pw-card">
+        <div class="pw-card-header">
+            <div class="pw-card-header-left">
+                <div class="pw-card-icon"><i class="fa-solid fa-tags"></i></div>
+                <div>
+                    <h2 class="pw-card-title">Varyant Teklifleri</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="pw-card-body">
+
+            <div class="pw-alert-info">
+                <i class="fa-solid fa-circle-info"></i>
+                <div>
+                    Satmak istediğiniz varyantların karşısına <strong>Fiyat</strong> ve <strong>Stok</strong> değerlerini giriniz. 
+                    <strong>Boş bıraktığınız (veri girmediğiniz) satırlar tamamen yoksayılacaktır.</strong>
+                </div>
+            </div>
+            
+            <!-- Bulk Apply Section -->
+            <div class="pw-bulk-section">
+                <div class="pw-bulk-header">
+                    <div class="pw-bulk-title">
+                        <i class="fa-solid fa-bolt"></i> Toplu Değer Ata
+                    </div>
+                </div>
+                <div class="pw-bulk-grid">
+                    <div class="pw-bulk-field">
+                        <label class="pw-bulk-label">Fiyat (TL)</label>
+                        <input type="text" inputmode="decimal" class="pw-bulk-input js-bulk-price" id="bulk-price" placeholder="Örn: 499,90">
+                    </div>
+                    <div class="pw-bulk-field">
+                        <label class="pw-bulk-label">Stok</label>
+                        <input type="number" min="0" class="pw-bulk-input js-bulk-stock" id="bulk-stock" placeholder="Örn: 50">
+                    </div>
+                    <!-- SİHİRLİ BUTON BURAYA EKLENDİ -->
+                    <div class="pw-bulk-field pw-sku-field-wrapper">
+                        <label class="pw-bulk-label">SKU Öneki (Opsiyonel)</label>
+                        <div class="pw-input-group">
+                            <input type="text" class="pw-bulk-input js-bulk-sku" id="bulk-sku" placeholder="Örn: TSHIRT-">
+                            <button type="button" class="pw-magic-btn js-generate-sku-prefix" title="Otomatik SKU Öneki Üret" data-product-name="{{ product.name }}">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            </button>
+                        </div>
+                        <div class="pw-sku-preview js-sku-preview">
+                            Örnek: <span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="pw-bulk-footer">
+                    <div class="pw-bulk-modes">
+                        <label class="pw-bulk-mode-label">
+                            <input type="radio" name="bulk_mode" value="empty" checked> Sadece Boş Olanlar
+                        </label>
+                        <label class="pw-bulk-mode-label">
+                            <input type="radio" name="bulk_mode" value="all"> Tüm Varyantlar
+                        </label>
+                    </div>
+                    <button type="button" class="pw-btn pw-btn-ghost js-btn-bulk-apply" id="btn-bulk-apply" style="height: 38px;">Uygula</button>
+                </div>
+            </div>
+
+            <!-- Main Form -->
+            <form id="offer-form" method="post" action="{% url 'products:offer_create' store_slug=store.slug draft_id=draft.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="variants_data" id="variants_data_input">
+
+                <div class="pw-table-wrapper">
+                    <table class="pw-table">
+                        <thead>
+                            <tr>
+                                <th>Varyant Kombinasyonu</th>
+                                <th style="width: 140px;">Fiyat (TL)</th>
+                                <th style="width: 100px;">Stok</th>
+                                <th style="width: 160px;">Satıcı SKU (Opsiyonel)</th>
+                                <th style="width: 160px;">Barkod (Varsa)</th>
+                                <th style="width: 60px; text-align: center;">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody id="variants-table-body">
+                            
+                            {% for item in variants_context %}
+                            <!-- YENİ EKLENEN VARYANTSA CLASS EKLİYORUZ -->
+                            <tr class="js-offer-row {% if item.is_custom %}pw-row-custom{% endif %}" 
+                                data-type="{% if item.is_custom %}custom{% else %}existing{% endif %}" 
+                                data-id="{% if item.is_custom %}{{ item.draft_variant.id }}{% else %}{{ item.catalog_variant.id }}{% endif %}"
+                                data-signature="{% if item.is_custom %}{{ item.draft_variant.attribute_signature }}{% else %}{{ item.catalog_variant.attribute_signature }}{% endif %}"
+                                data-attributes="{% if item.is_custom %}{% for val in item.draft_variant.attribute_values.all %}{{ val.value|slugify }}{% if not forloop.last %}-{% endif %}{% endfor %}{% else %}{% for val in item.catalog_variant.attribute_values.all %}{{ val.value|slugify }}{% if not forloop.last %}-{% endif %}{% endfor %}{% endif %}">
+                                
+                                <td>
+                                    <div class="pw-variant-cell">
+                                        <!-- Thumbnail -->
+                                        {% if item.thumbnail_url %}
+                                            <img src="{{ item.thumbnail_url }}" alt="Thumb" class="pw-variant-thumb">
+                                            
+                                        {% else %}
+                                            <div class="pw-variant-thumb" style="display:flex; align-items:center; justify-content:center;">
+                                                <i class="fa-regular fa-image" style="color:#a1a1aa;"></i>
+                                            </div>
+                                        {% endif %}
+                                        
+
+                                        <!-- Name -->
+                                        <div>
+                                            <div class="pw-variant-name">
+                                                {% if item.is_custom %}
+                                                    {% for val in item.draft_variant.attribute_values.all %}{{ val.value }}{% if not forloop.last %} / {% endif %}{% endfor %}
+                                                {% else %}
+                                                    {% for val in item.catalog_variant.attribute_values.all %}{{ val.value }}{% if not forloop.last %} / {% endif %}{% endfor %}
+                                                {% endif %}
+                                            </div>
+                                            {% if item.is_custom %}
+                                                <div style="display: flex; align-items: center; gap: 6px;">
+                                                    <div class="pw-custom-badge">
+                                                        <i class="fa-solid fa-sparkles"></i> Eklenen Varyant
+                                                    </div>
+
+                                                    {% if item.image_count > 0 %}
+                                                        <div class="pw-custom-badge">
+                                                            <i class="fa-solid fa-images"></i> {{ item.image_count }} Görsel
+                                                        </div>
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        
+
+                                    </div>
+                                </td>
+                                
+                                <td>
+                                    <input type="text" inputmode="decimal" class="pw-table-input js-input-price" placeholder="0,00" value="{{ item.draft_variant.price|default_if_none:'' }}">
+                                </td>
+                                
+                                <td>
+                                    <input type="number" min="0" class="pw-table-input js-input-stock" placeholder="0" value="{{ item.draft_variant.stock|default_if_none:'' }}">
+                                </td>
+                                
+                                <td>
+                                    <input type="text" class="pw-table-input js-input-sku" placeholder="İsteğe Bağlı" value="{{ item.draft_variant.sku|default_if_none:'' }}">
+                                </td>
+
+                                <!-- Barkod -->
+                                <td>
+                                    {% if item.is_custom %}
+                                        <input type="text" class="pw-table-input js-input-barcode" placeholder="EAN/UPC" value="{{ item.draft_variant.barcode|default_if_none:'' }}">
+                                    {% else %}
+                                        <!-- Katalog varyantı kontrolü -->
+                                        {% if item.catalog_variant.barcode %}
+                                            <!-- Katalogda barkod var: KİLİTLİ -->
+                                            <input type="text" class="pw-table-input" value="{{ item.catalog_variant.barcode }}" disabled style="background:var(--gray-50); color:var(--gray-500);" title="Katalog Barkodu">
+                                        {% else %}
+                                            <!-- Katalogda barkod YOK: GİRİLEBİLİR -->
+                                            <input type="text" class="pw-table-input js-input-barcode" placeholder="EAN/UPC Ekle" value="{{ item.draft_variant.barcode|default_if_none:'' }}">
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                                <!-- SİLME BUTONU HÜCRESİ -->
+                                <td style="text-align: center;">
+                                    {% if item.is_custom %}
+                                        <button type="button" 
+                                                class="pw-btn-delete-variant js-btn-delete" 
+                                                title="Bu varyantı tablodan sil"
+                                                data-url="{% url 'products:variant_delete' store_slug=store.slug draft_id=draft.id variant_id=item.draft_variant.id %}">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                                <tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--gray-500);">Bu ürüne ait varyant bulunamadı.</td></tr>
+                            {% endfor %}
+                            
+                        </tbody>
+                        <!-- Yeni Varyant Ekle Butonu Tablonun Altında! -->
+                        <tfoot>
+                            <tr>
+                                <td colspan="6" style="padding: 16px;">
+                                    <button type="button" class="pw-add-row-btn" id="btn-open-custom-modal">
+                                        <i class="fa-solid fa-plus"></i> Listede Olmayan Yeni Bir Seçenek (Varyant) Ekle
+                                    </button>
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Footer Butonları -->
+    <div class="pw-footer">
+        <a href="{% url 'products:wizard_step1_edit' store_slug=store.slug draft_id=draft.id %}" class="pw-btn pw-btn-ghost">
+            <i class="fa-solid fa-arrow-left"></i> Step1'e Dön
+        </a>
+
+        <button type="button" class="pw-btn pw-btn-primary" id="btn-submit-offer">
+            Kaydet ve Satışa Başla <i class="fa-solid fa-check"></i>
+        </button>
+    </div>
+</div>
+
+<!-- Yeni Varyant Ekleme Modal -->
+<div id="custom-variant-modal" class="pw-modal"
+    data-attributes-url="{% url 'products:api_category_attributes' category_id=product.category.id %}" hidden>
+    <div class="pw-modal-content">
+        <div class="pw-modal-header">
+            <h3><i class="fa-solid fa-plus-circle" style="color:var(--teal-600);"></i> Yeni Seçenek Ekle</h3>
+            <button type="button" class="pw-modal-close" id="btn-close-modal">&times;</button>
+        </div>
+        
+        <form id="custom-variant-form" method="post" enctype="multipart/form-data" action="{% url 'products:offer_custom_variant_create' store_slug=store.slug draft_id=draft.id %}">
+            {% csrf_token %}
+            <input type="hidden" name="attributes_data" id="modal_attributes_data">
+            
+            <div class="pw-modal-body">
+                <div style="margin-bottom: 20px; font-size: 0.9rem; color: var(--gray-700); background: var(--blue-50); padding: 14px; border-radius: 8px; border: 1px solid var(--blue-100);">
+                    <i class="fa-solid fa-circle-info" style="color:var(--blue-500); margin-right: 4px;"></i> 
+                    Katalogda olmayan bir özellik kombinasyonu ekliyorsunuz. <strong>Not: Bu işlem sayfayı yenileyecektir. Tablodaki kaydedilmemiş teklifleriniz varsa, önce onları kaydetmeniz önerilir.</strong>
+                </div>
+
+                <!-- Backend'den dönen özellikleri buraya yükleyeceğiz -->
+                <div id="modal-dynamic-attributes">
+                    <div style="text-align:center; padding:20px; color:var(--gray-400);">
+                        <i class="fa-solid fa-spinner fa-spin fa-2x"></i><br><br>Özellikler yükleniyor...
+                    </div>
+                </div>
+
+                <div id="modal-duplicate-warning" style="display:none; margin-bottom: 20px; font-size: 0.9rem; color: var(--gray-700); background: var(--blue-50); padding: 14px; border-radius: 8px; border: 1px solid var(--blue-100);">
+                    <i class="fa-solid fa-triangle-exclamation" style="color:var(--blue-500); margin-right: 4px;"></i> 
+                    Bu özelliklere sahip varyant tabloda zaten mevcut! Lütfen formu kapatıp listedeki mevcut varyanta fiyat giriniz.
+                </div>
+
+                <div class="pw-form-group" style="margin-top: 24px;">
+                    <label class="pw-form-label">Bu Seçeneğe Ait Görseller</label>
+
+                    <!-- Sürükle Bırak (Drag & Drop) Yükleme Alanı -->
+                    <div class="pw-upload-zone js-offer-upload-zone" id="offer-upload-zone">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <div class="pw-upload-zone-text">Görselleri sürükleyip bırakın veya seçin</div>
+                        <div class="pw-upload-zone-subtext">Maksimum 5 görsel, JPG veya PNG. (Max 10MB)</div>
+                    
+                        <!-- Gizli Input -->
+                        <input type="file" name="images" id="offer-image-input" class="pw-upload-input" multiple accept="image/jpeg, image/png, image/webp">
+                    </div>
+                    
+                    <!-- Seçilen dosyaların isimlerinin listeleneceği alan -->
+                    <div id="offer-upload-preview" style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;"></div>
+                </div>
+            </div>
+
+            <div class="pw-modal-footer">
+                <button type="button" class="pw-btn pw-btn-ghost" id="btn-cancel-modal">İptal</button>
+                <button type="submit" class="pw-btn pw-btn-primary" id="btn-save-modal" disabled>Varyantı Karta Ekle</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<!-- SortableJS (Sürükle bırak sıralama için en stabil kütüphane) -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+<script src="{% static 'products/js/wizard_ui.js' %}"></script>
+<script src="{% static 'products/js/offer.js' %}"></script>
+
+{% endblock %}

@@ -1,0 +1,1857 @@
+{% extends "core/home.html" %}
+{% load static %}
+
+{% block title %}
+Yeni Ürün Oluştur — {{ store.store_name }}
+{% endblock %}
+
+{% block content %}
+<!-- Choices.js CSS & JS tekli attr. ekleme listesi için-->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
+
+<style>
+    :root{
+        --teal-50:#e6fffb;
+        --teal-100:#c7f9f4;
+        --teal-500:#14b8a6;
+        --teal-600:#0d9488;
+        --teal-700:#0f766e;
+
+        --gray-50:#fafafa;
+        --gray-100:#f4f4f5;
+        --gray-200:#e4e4e7;
+        --gray-400:#a1a1aa;
+        --gray-600:#52525b;
+        --gray-700:#3f3f46;
+        --gray-800:#27272a;
+
+        --red:#dc2626;
+
+        --radius:14px;
+        --shadow:0 8px 30px rgba(0,0,0,.05);
+    }
+
+    .pw-wrapper{
+        max-width:900px;
+        margin:40px auto;
+        padding:0 20px;
+    }
+
+    .pw-breadcrumb{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        font-size:.88rem;
+        color:var(--gray-400);
+        margin-bottom:26px;
+    }
+
+    .pw-breadcrumb a{
+        text-decoration:none;
+        color:var(--teal-700);
+    }
+
+    .pw-breadcrumb a:hover{
+        text-decoration:underline;
+    }
+
+    /* --------------------------------------------------
+        Wizard Progress
+    -------------------------------------------------- */
+
+    .pw-steps{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:16px;
+
+        margin-bottom:28px;
+        padding:18px 22px;
+
+        background:#fff;
+        border-radius:var(--radius);
+        box-shadow:var(--shadow);
+    }
+
+    .pw-step{
+        flex:1;
+
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        gap:10px;
+
+        position:relative;
+
+        color:var(--gray-400);
+        font-size:.85rem;
+        font-weight:600;
+        text-align:center;
+    }
+
+    .pw-step:not(:last-child)::after{
+
+        content:"";
+
+        position:absolute;
+
+        top:18px;
+        left:50%;
+        right:auto;
+
+        width:100%;
+        height:2px;
+
+        background:var(--gray-200);
+
+        z-index:0;
+
+    }
+
+    .pw-number{
+
+        width:36px;
+        height:36px;
+
+        border-radius:50%;
+
+        display:flex;
+        align-items:center;
+        justify-content:center;
+
+        background:var(--gray-200);
+        color:var(--gray-600);
+        font-weight:700;
+        transition:.25s;
+
+        position:relative;
+        z-index:1;
+
+    }
+
+    .pw-step.active{
+
+        color:var(--teal-700);
+
+    }
+
+    .pw-step.active .pw-number{
+
+        background:var(--teal-500);
+        color:white;
+
+    }
+    .pw-step.current-step .pw-number { box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.2); transform: scale(1.1); }
+
+    /* --------------------------------------------------
+       Card
+    -------------------------------------------------- */
+
+    .pw-card{
+
+        background:#fff;
+        border-radius:var(--radius);
+        box-shadow:var(--shadow);
+        overflow:visible;
+        margin-bottom:24px;
+
+    }
+
+    .pw-card-header{
+
+        display:flex;
+        align-items:center;
+        gap:16px;
+        padding:22px 26px;
+        border-bottom:1px solid var(--gray-200);
+
+    }
+
+    .pw-card-icon{
+
+        width:48px;
+        height:48px;
+        border-radius:12px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:var(--teal-50);
+        color:var(--teal-600);
+        font-size:1.2rem;
+
+    }
+
+    .pw-card-title{
+
+        margin:0;
+        font-size:1.1rem;
+        color:var(--gray-800);
+
+    }
+
+    .pw-card-subtitle{
+
+        margin-top:4px;
+        color:var(--gray-400);
+        font-size:.88rem;
+
+    }
+
+    .pw-card-body{
+
+        padding:28px;
+
+    }
+
+    /* --------------------------------------------------
+       Form
+    -------------------------------------------------- */
+
+    .pw-field{
+
+        margin-bottom:22px;
+
+    }
+
+    .pw-grid{
+
+        display:grid;
+        gap:22px;
+
+    }
+
+    .pw-label{
+
+        display:block;
+        margin-bottom:8px;
+        font-size:.9rem;
+        font-weight:600;
+        color:var(--gray-800);
+
+    }
+
+    .pw-required{
+
+        color:var(--red);
+
+    }
+
+    .pw-errors{
+
+        margin-top:8px;
+
+    }
+
+    .pw-error{
+
+        color:var(--red);
+        font-size:.85rem;
+        margin-top:4px;
+
+    }
+
+    .pw-card input:not([type="checkbox"]),
+    .pw-card select,
+    .pw-card textarea
+    {
+
+        width:100%;
+        padding:11px 14px;
+        border:1px solid var(--gray-200);
+        border-radius:10px;
+        font-size:.95rem;
+        font-family:inherit;
+        background-color: var(--gray-50);
+        color: var(--gray-800);
+        font-weight: 500;
+        transition: all .2s ease;
+        box-sizing:border-box;
+
+    }
+
+    .pw-card textarea{
+
+        resize:vertical;
+        min-height:90px;
+
+    }
+
+    .pw-card select {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        background-color: #ffffff;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2352525b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+        padding-right: 40px;
+        cursor: pointer;
+    }
+
+    .pw-card select:hover {
+        background-color: #fff;
+        border-color: var(--teal-500);
+    }
+
+    .pw-card input:focus,
+    .pw-card select:focus,
+    .pw-card textarea:focus
+    {
+        outline:none;
+        background-color: #fff;
+        border-color:var(--teal-500);
+        box-shadow:0 0 0 4px rgba(20,184,166,.12);
+
+    }
+
+    .pw-footer{
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:16px;
+
+        padding:24px 28px;
+        border-top:1px solid var(--gray-200);
+    }
+
+    .pw-btn{
+
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        gap:8px;
+        white-space:nowrap;
+
+        padding:12px 22px;
+
+        border:none;
+        border-radius:10px;
+
+        text-decoration:none;
+        cursor:pointer;
+
+        font-weight:600;
+
+        transition:.2s;
+
+    }
+
+    .pw-btn:hover{
+        transform:translateY(-1px);
+        opacity:.95;
+    }
+
+    .pw-btn:active{
+        transform:translateY(0);
+    }
+
+    .pw-btn-primary{
+
+        background:var(--teal-600);
+        color:white;
+
+    }
+
+    .pw-btn-primary:hover{
+
+        background:var(--teal-700);
+
+    }
+
+    .pw-btn-outline{
+
+        background:white;
+        color:var(--teal-700);
+
+        border:1px solid var(--teal-600);
+
+    }
+
+    /* Tümünü Sil Butonu */
+    .pw-btn-delete-all {
+        padding: 6px 12px;
+        font-size: 13px;
+        color: #dc2626;
+        background: #fef2f2;
+        border: 1px solid #fca5a5;
+        border-radius: 8px;
+        cursor: pointer;
+        display: inline-flex; /* JS içinde 'inline-flex' yapıyoruz */
+        align-items: center;
+        gap: 6px;
+        font-weight: 600;
+        transition: .2s;
+    }
+
+    .pw-btn-delete-all:hover {
+        background: #fee2e2;
+        border-color: #f87171;
+    }
+
+
+    .pw-message{
+
+        display:flex;
+        align-items:flex-start;
+        gap:12px;
+
+        padding:16px 18px;
+
+        margin-bottom:20px;
+
+        border-radius:12px;
+
+    }
+
+    .pw-message-error{
+
+        background:#fef2f2;
+        color:#b91c1c;
+        border:1px solid #fecaca;
+
+    }
+
+    .pw-message-success{
+
+        background:#ecfdf5;
+        color:#166534;
+        border:1px solid #bbf7d0;
+
+    }
+
+    @media (max-width:768px){
+
+        .pw-grid{
+            grid-template-columns:1fr;
+        }
+
+        .pw-steps{
+            flex-direction:column;
+            align-items:stretch;
+        }
+
+        .pw-step{
+            width:100%;
+        }
+
+        .pw-step::after{
+            display:none;
+        }
+
+        .pw-card-body{
+            padding:20px;
+        }
+
+        .pw-footer{
+            flex-direction:column-reverse;
+        }
+
+        .pw-btn{
+            width:100%;
+        }
+
+        .pw-summary{
+            grid-template-columns:1fr;
+        }
+    
+        .pw-attribute-grid{
+            grid-template-columns:1fr;
+        }
+    
+        .pw-variant{
+            flex-direction:row;
+            align-items:center;
+        }
+
+        .pw-variant-info{
+            overflow-x:auto;
+        }
+    
+    }
+
+    .pw-modal{
+        position:fixed;
+        inset:0;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:rgba(0,0,0,.45);
+        z-index:1000;
+    }
+
+    .pw-modal[hidden]{
+        display:none;
+    }
+
+    .pw-modal-content{
+        width:min(600px,95%);
+        background:white;
+        border-radius:14px;
+        overflow:hidden;
+        box-shadow:0 25px 60px rgba(0,0,0,.15);
+    }
+
+    .pw-modal-header{
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        padding:20px 24px;
+        border-bottom:1px solid var(--gray-200);
+    }
+
+    .pw-modal-title-wrapper{
+
+        display:flex;
+        align-items:center;
+        gap:14px;
+
+    }
+
+    .pw-modal-icon{
+
+        width:42px;
+        height:42px;
+
+        display:flex;
+        align-items:center;
+        justify-content:center; 
+
+        border-radius:50%;  
+
+    }   
+
+
+    .pw-modal-icon-danger{  
+
+        background:#fee2e2; 
+
+        color:#dc2626;  
+
+    }
+
+    .pw-modal-header h3{
+        margin:0;
+        color:var(--gray-800);
+        font-size:1.1rem;
+    }
+
+    .pw-modal-body{
+        padding:24px;
+    }
+
+    .pw-modal-body p{
+        margin:0;
+
+        color:var(--gray-600);
+
+        line-height:1.6;
+
+    }
+
+    .pw-btn-danger{
+
+        background:#dc2626;
+
+        color:white;
+
+    }
+
+
+    .pw-btn-danger:hover{
+
+        background:#b91c1c;
+
+    }
+
+    .pw-modal-footer{
+        display:flex;
+        justify-content:flex-end;
+        gap:12px;
+        padding:20px 24px;
+        border-top:1px solid var(--gray-200);
+    }
+
+
+    [hidden]{
+        display:none !important;
+    }
+
+    /* --------------------------------------------------
+       Product Summary
+    -------------------------------------------------- */
+
+    .pw-summary{
+        display:grid;
+        grid-template-columns:repeat(4,1fr);
+        gap:16px;
+        margin-bottom:24px;
+    }
+
+    .pw-summary-item{
+        padding:18px;
+        background:var(--gray-50);
+        border:1px solid var(--gray-200);
+        border-radius:12px;
+    }
+
+    .pw-summary-label{
+        display:block;
+        font-size:.82rem;
+        color:var(--gray-400);
+        margin-bottom:6px;
+    }
+
+    .pw-summary-value{
+        font-weight:600;
+        color:var(--gray-800);
+    }
+
+    /* --------------------------------------------------
+       Attribute
+    -------------------------------------------------- */
+
+    .pw-attribute{
+
+        padding:18px;
+        margin-bottom:18px;
+        border:1px solid var(--gray-200);
+        border-radius:12px;
+        background:white;
+    }
+
+    .pw-attribute-title{
+        margin-bottom:14px;
+        font-size:.95rem;
+        font-weight:600;
+        color:var(--gray-800);
+    }
+
+    .pw-attribute-grid{
+        display:grid;
+        grid-template-columns:1fr;
+        gap:12px;
+        align-items: start;
+    }
+
+    .pw-attribute-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 14px;
+    }
+
+    .pw-attribute-header .pw-attribute-title {
+        margin-bottom: 0; /* Header içine aldığımız için alt boşluğu sıfırlıyoruz */
+    }
+
+    .pw-attribute-actions {
+        display: flex;
+        gap: 12px;
+        font-size: .85rem;
+    }
+
+    .pw-custom-box{
+        margin-top:12px;
+    }
+
+    .pw-btn-text {
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 600;
+        transition: color .2s;
+        
+    }
+
+    .pw-select-all {
+        color: var(--teal-600);
+    }
+
+    .pw-select-all:hover {
+        color: var(--teal-700);
+        text-decoration: underline;
+    }
+
+    .pw-clear-all {
+        color: var(--gray-400);
+    }
+
+    .pw-clear-all:hover {
+        color: var(--gray-600);
+        text-decoration: underline;
+    }
+
+    .pw-custom-value{
+        margin-top:10px;
+    }
+
+    /* --------------------------------------------------
+       Variant List
+    -------------------------------------------------- */
+
+    .pw-variants{
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+
+        max-height:420px;
+        overflow-y:auto;
+
+        margin-top:20px;
+
+    }
+
+    .pw-variant{
+
+        display:flex;
+
+        justify-content:space-between;
+
+        align-items:center;
+
+        padding: 14px 16px;
+
+        margin-bottom:14px;
+
+        border:1px solid var(--gray-200);
+
+        border-radius:10px;
+
+        background:white;
+
+        transition:
+            border-color .2s,
+            box-shadow .2s;
+
+    }
+
+    .pw-variant:hover {
+        border-color: #cfd8e3;
+        box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    }
+
+    .pw-variant-info{
+
+        display:flex;
+        align-items: center;
+        gap:8px;
+        flex: 1;
+        min-width:0;
+        overflow-x:auto;
+        white-space:nowrap;
+
+    }
+
+    .pw-badge{
+
+        display:inline-flex;
+        flex-shrink: 0;
+
+        align-items:center;
+
+        padding:6px 12px;
+
+        border-radius:999px;
+
+        background:var(--teal-50);
+
+        color:var(--teal-700);
+
+        font-size: 13px;
+
+        font-weight:500;
+
+    }
+
+    .pw-remove{
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-shrink: 0;
+
+        width: 34px;
+        height: 34px;
+
+        margin-left: 12px;
+
+        border:none;
+
+        background:#fee2e2;
+
+        color:#b91c1c;
+
+        border-radius:8px;
+
+        padding:0;
+
+        cursor:pointer;
+
+        transition:
+            background-color .2s,
+            color .2s;
+
+    }
+
+    .pw-remove:hover{
+
+        background:#fecaca;
+
+    }
+
+    .pw-remove:disabled {
+        opacity: .5;
+        cursor: not-allowed;
+    }
+
+    .pw-remove i {
+        font-size: 15px;
+    }
+
+    .pw-add-variant{
+
+        width:100%;
+
+        margin-top:22px;
+
+    }
+
+    .pw-empty{
+
+        text-align:center;
+
+        padding: 48px 24px;
+
+        border:2px dashed var(--gray-200);
+
+        border-radius:12px;
+
+        color:var(--gray-400);
+
+    }
+
+    .pw-attribute-required{
+        color:var(--red);
+        margin-left:4px;
+    }
+
+    .pw-variant-success{
+        border-left:4px solid var(--teal-600);
+    }
+
+    .pw-variant-header{
+
+        display:flex;
+
+        justify-content:space-between;
+
+        align-items:center;
+
+        margin-bottom:8px;
+
+    }
+
+    .pw-variant-count {
+
+        font-size:14px;
+        font-weight:600;
+
+        color:#6b7280;
+
+        background:#f3f4f6;
+
+        padding:5px 10px;
+
+        border-radius:999px;
+    }
+
+    .pw-variant-title{
+
+        font-weight:600;
+
+        color:var(--gray-800);
+
+    }
+    
+
+    .pw-btn:disabled{
+
+        opacity:.6;
+        
+        cursor:not-allowed;
+        
+        transform:none;
+        
+    }
+
+    .pw-divider{
+        margin:32px 0;
+        border:none;
+        border-top:1px solid var(--gray-200);
+    }
+
+    #wizard-toast-container{
+        position:fixed;
+        top:24px;
+        right:24px;
+
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+
+        width:360px;
+        max-width:calc(100vw - 40px);
+
+        z-index:99999;
+
+        pointer-events:none;
+    }
+
+    .wizard-toast{
+
+        display:flex;
+        align-items:flex-start;
+        gap:12px;
+
+        padding:16px 18px;
+
+        border-radius:12px;
+
+        box-shadow:0 12px 30px rgba(0,0,0,.15);
+
+        color:#fff;
+
+        opacity:0;
+        transform:translateY(-10px);
+
+        transition:
+            opacity .25s ease,
+            transform .25s ease;
+
+        pointer-events:auto;
+    }
+
+    .wizard-toast.show{
+        opacity:1;
+        transform:none;
+    }
+
+    .wizard-toast-success{
+        background:#16a34a;
+    }
+
+    .wizard-toast-error{
+        background:#dc2626;
+    }
+
+    .wizard-toast-warning{
+        background:#d97706;
+    }
+
+    .wizard-toast-info{
+        background:#2563eb;
+    }
+
+    .wizard-toast i{
+        margin-top:2px;
+    }
+
+    .wizard-toast > div{
+        flex:1;
+    }
+
+    .wizard-toast-close{
+
+        margin-left:auto;
+
+        border:none;
+        background:none;
+
+        color:inherit;
+
+        cursor:pointer;
+
+        font-size:1.2rem;
+        line-height:1;
+
+        opacity:.7;
+
+        transition:opacity .2s;
+
+    }
+
+    .wizard-toast-close:hover{
+
+        opacity:1;
+
+    }
+
+    body.modal-open {
+        overflow:hidden;
+    }
+
+    .pw-checkbox-list{
+
+        display:grid;
+        flex-wrap: wrap;
+
+        gap:12px;
+
+        margin-top:12px;
+        grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+
+    }
+
+    .pw-checkbox-item{
+
+        display:flex;
+
+        align-items:center;
+        justify-content: center;
+
+        gap:12px;
+
+        padding:12px 14px;
+
+        border:1px solid var(--gray-200);
+
+        border-radius: 12px;
+
+        cursor:pointer;
+
+        transition:.2s;
+
+        background:#fff;
+
+    }
+
+    .pw-checkbox-item input[type="checkbox"] {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+        margin: 0;
+    }
+
+    .pw-checkbox-label {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: var(--gray-700);
+        transition: color .2s ease;
+    }
+
+    .pw-checkbox-item:hover{
+
+        border-color:var(--teal-500);
+
+        background:var(--teal-50);
+        color: var(--teal-700);
+        transform: translateY(-1px);
+
+    }
+
+    .pw-checkbox-label{
+
+        font-weight:500;
+
+    }
+
+    .pw-checkbox-item:has(input:checked){
+
+        border-color:var(--teal-600);
+
+        background:var(--teal-50);
+        box-shadow: 0 4px 10px rgba(13, 148, 136, 0.25);
+
+    }
+
+    .pw-checkbox-item:has(input:checked) .pw-checkbox-label,
+    .pw-checkbox-item:has(input:checked) {
+        color: var(--gray-600);
+    }
+
+    .pw-tabs {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 24px;
+
+
+
+        padding:6px;
+        background:var(--gray-100);
+        border-radius:12px;
+    }
+
+    .pw-tab {
+        padding: 12px 18px;
+
+        border: none;
+        border-bottom: 2px solid transparent;
+
+        background: transparent;
+
+        font-size: 15px;
+        font-weight: 600;
+
+        color: var(--gray-400);
+
+        cursor: pointer;
+
+        transition: .2s;
+        border-radius:8px;
+    }
+
+    .pw-tab:hover {
+        color: var(--teal-600);
+    }
+
+    .pw-tab.active {
+        background:#fff;
+        box-shadow:0 2px 6px rgba(0,0,0,.08);
+        color: var(--teal-700);
+
+        border-bottom-color: var(--teal-600);
+    }
+
+    .pw-tab-panel {
+        display: none;
+    }
+
+    .pw-tab-panel.active {
+        display: block;
+    }
+
+    /* --------------------------------------------------
+       Checkbox Filter (Arama Kutusu)
+    -------------------------------------------------- */
+    .pw-checkbox-search {
+        position: relative;
+        margin-bottom: 14px;
+    }
+    
+    .pw-checkbox-search i {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--gray-400);
+        font-size: 0.9rem;
+        pointer-events: none; /* Tıklamayı engelleme */
+    }
+    
+    .pw-card .pw-checkbox-search input {
+        width: 100%;
+        padding: 10px 14px 10px 38px; /* İkon için soldan boşluk */
+        border: 1px solid var(--gray-200);
+        border-radius: 10px;
+        font-size: 0.9rem;
+        transition: .2s;
+        background: var(--gray-50);
+    }
+    
+    .pw-card .pw-checkbox-search input:focus {
+        background: #fff;
+        outline: none;
+        border-color: var(--teal-500);
+        box-shadow: 0 0 0 4px rgba(20,184,166,.12);
+    }
+
+    /* --------------------------------------------------
+       Choices.js Tema Uyarlaması (Modern Select)
+    -------------------------------------------------- */
+    .choices { 
+        margin-bottom: 0; 
+    }
+    
+    /* Dış Kutu (Normal ve Kapalı Hal) */
+    .choices__inner {
+        background-color: var(--gray-50);
+        border: 1px solid var(--gray-200);
+        border-radius: 10px;
+        padding: 9px 14px; /* Orijinal inputlarla aynı yükseklikte olması için ayarladık */
+        min-height: auto;
+        font-size: .95rem;
+        color: var(--gray-800);
+        font-family: inherit;
+        font-weight: 500;
+        transition: all .2s ease;
+        display: flex;
+        align-items: center;
+        box-sizing: border-box;
+    }
+    
+    /* Focus (Tıklanmış/Açık) Halinde Çerçeve Rengi */
+    .choices.is-focused .choices__inner {
+        background-color: #fff;
+        border-color: var(--teal-500);
+        box-shadow: 0 0 0 4px rgba(20,184,166,.12);
+    }
+    
+    .choices.is-open .choices__inner {
+        border-radius: 10px; 
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+        border-bottom-color: transparent; /* Alt çizgiyi gizle ki liste ile birleşsin */
+    }
+
+    /* Seçili Metin Hizalaması */
+    .choices__list--single {
+        padding: 0;
+        margin: 0;
+    }
+    
+    /* İçerideki Arama Kutusu (Input) */
+    .choices__input--cloned {
+        background-color: var(--gray-50);
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        margin-bottom: 10px;
+        font-family: inherit;
+    }
+    
+    .choices__input--cloned:focus {
+        border-color: var(--teal-500);
+    }
+
+    /* Sağdaki Ok İkonu (FontAwesome yerine temanın SVG okunu yerleştirdik) */
+    .choices[data-type*="select-one"]::after {
+        content: "";
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2352525b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: center;
+        height: 18px;
+        width: 18px;
+        border: none;
+        right: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        margin: 0;
+        pointer-events: none;
+        transition: transform .2s ease;
+    }
+
+    /* Menü Açıkken Oku Döndür */
+    .choices[data-type*="select-one"].is-open::after {
+        transform: translateY(-50%) rotate(180deg);
+    }
+    
+    /* Açılır Liste Konteyneri */
+    .choices__list--dropdown {
+        border-radius: 0 0 10px 10px;
+        border: 1px solid var(--teal-500);
+        border-top: none;
+        box-shadow: 0 8px 30px rgba(0,0,0,.08);
+        z-index: 100;
+        margin-top: 0;
+        padding-bottom: 0;
+        word-break: break-word;
+        overflow: hidden;
+    }
+    
+    /* Açılır Liste Elemanları */
+    .choices__list--dropdown .choices__item {
+        font-size: .95rem;
+        font-weight: 500;
+        padding: 10px 14px;
+        color: var(--gray-700);
+    }
+    
+    /* Liste Elemanı Üzerine Gelince (Hover/Focus) */
+    .choices__list--dropdown .choices__item--selectable.is-highlighted {
+        background-color: var(--teal-50);
+        color: var(--teal-700);
+    }
+
+</style>
+
+<div class="pw-wrapper">
+    <div id="wizard-toast-container"></div>
+
+    <!-- Breadcrumb -->
+    <nav class="pw-breadcrumb">
+        <a href="{% url 'store:store_list' %}">
+            Mağazalarım
+        </a>
+
+        <i class="fas fa-chevron-right"></i>
+
+        <a href="{% url 'products:store_product_list' store_slug=store.slug %}">
+            {{ store.store_name }}
+        </a>
+
+        <i class="fas fa-chevron-right"></i>
+
+        <a href="{% url 'products:wizard_step1_edit' store_slug=store.slug draft_id=draft.id %}">
+            Ürün Bilgileri
+        </a>
+
+        <i class="fas fa-chevron-right"></i>
+
+        <span>Varyantlar</span>
+    </nav>
+
+
+    <!-- Wizard Steps -->
+
+    <div class="pw-steps">
+
+        <div class="pw-step active">
+            <span class="pw-number"><i class="fa-solid fa-check"></i></span>
+
+            <div>
+                <strong>Ürün Bilgileri</strong><br>
+                <small>Temel bilgiler</small>
+            </div>
+        </div>
+
+        <div class="pw-step active">
+            <span class="pw-number">2</span>
+
+            <div>
+                <strong>Varyantlar</strong><br>
+                <small>Ürün seçenekleri</small>
+            </div>
+        </div>
+
+        <div class="pw-step">
+            <span class="pw-number">3</span>
+
+            <div>
+                <strong>Görseller</strong><br>
+                <small>Fotoğraflar</small>
+            </div>
+        </div>
+
+        <div class="pw-step">
+            <span class="pw-number">4</span>
+
+            <div>
+                <strong>Satış</strong><br>
+                <small>Fiyat • Stok</small>
+            </div>
+        </div>
+
+        <div class="pw-step">
+            <span class="pw-number">5</span>
+            <div><strong>Yayınla</strong><br><small>Önizleme</small></div>
+        </div>
+
+</div>
+
+<div class="pw-summary">
+
+    <div class="pw-summary-item">
+
+        <span class="pw-summary-label">
+            Ürün
+        </span>
+
+        <div class="pw-summary-value">
+            {{ draft.name }}
+        </div>
+
+    </div>
+
+    <div class="pw-summary-item">
+
+        <span class="pw-summary-label">
+            Kategori
+        </span>
+
+        <div class="pw-summary-value">
+            {{ draft.category.name }}
+        </div>
+
+    </div>
+
+    <div class="pw-summary-item">
+
+        <span class="pw-summary-label">
+            Marka
+        </span>
+
+        <div class="pw-summary-value">
+            {{ draft.brand.name|default:"Belirtilmedi" }}
+        </div>
+
+    </div>
+
+    <div class="pw-summary-item">
+
+        <span class="pw-summary-label">
+            Oluşturulan Varyant
+        </span>
+
+    <div class="pw-summary-value">
+        <span id="variant-total-count">
+            {{ variants|length }}
+        </span>
+    </div>
+
+    </div>
+
+</div>
+
+
+
+<div class="pw-card">
+
+    <div class="pw-card-header">
+
+        <div class="pw-card-icon">
+
+            <i class="fa-solid fa-layer-group"></i>
+
+        </div>
+
+        <div>
+
+            <h2 class="pw-card-title">
+
+                Ürün Varyantları
+
+            </h2>
+
+            <div class="pw-card-subtitle">
+
+                Bu ürün için satacağınız varyantları oluşturun.
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="pw-card-body">
+
+        <div class="pw-tabs">
+
+    <button
+        type="button"
+        class="pw-tab active"
+        data-target="single"
+    >
+        Tek Tek Oluştur
+    </button>
+
+    {% if show_bulk_tab %}
+        <button
+            type="button"
+            class="pw-tab"
+            data-target="bulk"
+        >
+            Toplu Oluştur
+        </button>
+    {% endif %}
+
+</div>
+
+
+
+
+
+<div
+    id="single-panel"
+    class="pw-tab-panel active"
+    
+>
+<form method="post" id="variant-form" action="{% url 'products:variant_create' store_slug=store.slug draft_id=draft.id %}">
+    {% csrf_token %}
+
+    {% if variant_form.non_field_errors %}
+        <div class="pw-message pw-message-error">
+            <div>
+                {% for error in variant_form.non_field_errors %}
+                    <div>{{ error }}</div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+
+
+    {% for field in variant_form.get_attribute_fields %}
+        <div class="pw-attribute">
+            <h3 class="pw-attribute-title">
+                {{ field.category_attribute.attribute.name }}
+
+                {% if field.category_attribute.is_required %}
+                    <span class="pw-required">*</span>
+                {% endif %}
+            </h3>
+
+            <p class="pw-attribute-help">
+
+                Bir seçenek seçebilirsiniz.
+
+            </p>
+
+            <div class="pw-attribute-grid">
+                <div class="pw-field" style="margin-bottom: 0;">
+
+                    <div class="js-select-container" data-attr-name="{{ field.category_attribute.attribute.name }}">
+                        {{ field.select_field }}
+                    </div>
+                
+                    {% if field.select_field.errors %}
+                        <div class="pw-errors">
+                            {% for error in field.select_field.errors %}
+                                <div class="pw-error">
+                                    {{ error }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    
+                </div>
+
+
+                {% if field.custom_field %}
+                    <div class="pw-field pw-custom-wrapper" style="margin-bottom: 0;">
+                            <!-- BU BUTON ARTIK GÖRÜNMEZ. CHOICES.JS İÇİNDEN TETİKLENECEK -->
+                            <button type="button" class="pw-btn-text js-toggle-custom" hidden>Gizli Buton</button>
+                        
+                            <!-- TEXTBOX KUTUSU  -->
+                            <div class="pw-custom-box" hidden style="margin-top: 4px; padding: 16px; background: var(--teal-50); border: 1px dashed var(--teal-500); border-radius: 12px; transition: opacity 0.3s ease;">
+
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                    <label class="pw-label" style="margin: 0; color: var(--teal-700);">
+                                        Yeni {{ field.category_attribute.attribute.name }} Adı
+                                    </label>
+
+                                    <!-- Kapatma / İptal Butonu -->
+                                    <button type="button" class="pw-btn-text js-cancel-custom" style="color: var(--red);">
+                                        <i class="fa-solid fa-xmark"></i> İptal
+                                    </button>
+                                </div>
+
+                                {{ field.custom_field }}
+
+                                {% if field.custom_field.errors %}
+                                    <div class="pw-errors">
+                                        {% for error in field.custom_field.errors %}
+                                            <div class="pw-error">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
+                
+            </div>
+        </div>
+    {% endfor %}
+
+    <hr class="pw-divider">
+
+    <div class="pw-variant-header">
+        <h3 class="pw-card-title">
+            Oluşturulan Varyantlar
+        </h3>
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <!-- YENİ EKLENEN "TÜMÜNÜ SİL" BUTONU -->
+            <button 
+                type="button" 
+                class="pw-btn-delete-all js-delete-all-variants" 
+                data-url="{% url 'products:variant_delete_all' store_slug=store.slug draft_id=draft.id %}"
+                {% if not variants %}style="display: none;"{% endif %}
+            >
+                <i class="fa-solid fa-trash-can"></i> Tümünü Sil
+            </button>
+
+            <span class="pw-variant-count">
+                <span class="js-variant-count">
+                    {{ variants|length }}
+                </span>
+                adet
+            </span>
+        </div>
+    </div>
+
+    <p class="pw-card-subtitle">
+        Eklediğiniz varyantlar aşağıda listelenir.
+    </p>
+
+    <div
+        class="pw-variants js-variant-list"
+    >
+        {% include "products/seller/wizard/variant_list.html" %}
+    </div>
+
+
+    <button
+        type="button"
+        id="add-variant"
+        class="pw-btn pw-btn-primary pw-add-variant"
+
+        data-url="{% url 'products:variant_create' store_slug=store.slug draft_id=draft.id %}"
+        disabled
+    >
+        <i class="fa-solid fa-layer-group"></i>
+        Seçilen Varyantları Oluştur
+    </button>
+
+    </form>
+</div>
+
+    {% if show_bulk_tab %}
+    <div
+        id="bulk-panel"
+        class="pw-tab-panel"
+    >
+        <form method="post" id="bulk-variant-form" action="{% url 'products:bulk_variant_create' store_slug=store.slug draft_id=draft.id %}">
+        {% csrf_token %}
+
+        {% if bulk_form.non_field_errors %}
+            <div class="pw-message pw-message-error">
+                <div>
+                    {% for error in bulk_form.non_field_errors %}
+                        <div>{{ error }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+
+
+
+        {% for field in bulk_form.get_attribute_fields %}
+            <div class="pw-attribute">
+                <div class="pw-attribute-header">
+                    <h3 class="pw-attribute-title">
+                        {{ field.category_attribute.attribute.name }}
+                    
+                        {% if field.category_attribute.is_required %}
+                            <span class="pw-required">*</span>
+                        {% endif %}
+                    </h3>
+                
+                    <div class="pw-attribute-actions">
+                        <button type="button" class="pw-btn-text pw-select-all js-select-all">
+                            Tümünü Seç
+                        </button>
+                        <button type="button" class="pw-btn-text pw-clear-all js-clear-all">
+                            Temizle
+                        </button>
+                    </div>
+                </div>
+
+                <p class="pw-attribute-help" style="margin-top:-8px; margin-bottom:14px;">
+                    Bir veya birden fazla seçenek seçebilirsiniz.
+                </p>
+
+                <div class="pw-attribute-grid">
+                    <div class="pw-field">
+
+                        <div class="pw-checkbox-search" hidden>
+                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                    <input 
+                                        type="text" 
+                                        class="pw-filter-input" 
+                                        placeholder="{{ field.category_attribute.attribute.name }} ara..." 
+                                        data-list-id="filter-list-{{ field.category_attribute.attribute.id }}"
+                                        autocomplete="off"
+                                    >
+                            </div>
+                            
+                            <div class="pw-checkbox-list" id="filter-list-{{ field.category_attribute.attribute.id }}">
+                        
+                            {% for choice in field.field %}
+                                <label class="pw-checkbox-item">
+                                    {{ choice.tag }}
+                                
+                                    <span class="pw-checkbox-label">
+                                        {{ choice.choice_label }}
+                                    </span>
+                                </label>
+                            {% empty %}
+                                <div class="pw-empty">
+                                     Henüz seçenek bulunmuyor.
+                                </div>
+                            {% endfor %}
+                        </div>
+                    
+                        {% if field.field.errors %}
+                            <div class="pw-errors">
+                                {% for error in field.field.errors %}
+                                    <div class="pw-error">
+                                        {{ error }}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        
+                    </div>
+
+                </div>
+            </div>
+        {% endfor %}
+
+        <div class="pw-combination-summary">
+
+            Oluşturulacak kombinasyon:
+
+            <strong id="bulk-combination-count">
+                0
+            </strong>
+
+        </div>
+
+            <hr class="pw-divider">
+
+    <div class="pw-variant-header">
+        <h3 class="pw-card-title">
+            Oluşturulan Varyantlar
+        </h3>
+        <div style="display: flex; align-items: center; gap: 12px;">
+        <!-- YENİ EKLENEN "TÜMÜNÜ SİL" BUTONU -->
+            <button 
+                type="button" 
+                class="pw-btn-delete-all js-delete-all-variants" 
+                data-url="{% url 'products:variant_delete_all' store_slug=store.slug draft_id=draft.id %}"
+                {% if not variants %}style="display: none;"{% endif %}
+            >
+                <i class="fa-solid fa-trash-can"></i> Tümünü Sil
+            </button>
+        
+            <span class="pw-variant-count">
+                <span class="js-variant-count">
+                    {{ variants|length }}
+                </span>
+                adet
+            </span>
+        </div>
+    </div>
+
+    <p class="pw-card-subtitle">
+        Eklediğiniz varyantlar aşağıda listelenir.
+    </p>
+
+    <div
+        class="pw-variants js-variant-list"
+    >
+        {% include "products/seller/wizard/variant_list.html" %}
+    </div>
+
+        <button
+            type="button"
+            id="bulk-add-variant"
+            class="pw-btn pw-btn-primary pw-add-variant"
+
+            data-url="{% url 'products:bulk_variant_create' store_slug=store.slug draft_id=draft.id %}"
+            disabled
+        >
+            <i class="fa-solid fa-layer-group"></i>
+            Kombinasyonları Oluştur
+        </button>
+
+    </form>
+    </div>
+    {% endif %}
+
+
+
+    </div>
+    <div class="pw-footer">
+        <a
+            href="{% url 'products:wizard_step1_edit' store_slug=store.slug draft_id=draft.id %}"
+            class="pw-btn pw-btn-outline"
+        >
+            <i class="fa-solid fa-arrow-left"></i>
+            Önceki Adım
+        </a>
+
+        <button
+            type="submit"
+            form="step2-complete-form"
+            class="pw-btn pw-btn-primary"
+        >
+            Devam Et
+            <i class="fa-solid fa-arrow-right"></i>
+        </button>
+    </div>
+
+</div>
+
+
+
+
+<form
+    id="step2-complete-form"
+    method="post"
+    action="{% url 'products:wizard_step2_complete' store_slug=store.slug draft_id=draft.id %}"
+>
+    {% csrf_token %}
+
+</form>
+
+
+<div
+    id="wizard-confirm-modal"
+    class="pw-modal"
+    hidden
+>
+
+    <div class="pw-modal-content">
+
+        <div class="pw-modal-header">
+
+            <div class="pw-modal-title-wrapper">
+
+                <div class="pw-modal-icon pw-modal-icon-danger">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+
+                <h3 data-modal-title>
+                    Varyant silinsin mi?
+                </h3>
+
+            </div>
+
+        </div>
+
+
+        <div class="pw-modal-body">
+
+            <p data-modal-message>
+                Bu varyant kalıcı olarak silinecek.
+                Bu işlem geri alınamaz.
+            </p>
+
+        </div>
+
+
+        <div class="pw-modal-footer">
+
+            <button
+                type="button"
+                class="pw-btn pw-btn-outline"
+                data-modal-cancel
+            >
+                Vazgeç
+            </button>
+
+
+            <button
+                type="button"
+                class="pw-btn pw-btn-danger"
+                data-modal-confirm
+            >
+                <i class="fa-solid fa-trash"></i>
+                Sil
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+</div>
+
+<script src="{% static 'products/js/wizard_ui.js' %}"></script>
+<script src="{% static 'products/js/step2.js' %}"></script>
+
+{% endblock %}

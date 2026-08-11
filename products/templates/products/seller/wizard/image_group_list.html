@@ -1,0 +1,32 @@
+{% if groups %}
+    {% for group in groups %}
+        {% include "products/seller/wizard/image_group_item.html" %}
+    {% endfor %}
+{% else %}
+    <div class="pw-empty" style="padding: 60px 20px;">
+        <i class="fa-regular fa-images" style="font-size:48px; margin-bottom:16px; color: var(--gray-400);"></i>
+        
+        <p style="font-size: 1.05rem; color: var(--gray-600); margin-bottom: 8px; font-weight: 600;">
+            Henüz görsel bulunmuyor
+        </p>
+        
+        {% if group_form.fields %}
+            <p style="font-size: 0.9rem; color: var(--gray-400);">
+                Yukarıdaki formdan bir özellik (örn: Renk) seçip "Grup Ekle" butonuna tıklayarak ilk grubunuzu oluşturun.
+            </p>
+        {% else %}
+            <!-- Ürünün varyantı yoksa veya görselli varyantı yoksa direkt ortak grubu oluşturma butonu -->
+            <p style="font-size: 0.9rem; color: var(--gray-400); margin-bottom: 24px;">
+                Ürününüze ait fotoğrafları yüklemek için aşağıdaki butona tıklayarak başlayabilirsiniz.
+            </p>
+            
+            <button 
+                type="button" 
+                class="pw-btn pw-btn-primary js-create-default-group" 
+                data-url="{% url 'products:image_group_create' store_slug=store.slug draft_id=draft.id %}"
+            >
+                <i class="fa-solid fa-cloud-arrow-up"></i> Ortak Yükleme Alanı Oluştur
+            </button>
+        {% endif %}
+    </div>
+{% endif %}

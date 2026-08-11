@@ -1,0 +1,39 @@
+{% if variants %}
+    {% for variant in variants %}
+        <div class="pw-variant" id="variant"-{{ variant.id }}>
+            <div class="pw-variant-info">
+
+                {% for value in variant.attribute_values.all %}
+                    <span class="pw-badge">
+                       <strong> {{ value.attribute.name }}:</strong>&nbsp; {{ value.value }}
+                    </span>
+                {% endfor %}
+            </div>
+
+            <button
+                type="button"
+                class="pw-remove"
+                title="Varyantı sil"
+                data-variant-id="{{ variant.id }}"
+
+                data-url="{% url 'products:variant_delete' store_slug=store.slug draft_id=variant.draft_id variant_id=variant.id %}"
+            >
+                <i class="fa-solid fa-trash"></i>
+            </button>
+        </div>
+    {% endfor %}
+{% else %}
+    <div
+        class="pw-empty"
+        id="empty-variants"
+    >
+        <i
+            class="fa-solid fa-layer-group"
+            style="font-size:42px;margin-bottom:12px;"
+        ></i>
+
+        <p>
+            Henüz varyant oluşturulmadı.
+        </p>
+    </div>
+{% endif %}

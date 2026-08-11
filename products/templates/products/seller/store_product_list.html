@@ -1,0 +1,625 @@
+{% extends "core/home.html" %}
+{% load static %}
+
+{% block title %}{{ store.store_name }} — Envanter Yönetimi{% endblock %}
+
+{% block content %}
+
+<!-- SweetAlert2 (Arşivleme Modalı İçin) -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<style>
+    :root {
+        --teal-50: #caf0f8;
+        --teal-100: #ade8f4;
+        --teal-500: #00b4d8;
+        --teal-600: #0096c7;
+        --teal-700: #0077b6;
+        --teal-900: #03045e;
+
+        --gray-50: #fafafa;
+        --gray-100: #f4f4f5;
+        --gray-200: #e4e4e7;
+        --gray-300: #d4d4d8;
+        --gray-400: #a1a1aa;
+        --gray-500: #71717a;
+        --gray-600: #52525b;
+        --gray-700: #3f3f46;
+        --gray-800: #27272a;
+        --gray-900: #18181b;
+
+        --red-50: #fef2f2;
+        --red-600: #dc2626;
+        
+        --yellow-50: #fefce8;
+        --yellow-600: #ca8a04;
+
+        --green-50: #f0fdf4;
+        --green-600: #16a34a;
+
+        --radius: 12px;
+        --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
+        --shadow-md: 0 8px 24px rgba(0,0,0,0.06);
+    }
+
+    body { background-color: var(--gray-50); }
+
+    /* ---------------------------------------------------
+       LAYOUT & SIDEBAR
+       --------------------------------------------------- */
+    .seller-layout { display: flex; gap: 24px; max-width: 1400px; margin: 32px auto; padding: 0 24px; align-items: start; }
+
+    .seller-sidebar {
+        width: 280px; background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-sm);
+        border: 1px solid var(--gray-200); position: sticky; top: 24px; overflow: hidden; flex-shrink: 0;
+    }
+
+    .sidebar-profile {
+        padding: 32px 24px 24px; text-align: center;
+        background: linear-gradient(180deg, var(--teal-50) 0%, #fff 100%);
+        border-bottom: 1px solid var(--gray-100);
+    }
+
+    .sidebar-avatar {
+        width: 80px; height: 80px; border-radius: 24px; background: var(--teal-600); color: #fff;
+        display: inline-flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 700;
+        margin-bottom: 12px; box-shadow: 0 8px 16px rgba(0, 150, 199, 0.2);
+    }
+    .sidebar-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 24px; }
+
+    .sidebar-store-name { font-size: 1.1rem; font-weight: 700; color: var(--gray-900); margin: 0 0 6px 0; }
+    .sidebar-badge { display: inline-block; padding: 4px 10px; background: var(--green-50); color: var(--green-600); font-size: 0.75rem; font-weight: 700; border-radius: 20px; border: 1px solid #bbf7d0; }
+
+    .sidebar-nav { padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; list-style: none; margin: 0; }
+    .sidebar-nav a { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--gray-600); font-weight: 600; text-decoration: none; border-radius: 10px; transition: .2s; }
+    .sidebar-nav a:hover { background: var(--gray-50); color: var(--gray-900); }
+    .sidebar-nav a.active { background: var(--teal-50); color: var(--teal-700); }
+    .sidebar-nav a i { font-size: 1.1rem; width: 24px; text-align: center; }
+
+    /* ---------------------------------------------------
+       MAIN CONTENT & CARDS
+       --------------------------------------------------- */
+    .seller-main { flex: 1; min-width: 0; }
+
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .page-title { margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--gray-900); }
+
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 10px; font-weight: 600; font-size: 0.95rem; cursor: pointer; text-decoration: none; border: none; transition: .2s; }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary { background: var(--teal-600); color: #fff; box-shadow: 0 4px 12px rgba(0, 150, 199, 0.2); }
+    .btn-primary:hover { background: var(--teal-700); }
+    .btn-outline { background: #fff; color: var(--gray-700); border: 1px solid var(--gray-300); }
+    .btn-outline:hover { border-color: var(--gray-400); background: var(--gray-50); }
+
+    /* Sekmeler */
+    .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .metric-card { background: #fff; border-radius: var(--radius); padding: 20px; border: 1px solid var(--gray-200); box-shadow: var(--shadow-sm); cursor: pointer; text-decoration: none; transition: .2s; position: relative; overflow: hidden; }
+    .metric-card:hover { border-color: var(--teal-500); transform: translateY(-2px); }
+    .metric-card.active { border-color: var(--teal-600); background: var(--teal-50); box-shadow: 0 4px 15px rgba(0, 180, 216, 0.1); }
+    .metric-card.active::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--teal-600); }
+    
+    .metric-title { font-size: 0.85rem; font-weight: 600; color: var(--gray-500); margin-bottom: 8px; }
+    .metric-card.active .metric-title { color: var(--teal-700); }
+    .metric-value { font-size: 1.8rem; font-weight: 700; color: var(--gray-900); }
+    .metric-card.active .metric-value { color: var(--teal-900); }
+
+    /* Arama Çubuğu */
+    .filter-bar { background: #fff; border-radius: var(--radius); padding: 16px 20px; display: flex; gap: 16px; align-items: center; border: 1px solid var(--gray-200); margin-bottom: 24px; }
+    .search-box { position: relative; flex: 1; max-width: 400px; }
+    .search-box i { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--gray-400); }
+    .search-box input { width: 100%; padding: 12px 16px 12px 42px; border: 1px solid var(--gray-200); border-radius: 10px; font-size: 0.95rem; outline: none; transition: .2s; box-sizing: border-box;}
+    .search-box input:focus { border-color: var(--teal-500); box-shadow: 0 0 0 3px rgba(0,180,216,.1); }
+
+    /* ---------------------------------------------------
+       TABLE (GROUPED)
+       --------------------------------------------------- */
+    .table-card { background: #fff; border-radius: var(--radius); border: 1px solid var(--gray-200); box-shadow: var(--shadow-sm); overflow: hidden; }
+    .sp-table { width: 100%; border-collapse: collapse; text-align: left; table-layout: fixed; }
+    .sp-table th { padding: 16px 20px; font-size: 0.8rem; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.5px; background: var(--gray-50); border-bottom: 1px solid var(--gray-200); }
+    .sp-table td { padding: 16px 20px; vertical-align: middle; border-bottom: 1px solid var(--gray-100); }
+    
+
+    /* Ana Ürün Satırı */
+    .product-row { transition: .2s; cursor: pointer; }
+    .product-row:hover { background: var(--gray-50); }
+    .product-row.expanded { background: var(--teal-50); border-bottom-color: transparent; }
+    
+    .product-cell { display: flex; align-items: center; gap: 16px; }
+    .product-thumb { width: 56px; height: 56px; border-radius: 10px; background: #fff; border: 1px solid var(--gray-200); object-fit: contain; padding: 2px; flex-shrink: 0; }
+    .product-info { display: flex; flex-direction: column; gap: 4px; }
+    .product-name { font-weight: 700; color: var(--gray-900); font-size: 0.95rem; }
+    .product-meta { font-size: 0.8rem; color: var(--gray-500); }
+
+    .price-range { font-weight: 700; color: var(--teal-700); font-size: 0.95rem; }
+    .stock-total { font-weight: 600; color: var(--gray-700); }
+    
+    .variant-count-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--gray-100); color: var(--gray-700); border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+    .product-row.expanded .variant-count-badge { background: var(--teal-600); color: #fff; }
+
+    .expand-icon { color: var(--gray-400); transition: .3s; }
+    .product-row.expanded .expand-icon { transform: rotate(180deg); color: var(--teal-600); }
+
+    /* Varyant Satırları */
+    .variant-row { background: var(--gray-50); display: none; }
+    .variant-row.show { display: table-row; }
+    .variant-row td { padding: 12px 20px; border-bottom: 1px dashed var(--gray-200); font-size: 0.9rem; }
+    .variant-row:last-child td { border-bottom: 1px solid var(--gray-200); }
+    
+    .variant-inner-cell { display: flex; align-items: center; gap: 12px; }
+    .variant-mini-thumb { width: 40px; height: 40px; border-radius: 6px; background: #fff; border: 1px solid var(--gray-200); object-fit: contain; }
+    .vr-name { font-weight: 600; color: var(--gray-800); }
+    .vr-codes { 
+        display: flex; 
+        gap: 8px; 
+        margin-top: 8px; 
+        flex-wrap: wrap; 
+    }
+    .vr-code-box { 
+        display: inline-flex; 
+        align-items: center; 
+        gap: 6px; 
+        background: #f8fafc;
+        color: var(--gray-800); 
+        padding: 4px 10px; 
+        border-radius: 6px; 
+        border: 1px solid var(--gray-200);
+        font-size: 0.75rem; 
+        font-family: inherit;
+        font-weight: 600;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+    .vr-code-box i {
+        color: var(--teal-500);
+        font-size: 0.8rem;
+    }
+    .vr-code-label {
+        color: var(--gray-500);
+        font-weight: 500;
+    }
+    
+    .vr-price { font-weight: 600; color: var(--gray-900); }
+    
+    /* Durum Rozetleri */
+    .status-badge { display: inline-flex; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
+    .status-active { background: var(--green-50); color: var(--green-600); border: 1px solid #bbf7d0; }
+    .status-draft { background: var(--gray-100); color: var(--gray-600); border: 1px solid var(--gray-300); }
+    .status-out_of_stock { background: var(--red-50); color: var(--red-600); border: 1px solid #fecaca; }
+    .status-archived { background: var(--yellow-50); color: var(--yellow-600); border: 1px solid #fef08a; }
+
+    /* Aksiyonlar */
+    .actions-group { display: flex; gap: 8px; justify-content: flex-end; }
+    .btn-icon { width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--gray-200); background: #fff; color: var(--gray-600); cursor: pointer; transition: .2s; text-decoration: none; }
+    .btn-icon:hover { background: var(--gray-50); color: var(--teal-600); border-color: var(--teal-500); }
+    .btn-icon.danger:hover { color: var(--red-600); border-color: var(--red-600); background: var(--red-50); }
+
+    /* Sayfalama */
+    .sp-pagination { display: flex; justify-content: center; gap: 6px; padding: 20px; border-top: 1px solid var(--gray-100); background: #fff; }
+    .sp-page-btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--gray-200); background: white; color: var(--gray-700); font-size: 0.9rem; font-weight: 600; text-decoration: none; transition: .2s; }
+    .sp-page-btn:hover { border-color: var(--teal-600); color: var(--teal-700); }
+    .sp-page-btn.current { background: var(--teal-600); color: white; border-color: var(--teal-600); }
+    .sp-page-btn.disabled { opacity: 0.4; pointer-events: none; }
+
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--gray-500); }
+    .empty-state i { font-size: 3rem; color: var(--gray-300); margin-bottom: 16px; }
+
+
+    .message-alert {
+        padding: 14px 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .message-success {
+        background: var(--green-50);
+        color: var(--green-600);
+        border: 1px solid #bbf7d0;
+    }
+    
+    .message-error {
+        background: var(--red-50);
+        color: var(--red-600);
+        border: 1px solid #fecaca;
+    }
+
+    @media (max-width: 992px) {
+        .seller-layout { flex-direction: column; }
+        .seller-sidebar { width: 100%; position: relative; top: 0; }
+        .metric-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+</style>
+
+<div class="seller-layout">
+
+    <!-- 1. SIDEBAR -->
+    <aside class="seller-sidebar">
+        <div class="sidebar-profile">
+            <div class="sidebar-avatar">
+                {% if store.logo %}
+                    <img src="{{ store.logo.url }}" alt="{{ store.store_name }}">
+                {% else %}
+                    {{ store.store_name|slice:":1"|upper }}
+                {% endif %}
+            </div>
+            <h2 class="sidebar-store-name">{{ store.store_name }}</h2>
+            <div class="sidebar-badge"><i class="fa-solid fa-check-circle"></i> Onaylı Mağaza</div>
+        </div>
+        <ul class="sidebar-nav">
+            <li><a href="{% url 'store:store_dashboard' store.slug %}"><i class="fa-solid fa-chart-pie"></i> Özet Paneli</a></li>
+            <li><a href="{% url 'products:store_product_list' store.slug %}" class="active"><i class="fa-solid fa-box-open"></i> Envanter (Ürünler)</a></li>
+            <li><a href="#"><i class="fa-solid fa-clipboard-list"></i> Siparişler</a></li>
+            <li><a href="{% url 'store:update_store' store.slug %}"><i class="fa-solid fa-gear"></i> Mağaza Ayarları</a></li>
+            <li style="margin-top: 16px; border-top: 1px solid var(--gray-100); padding-top: 16px;">
+                <a href="{% url 'store:store_list' %}" style="color: var(--red-600);"><i class="fa-solid fa-arrow-right-from-bracket"></i> Mağaza Değiştir</a>
+            </li>
+        </ul>
+    </aside>
+
+    <!-- 2. MAIN CONTENT -->
+    <main class="seller-main">
+        
+        <div class="page-header">
+            <h1 class="page-title">Envanter Yönetimi</h1>
+            <a href="{% url 'products:wizard_step1' store_slug=store.slug %}" class="btn btn-primary">
+                <i class="fa-solid fa-plus"></i> Yeni Ürün Ekle
+            </a>
+        </div>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="message-alert {% if message.tags == 'success' %}message-success{% else %}message-error{% endif %}">
+                    <i class="fa-solid {% if message.tags == 'success' %}fa-check-circle{% else %}fa-circle-exclamation{% endif %}"></i>
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <!-- Metric Cards -->
+        <div class="metric-grid">
+            <a href="?{% if current_q %}q={{ current_q }}{% endif %}" class="metric-card {% if not current_status %}active{% endif %}">
+                <div class="metric-title">Tüm Ürünler</div>
+                <div class="metric-value">{{ status_counts.all }}</div>
+            </a>
+            <a href="?status=active{% if current_q %}&q={{ current_q }}{% endif %}" class="metric-card {% if current_status == 'active' %}active{% endif %}">
+                <div class="metric-title" style="color: var(--green-600);">Yayında</div>
+                <div class="metric-value">{{ status_counts.active }}</div>
+            </a>
+            <a href="?status=out_of_stock{% if current_q %}&q={{ current_q }}{% endif %}" class="metric-card {% if current_status == 'out_of_stock' %}active{% endif %}">
+                <div class="metric-title" style="color: var(--red-600);">Tükendi</div>
+                <div class="metric-value">{{ status_counts.out_of_stock }}</div>
+            </a>
+            <a href="?status=archived{% if current_q %}&q={{ current_q }}{% endif %}" class="metric-card {% if current_status == 'archived' %}active{% endif %}">
+                <div class="metric-title" style="color: var(--yellow-600);">Arşivlenenler</div>
+                <div class="metric-value">{{ status_counts.archived }}</div>
+            </a>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="filter-bar">
+            <form method="get" style="display: flex; gap: 12px; flex: 1;">
+                {% if current_status %}
+                    <input type="hidden" name="status" value="{{ current_status }}">
+                {% endif %}
+                <div class="search-box">
+                    <i class="fa-solid fa-search"></i>
+                    <input type="text" name="q" value="{{ current_q }}" placeholder="Ürün adı, Stok Kodu (SKU) veya Barkod ara...">
+                </div>
+                <button type="submit" class="btn btn-outline">Ara</button>
+                {% if current_q %}
+                    <a href="?{% if current_status %}status={{ current_status }}{% endif %}" class="btn btn-outline" style="color: var(--red-600); border-color: var(--red-50); background: var(--red-50);"><i class="fa-solid fa-times"></i> Temizle</a>
+                {% endif %}
+            </form>
+        </div>
+
+        <!-- GİZLİ VERİ ALANI: Backend'den gelen tüm varyantlar burada JS için tutulur -->
+        <div id="raw-offer-data" style="display: none;">
+            {% for offer in store_products %}
+            <div class="js-raw-offer"
+                 data-offer-id="{{ offer.pk }}"
+                 data-product-id="{{ offer.variant.product.pk }}"
+                 data-product-name="{{ offer.variant.product.name }}"
+                 data-brand="{{ offer.variant.product.brand.name|default:'Belirtilmedi' }}"
+                 data-category="{{ offer.variant.product.category.name }}"
+                 data-common-image="{{ offer.common_image_url|default:'' }}"
+                 data-variant-image="{{ offer.thumbnail_url|default:'' }}"
+                 data-variant-name="{% for av in offer.variant.attribute_values.all %}{{ av.value }}{% if not forloop.last %} / {% endif %}{% empty %}Standart{% endfor %}"
+                 data-price="{{ offer.price }}"
+                 data-stock="{{ offer.stock }}"
+                 data-sku="{{ offer.sku|default:'-' }}"
+                 data-barcode="{{ offer.variant.barcode|default:'-' }}"
+                 data-status="{{ offer.status }}"
+                 data-status-display="{{ offer.get_status_display }}"
+                 data-updated="{{ offer.updated_at|date:'d.m.Y' }}">
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- TABLO KARTI (JS İLE DOLDURULACAK) -->
+        <div class="table-card">
+            {% if store_products %}
+                <table class="sp-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 40%;">Ürün Bilgisi</th>
+                            <th style="width: 23%;" id="price-column-title">Fiyat</th>
+                            <th style="width: 17%;">Toplam Stok</th>
+                            <th style="width: 12%;">Seçenekler</th>
+                            <th style="width: 8%; text-align: right;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="grouped-table-body">
+                        <!-- JS Burayı Dolduracak -->
+                    </tbody>
+                </table>
+                
+                <!-- Orijinal Django Pagination -->
+                {% if is_paginated %}
+                <div class="sp-pagination">
+                    {% if page_obj.has_previous %}
+                        <a href="?page={{ page_obj.previous_page_number }}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_q %}&q={{ current_q }}{% endif %}" class="sp-page-btn"><i class="fas fa-chevron-left"></i></a>
+                    {% else %}
+                        <span class="sp-page-btn disabled"><i class="fas fa-chevron-left"></i></span>
+                    {% endif %}
+
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <span class="sp-page-btn current">{{ num }}</span>
+                        {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+                            <a href="?page={{ num }}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_q %}&q={{ current_q }}{% endif %}" class="sp-page-btn">{{ num }}</a>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_q %}&q={{ current_q }}{% endif %}" class="sp-page-btn"><i class="fas fa-chevron-right"></i></a>
+                    {% else %}
+                        <span class="sp-page-btn disabled"><i class="fas fa-chevron-right"></i></span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="fa-solid fa-box-open"></i>
+                    {% if current_q %}
+                        <h3>"{{ current_q }}" için sonuç bulunamadı.</h3>
+                    {% elif current_status %}
+                        <h3>Bu filtreye uygun ürününüz yok.</h3>
+                    {% else %}
+                        <h3>Mağazanıza henüz ürün eklenmemiş.</h3>
+                        <p style="margin-top: 8px;">Müşterilerinize ilk ürününüzü sunarak satışa başlayın.</p>
+                        <br>
+                        <a href="{% url 'products:wizard_step1' store_slug=store.slug %}" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Hemen Ürün Ekle</a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </main>
+</div>
+
+<!-- JavaScript: Sanal Gruplama -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    
+    function formatMoney(val) {
+        return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+    }
+    const placeholderImg = "{% static 'core/images/placeholder.png' %}";
+    
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== "") {
+            const cookies = document.cookie.split(";");
+            for (let cookie of cookies) {
+                cookie = cookie.trim();
+                if (cookie.startsWith(name + "=")) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie("csrftoken");
+
+    const rawRows = document.querySelectorAll('.js-raw-offer');
+    if(rawRows.length === 0) return;
+
+    // 1. Ürünleri ID'ye göre grupla
+    const products = {};
+
+    rawRows.forEach(row => {
+        const pId = row.dataset.productId;
+        
+        if(!products[pId]) {
+            products[pId] = {
+                id: pId,
+                name: row.dataset.productName,
+                brand: row.dataset.brand,
+                category: row.dataset.category,
+                // ANA ÜRÜN İÇİN: Varsa ortak kapak resmini al, yoksa varyant resmini al, o da yoksa placeholder
+                image: row.dataset.commonImage || row.dataset.variantImage || placeholderImg,
+                offers: [],
+                totalStock: 0,
+                minPrice: Infinity,
+                maxPrice: -Infinity
+            };
+        }
+
+        const price = parseFloat(row.dataset.price);
+        const stock = parseInt(row.dataset.stock);
+
+        products[pId].offers.push({
+            id: row.dataset.offerId,
+            variantName: row.dataset.variantName,
+            sku: row.dataset.sku,
+            barcode: row.dataset.barcode,
+            image: row.dataset.variantImage || products[pId].image, // VARYANT İÇİN Kendi resmi
+            price: price,
+            stock: stock,
+            status: row.dataset.status,
+            statusDisplay: row.dataset.statusDisplay,
+            updated: row.dataset.updated
+        });
+
+        products[pId].totalStock += stock;
+        if(price < products[pId].minPrice) products[pId].minPrice = price;
+        if(price > products[pId].maxPrice) products[pId].maxPrice = price;
+    });
+
+    const tbody = document.getElementById("grouped-table-body");
+    const priceColumnTitle = document.getElementById("price-column-title");
+
+    const hasPriceRange = Object.values(products).some(prod => {
+        return prod.minPrice !== prod.maxPrice;
+    });
+    
+    priceColumnTitle.textContent = hasPriceRange
+        ? "Fiyat Aralığı"
+        : "Fiyat";
+    tbody.innerHTML = "";
+
+    const updateUrlTemplate = "{% url 'products:offer_update' store_slug=store.slug pk='000000' %}";
+    const archiveUrlTemplate = "{% url 'products:offer_archive' store_slug=store.slug pk='000000' %}";
+
+    // 2. Gruplanan veriyi DOM'a bas
+    Object.values(products).forEach(prod => {
+        
+        let priceStr = "";
+        if(prod.minPrice === prod.maxPrice) {
+            priceStr = `₺${formatMoney(prod.minPrice)}`;
+        } else {
+            priceStr = `₺${formatMoney(prod.minPrice)} - ₺${formatMoney(prod.maxPrice)}`;
+        }
+
+        // Ana Ürün Satırı
+        const trMain = document.createElement("tr");
+        trMain.className = "product-row";
+        trMain.innerHTML = `
+            <td>
+                <div class="product-cell">
+                    <img src="${prod.image}" class="product-thumb" alt="${prod.name}">
+                    <div class="product-info">
+                        <div class="product-name">${prod.name}</div>
+                        <div class="product-meta">${prod.brand} • ${prod.category}</div>
+                    </div>
+                </div>
+            </td>
+            <td><span class="price-range">${priceStr}</span></td>
+            <td><span class="stock-total">${prod.totalStock} Adet</span></td>
+            <td>
+                <span class="variant-count-badge">
+                    <i class="fa-solid fa-layer-group"></i> ${prod.offers.length} Seçenek
+                </span>
+            </td>
+            <td style="text-align:right;">
+                <i class="fa-solid fa-chevron-down expand-icon"></i>
+            </td>
+        `;
+
+        tbody.appendChild(trMain);
+
+        const variantRows = [];
+        
+        prod.offers.forEach(offer => {
+            const trVar = document.createElement("tr");
+            trVar.className = "variant-row";
+            
+            const editUrl = updateUrlTemplate.replace("000000", offer.id);
+            const archiveUrl = archiveUrlTemplate.replace("000000", offer.id);
+            
+            trVar.innerHTML = `
+                <td style="padding-left: 50px;">
+                    <div class="variant-inner-cell">
+                        <img src="${offer.image}" class="variant-mini-thumb" alt="${offer.variantName}">
+                        <div>
+                            <div class="vr-name">${offer.variantName}</div>
+                            <div class="vr-codes">
+                                <span class="vr-code-box">
+                                    <i class="fa-solid fa-tag"></i>
+                                    <span class="vr-code-label">SKU:</span> ${offer.sku}
+                                </span>
+                                <span class="vr-code-box">
+                                    <i class="fa-solid fa-barcode"></i>
+                                    <span class="vr-code-label">Barkod:</span> ${offer.barcode}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+                <td><span class="vr-price">₺${formatMoney(offer.price)}</span></td>
+                <td>${offer.stock} Adet</td>
+                <td>
+                    <span class="status-badge status-${offer.status}">${offer.statusDisplay}</span>
+                    <div style="font-size:0.75rem; color:var(--gray-400); margin-top:4px;">Gnc: ${offer.updated}</div>
+                </td>
+                <td>
+                    <div class="actions-group">
+                        <a href="${editUrl}" class="btn-icon" title="Fiyat/Stok Güncelle"><i class="fa-solid fa-pen"></i></a>
+                        ${offer.status !== 'archived' ? `
+                            <button type="button" class="btn-icon danger js-archive-btn" data-id="${offer.id}" data-name="${prod.name} - ${offer.variantName}" data-url="${archiveUrl}" title="Arşivle">
+                                <i class="fa-solid fa-archive"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(trVar);
+            variantRows.push(trVar);
+        });
+
+        // Accordion Toggle
+        trMain.addEventListener("click", () => {
+            const isExpanded = trMain.classList.contains("expanded");
+            if(isExpanded) {
+                trMain.classList.remove("expanded");
+                variantRows.forEach(r => r.classList.remove("show"));
+            } else {
+                trMain.classList.add("expanded");
+                variantRows.forEach(r => r.classList.add("show"));
+            }
+        });
+    });
+
+    // 3. Arşivleme SweetAlert
+    document.querySelectorAll(".js-archive-btn").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+            e.stopPropagation(); 
+            
+            const btnEl = e.currentTarget;
+            const offerName = btnEl.dataset.name;
+            const actionUrl = btnEl.dataset.url;
+
+            const confirm = await Swal.fire({
+                title: 'Teklifi Arşivle',
+                html: `<strong>${offerName}</strong> satış teklifini arşivlemek istediğinize emin misiniz?<br><br><span style="font-size:0.9rem; color:var(--gray-500);">Arşivlenen teklifler müşterilere gösterilmez, ancak ürün bilgileriniz kaybolmaz.</span>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc2626',
+                cancelButtonColor: '#71717a',
+                confirmButtonText: 'Evet, Arşivle',
+                cancelButtonText: 'Vazgeç'
+            });
+
+            if (confirm.isConfirmed) {
+                const form = document.createElement("form");
+                form.method = "POST";
+                form.action = actionUrl;
+                
+                const csrfInput = document.createElement("input");
+                csrfInput.type = "hidden";
+                csrfInput.name = "csrfmiddlewaretoken";
+                csrfInput.value = csrftoken;
+                
+                form.appendChild(csrfInput);
+                document.body.appendChild(form);
+                form.submit();
+            }
+        });
+    });
+
+});
+</script>
+
+{% endblock %}

@@ -1,0 +1,13 @@
+{% if group.images.exists %}
+    <!-- 
+      js-sortable-grid sınıfı: JS tarafında bu div'i bulup SortableJS kütüphanesine bağlayacağız.
+      data-url: Kullanıcı bir resmin yerini değiştirdiğinde yeni sırayı göndereceğimiz backend adresi.
+    -->
+    <div class="pw-image-grid js-sortable-grid" data-url="{% url 'products:image_reorder' store_slug=store.slug draft_id=draft.id group_id=group.id %}">
+        
+        {% for image in group.images.all %}
+            {% include "products/seller/wizard/image_item.html" %}
+        {% endfor %}
+
+    </div>
+{% endif %}

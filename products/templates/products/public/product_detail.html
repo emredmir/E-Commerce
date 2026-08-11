@@ -1,0 +1,435 @@
+{% extends "core/home.html" %}
+
+{% block title %}{{ product.name }} Fiyatı ve Özellikleri{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --primary: #f27a1a; /* E-ticaret Turuncusu */
+        --primary-hover: #d96812;
+        --text-dark: #333333;
+        --text-muted: #666666;
+        --bg-light: #f5f5f5;
+        --border-color: #e2e8f0;
+        --radius: 8px;
+        --green-stock: #2e7d32;
+        --red-stock: #d32f2f;
+    }
+
+    body { background-color: var(--bg-light); }
+
+    .pd-container {
+        max-width: 1200px;
+        margin: 20px auto;
+        padding: 0 15px;
+    }
+
+    /* --- Breadcrumb --- */
+    .pd-breadcrumb {
+        margin-bottom: 20px;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+    .pd-breadcrumb a {
+        color: var(--text-muted);
+        text-decoration: none;
+    }
+    .pd-breadcrumb a:hover { color: var(--primary); }
+    .pd-breadcrumb span.sep { margin: 0 8px; font-size: 0.75rem; }
+
+    /* --- Ana Layout (3 Kolonlu Grid) --- */
+    .pd-main-grid {
+        display: grid;
+        grid-template-columns: 40% 1fr 300px;
+        gap: 24px;
+        background: #fff;
+        padding: 24px;
+        border-radius: var(--radius);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+    }
+
+    /* --- 1. Kolon: Galeri --- */
+    .pd-gallery {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+    .pd-main-image {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        box-sizing: border-box;
+    }
+    .pd-main-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+    .pd-thumbnails {
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding-bottom: 5px;
+    }
+    .pd-thumb {
+        width: 70px;
+        height: 70px;
+        border: 2px solid transparent;
+        border-radius: 6px;
+        cursor: pointer;
+        padding: 5px;
+        box-sizing: border-box;
+        border-color: var(--border-color);
+        transition: border-color 0.2s;
+    }
+    .pd-thumb:hover, .pd-thumb.active { border-color: var(--primary); }
+    .pd-thumb img { width: 100%; height: 100%; object-fit: contain; }
+
+    /* --- 2. Kolon: Ürün Bilgileri --- */
+    .pd-info {
+        display: flex;
+        flex-direction: column;
+    }
+    .pd-brand {
+        font-size: 0.9rem;
+        color: var(--primary);
+        font-weight: 700;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+        text-decoration: none;
+    }
+    .pd-title {
+        font-size: 1.4rem;
+        font-weight: 600;
+        color: var(--text-dark);
+        margin: 0 0 15px 0;
+        line-height: 1.4;
+    }
+    
+    /* Varyant Seçici */
+    .pd-variants {
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border-color);
+    }
+    .pd-variants-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin-bottom: 12px;
+        color: var(--text-dark);
+    }
+    .pd-variant-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .pd-v-chip {
+        display: inline-block;
+        padding: 8px 16px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        text-decoration: none;
+        color: var(--text-dark);
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: all 0.2s;
+        background: #fff;
+    }
+    .pd-v-chip:hover { border-color: var(--primary); color: var(--primary); }
+    .pd-v-chip.active {
+        border-color: var(--primary);
+        background: #fff4ec;
+        color: var(--primary);
+        font-weight: 700;
+    }
+
+    .pd-description {
+        margin-top: 25px;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        color: var(--text-muted);
+    }
+
+    /* --- 3. Kolon: Buy Box (Satın Alma Kutusu) --- */
+    .pd-buybox {
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        padding: 20px;
+        background: #fafafa;
+        align-self: start;
+        position: sticky;
+        top: 20px;
+    }
+    .bb-price {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--primary);
+        margin-bottom: 10px;
+    }
+    .bb-seller {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        margin-bottom: 15px;
+    }
+    .bb-seller a {
+        color: var(--text-dark);
+        font-weight: 600;
+        text-decoration: none;
+    }
+    .bb-seller a:hover { text-decoration: underline; }
+    
+    .bb-stock {
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 20px;
+    }
+    .bb-stock.in-stock { color: var(--green-stock); }
+    .bb-stock.low-stock { color: var(--red-stock); }
+
+    .btn-add-cart {
+        width: 100%;
+        background: var(--primary);
+        color: #fff;
+        border: none;
+        padding: 14px;
+        border-radius: 6px;
+        font-size: 1.05rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    .btn-add-cart:hover { background: var(--primary-hover); }
+
+    .bb-unavailable {
+        text-align: center;
+        color: var(--text-muted);
+        padding: 20px 0;
+        font-weight: 600;
+    }
+
+    /* --- Alt Kısım: Diğer Satıcılar --- */
+    .pd-other-sellers {
+        background: #fff;
+        border-radius: var(--radius);
+        border: 1px solid var(--border-color);
+        padding: 24px;
+        margin-bottom: 40px;
+    }
+    .pd-other-sellers h3 {
+        margin: 0 0 20px 0;
+        font-size: 1.2rem;
+        color: var(--text-dark);
+    }
+    .seller-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .seller-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        transition: background 0.2s;
+    }
+    .seller-item:hover { background: #f9f9f9; }
+    
+    .si-info { flex: 1; }
+    .si-store { font-weight: 700; color: var(--text-dark); display: block; margin-bottom: 4px; }
+    .si-badge { font-size: 0.75rem; background: #e0f2f1; color: #00796b; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+    
+    .si-price { font-size: 1.3rem; font-weight: 700; color: var(--primary); margin-right: 20px; }
+    
+    .btn-add-cart-small {
+        background: #fff;
+        color: var(--primary);
+        border: 1px solid var(--primary);
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-add-cart-small:hover { background: var(--primary); color: #fff; }
+
+    /* --- Mobil Uyum --- */
+    @media (max-width: 992px) {
+        .pd-main-grid { grid-template-columns: 1fr; gap: 30px; }
+        .pd-buybox { position: static; }
+        .pd-main-image { padding: 10px; max-height: 400px; }
+        .seller-item { flex-wrap: wrap; gap: 15px; }
+        .si-price { width: 100%; text-align: left; margin-right: 0; }
+        .btn-add-cart-small { width: 100%; }
+    }
+</style>
+
+<div class="pd-container">
+
+    <!-- Breadcrumb -->
+    <nav class="pd-breadcrumb">
+        <a href="/">Anasayfa</a>
+        {% if product.category %}
+            <span class="sep"><i class="fas fa-chevron-right"></i></span>
+            <a href="{% url 'products:category_product_list' slug=product.category.slug %}">{{ product.category.name }}</a>
+        {% endif %}
+        <span class="sep"><i class="fas fa-chevron-right"></i></span>
+        <span style="color: var(--text-dark); font-weight: 500;">{{ product.name }}</span>
+    </nav>
+
+    <!-- Ana Layout -->
+    <div class="pd-main-grid">
+        
+        <!-- 1. Kolon: Galeri -->
+        <div class="pd-gallery">
+            <div class="pd-main-image">
+                {% if display_images %}
+                    <!-- Varsayılan olarak ilk resmi göster -->
+                    <img id="mainImage" src="{{ display_images.0.image.url }}" alt="{{ product.name }}">
+                {% else %}
+                    <i class="fas fa-box fa-4x" style="color: #ccc;"></i>
+                {% endif %}
+            </div>
+            
+            {% if display_images|length > 1 %}
+            <div class="pd-thumbnails">
+                {% for img in display_images %}
+                <!-- Tıklanınca ana resmi değiştiren JS fonksiyonu tetiklenir -->
+                <div class="pd-thumb {% if forloop.first %}active{% endif %}" onclick="changeImage(this, '{{ img.image.url }}')">
+                    <img src="{{ img.image.url }}" alt="Thumbnail">
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- 2. Kolon: Ürün Detayları -->
+        <div class="pd-info">
+            {% if product.brand %}
+                <a href="#" class="pd-brand">{{ product.brand.name }}</a>
+            {% endif %}
+            
+            <h1 class="pd-title">{{ product.name }}</h1>
+
+            <!-- Varyant Seçici -->
+            {% if product.active_variants %}
+            <div class="pd-variants">
+                <div class="pd-variants-title">Seçenekler:</div>
+                <div class="pd-variant-chips">
+                    {% for variant in product.active_variants %}
+                        <a href="?variant={{ variant.pk }}" class="pd-v-chip {% if selected_variant and selected_variant.pk == variant.pk %}active{% endif %}">
+                            <!-- Varyantın içindeki değerleri (örn: Kırmızı - M) birleştirerek yazdır -->
+                            {% if variant.attribute_values.all %}
+                                {% for av in variant.attribute_values.all %}
+                                    {{ av.value|title }}{% if not forloop.last %} - {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                Standart Seçenek
+                            {% endif %}
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Ürün Açıklaması -->
+            <div class="pd-description">
+                {{ product.description|linebreaks }}
+            </div>
+        </div>
+
+        <!-- 3. Kolon: Buy Box -->
+        <div class="pd-buybox">
+            {% if has_offers and buy_box_offer %}
+                <div class="bb-price">₺{{ buy_box_offer.price|floatformat:2 }}</div>
+                
+                <div class="bb-seller">
+                    Satıcı: <a href="#">{{ buy_box_offer.store.store_name }}</a>
+                </div>
+
+                <!-- Stok Durumu -->
+                <div class="bb-stock {% if buy_box_offer.stock < 5 %}low-stock{% else %}in-stock{% endif %}">
+                    {% if buy_box_offer.stock < 5 %}
+                        <i class="fas fa-exclamation-triangle"></i> Sadece {{ buy_box_offer.stock }} ürün kaldı!
+                    {% else %}
+                        <i class="fas fa-check-circle"></i> Stokta Var
+                    {% endif %}
+                </div>
+
+                <!-- Sepete Ekle Formu (İleride Cart modülüne bağlanacak) -->
+                <form method="post" action="#"> 
+                    {% csrf_token %}
+                    <!-- Hangi satıcının teklifinin sepete eklendiğini belirtmek çok önemlidir -->
+                    <input type="hidden" name="offer_id" value="{{ buy_box_offer.pk }}">
+                    <button type="submit" class="btn-add-cart">
+                        <i class="fas fa-shopping-cart"></i> Sepete Ekle
+                    </button>
+                </form>
+
+            {% else %}
+                <div class="bb-unavailable">
+                    <i class="fas fa-box-open fa-2x" style="color: #ccc; margin-bottom: 10px; display:block;"></i>
+                    Şu an bu ürün için aktif bir satış bulunmamaktadır.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Alt Kısım: Diğer Satıcılar -->
+    {% if other_offers %}
+    <div class="pd-other-sellers">
+        <h3>Diğer Satıcılar ({{ other_offers|length }})</h3>
+        <div class="seller-list">
+            {% for offer in other_offers %}
+            <div class="seller-item">
+                <div class="si-info">
+                    <span class="si-store">{{ offer.store.store_name }}</span>
+                    {% if offer.seller_notes %}
+                        <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-top: 4px;">
+                            Not: {{ offer.seller_notes }}
+                        </span>
+                    {% endif %}
+                </div>
+                
+                <div class="si-price">₺{{ offer.price|floatformat:2 }}</div>
+                
+                <div>
+                    <!-- Sepete Ekle Formu -->
+                    <form method="post" action="#">
+                        {% csrf_token %}
+                        <input type="hidden" name="offer_id" value="{{ offer.pk }}">
+                        <button type="submit" class="btn-add-cart-small">Sepete Ekle</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- Basit Galeri Script'i -->
+<script>
+    function changeImage(element, imageUrl) {
+        // Ana resmi değiştir
+        document.getElementById('mainImage').src = imageUrl;
+        
+        // Aktif thumbnail (küçük resim) çerçevesini güncelle
+        let thumbs = document.querySelectorAll('.pd-thumb');
+        thumbs.forEach(thumb => thumb.classList.remove('active'));
+        element.classList.add('active');
+    }
+</script>
+{% endblock %}

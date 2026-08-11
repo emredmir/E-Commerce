@@ -1,0 +1,924 @@
+{% extends "core/home.html" %}
+{% load static %}
+
+{% block title %}
+Önizleme ve Yayınla — {{ store.store_name }}
+{% endblock %}
+
+{% block content %}
+
+<!-- SweetAlert2 Kütüphanesi -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<style>
+    :root{
+        --teal-50:#e6fffb;
+        --teal-100:#c7f9f4;
+        --teal-500:#14b8a6;
+        --teal-600:#0d9488;
+        --teal-700:#0f766e;
+
+        --gray-50:#fafafa;
+        --gray-100:#f4f4f5;
+        --gray-200:#e4e4e7;
+        --gray-300:#d4d4d8;
+        --gray-400:#a1a1aa;
+        --gray-600:#52525b;
+        --gray-700:#3f3f46;
+        --gray-800:#27272a;
+
+        --red:#dc2626;
+        --blue-50: #eff6ff;
+        --blue-500: #3b82f6;
+        --blue-700: #1d4ed8;
+        --green-50: #ecfdf5;
+        --green-600: #16a34a;
+        --green-700: #15803d;
+
+        --radius:14px;
+        --shadow:0 8px 30px rgba(0,0,0,.05);
+    }
+
+    .pw-wrapper{
+        max-width:900px;
+        margin:40px auto;
+        padding:0 20px;
+    }
+
+    .pw-breadcrumb{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        font-size:.88rem;
+        color:var(--gray-400);
+        margin-bottom:26px;
+    }
+    .pw-breadcrumb a{
+        text-decoration:none;
+        color:var(--teal-700);
+    }
+    .pw-breadcrumb a:hover{
+        text-decoration:underline;
+    }
+
+    /* Toast Container */
+    #wizard-toast-container{
+        position:fixed !important;
+        top:24px !important;
+        right:24px !important;
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+        width:360px;
+        max-width:calc(100vw - 40px);
+        z-index:99999;
+        pointer-events:none;
+    }
+    .wizard-toast{
+        display:flex;
+        align-items:flex-start;
+        gap:12px;
+        padding:16px 18px;
+        border-radius:12px;
+        box-shadow:0 12px 30px rgba(0,0,0,.15);
+        color:#fff;
+        opacity:0;
+        transform:translateY(-10px);
+        transition: opacity .25s ease, transform .25s ease;
+        pointer-events:auto;
+    }
+    .wizard-toast.show{ opacity:1; transform:none; }
+    .wizard-toast-success{ background:#16a34a; }
+    .wizard-toast-error{ background:#dc2626; }
+    .wizard-toast i{ margin-top:2px; }
+    .wizard-toast > div{ flex:1; }
+    .wizard-toast-close{ margin-left:auto; border:none; background:none; color:inherit; cursor:pointer; font-size:1.2rem; opacity:.7; }
+    .wizard-toast-close:hover{ opacity:1; }
+
+    /* Wizard Progress */
+    .pw-steps{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:16px;
+        margin-bottom:28px;
+        padding:18px 22px;
+        background:#fff;
+        border-radius:var(--radius);
+        box-shadow:var(--shadow);
+    }
+    .pw-step{
+        flex:1;
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        gap:10px;
+        position:relative;
+        color:var(--gray-400);
+        font-size:.85rem;
+        font-weight:600;
+        text-align:center;
+    }
+    .pw-step:not(:last-child)::after{
+        content:"";
+        position:absolute;
+        top:18px;
+        left:50%;
+        width:100%;
+        height:2px;
+        background:var(--gray-200);
+        z-index:0;
+    }
+    .pw-number{
+        width:36px;
+        height:36px;
+        border-radius:50%;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:var(--gray-200);
+        color:var(--gray-600);
+        font-weight:700;
+        position:relative;
+        z-index:1;
+    }
+    .pw-step.active{ color:var(--teal-700); }
+    .pw-step.active .pw-number{ background:var(--teal-500); color:white; }
+    .pw-step.current-step .pw-number { box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.2); transform: scale(1.1); }
+
+    /* Card & Summary */
+    .pw-card{
+        background:#fff;
+        border-radius:var(--radius);
+        box-shadow:var(--shadow);
+        overflow:hidden;
+        margin-bottom:24px;
+    }
+    .pw-card-header{
+        display:flex;
+        align-items:center;
+        gap:16px;
+        padding:22px 26px;
+        border-bottom:1px solid var(--gray-200);
+    }
+    .pw-card-icon{
+        width:48px;
+        height:48px;
+        border-radius:12px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:var(--teal-50);
+        color:var(--teal-600);
+        font-size:1.2rem;
+    }
+    .pw-card-title{ margin:0; font-size:1.1rem; color:var(--gray-800); }
+    .pw-card-subtitle{ margin-top:4px; color:var(--gray-400); font-size:.88rem; }
+    .pw-card-body{ padding:28px; }
+
+    .pw-summary{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+    .pw-summary-item{ padding:18px; background:var(--gray-50); border:1px solid var(--gray-200); border-radius:12px; }
+    .pw-summary-label{ display:block; font-size:.82rem; color:var(--gray-400); margin-bottom:6px; }
+    .pw-summary-value{ font-weight:600; color:var(--gray-800); }
+
+    .pw-publish-modes {
+        display: inline-flex; /* Sadece içeriği kadar genişler */
+        background: rgba(59, 130, 246, 0.15); /* Mavi arkaplana uyumlu şeffaf track */
+        border-radius: 12px;
+        padding: 4px;
+        gap: 4px;
+        margin-top: 12px;
+    }
+    .pw-publish-mode-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        text-align: center;
+        padding: 10px 18px;
+        border-radius: 10px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--blue-700);
+        cursor: pointer;
+        opacity: 0.7; /* Seçili olmayanlar biraz soluk dursun */
+        transition: all .2s ease;
+    }
+    .pw-publish-mode-label:hover {
+        opacity: 1;
+    }
+    /* Orijinal yuvarlak radio butonunu tamamen gizliyoruz */
+    .pw-publish-mode-label input[type="radio"] { 
+        display: none; 
+    }
+    /* Input seçiliyse Label'ın şeklini değiştiriyoruz */
+    .pw-publish-mode-label:has(input:checked) {
+        background: #fff;
+        color: var(--blue-700);
+        box-shadow: 0 2px 8px rgba(29, 78, 216, 0.15); /* Tatlı bir mavi gölge */
+        opacity: 1;
+    }
+
+    /* --------------------------------------------------
+       Preview Grid
+    -------------------------------------------------- */
+    .pw-preview-grid {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 32px;
+        align-items: start;
+    }
+
+    /* Left Gallery */
+    .pw-gallery-container {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        position: sticky;
+        top: 24px;
+    }
+    .pw-main-image-box {
+        width: 100%;
+        height: 380px;
+        border: 1px solid var(--gray-200);
+        border-radius: 12px;
+        background: var(--gray-50);
+        overflow: hidden;
+        position: relative;
+    }
+    .pw-image-track {
+        display: flex;
+        width: 100%;
+        height: 100%;
+        /* Animasyon süresi JS tarafından dinamik ayarlanacak, burada default değer var */
+        transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+        will-change: transform;
+    }
+    
+    /* Şerit içindeki resimler */
+    .pw-image-track img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        flex-shrink: 0; /* Küçülmesini engeller, 100% genişlikte yan yana dizer */
+        display: block;
+    }
+    .pw-main-image-box img {
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        transform: translateX(0); /* Varsayılan konum */
+        /* Pürüzsüz e-ticaret kayma efekti (Hızlı başlar, yavaş oturur) */
+        transition: transform 0.9s cubic-bezier(0.25, 0.8, 0.25, 1); 
+    }
+    .pw-thumbnail-row {
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+    }
+
+    .pw-thumbnail-row::-webkit-scrollbar { height: 6px; }
+    .pw-thumbnail-row::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 10px; }
+
+    .pw-thumbnail-item {
+        width: 72px;
+        height: 72px;
+        flex-shrink: 0;
+        border-radius: 8px;
+        border: 2px solid transparent;
+        overflow: hidden;
+        cursor: pointer;
+        opacity: 0.6;
+        transition: .2s;
+        background: var(--gray-50);
+    }
+    .pw-thumbnail-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .pw-thumb:hover { opacity: 1; }
+    .pw-thumbnail-item.active {
+        border-color: var(--teal-600);
+        box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2);
+        opacity: 1;
+    }
+
+    /* Teslimat ve Kargo Bilgilendirme Kutusu */
+    .pw-delivery-box {
+        background: var(--gray-50);
+        border: 1px solid var(--gray-200);
+        border-radius: 12px;
+        padding: 10px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 63px;
+    }
+    .pw-delivery-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .pw-delivery-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        background: var(--teal-50);
+        color: var(--teal-600);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.95rem;
+        flex-shrink: 0;
+    }
+    .pw-delivery-title {
+        font-weight: 700;
+        font-size: 0.88rem;
+        color: var(--gray-800);
+    }
+    .pw-delivery-timer {
+        font-size: 0.8rem;
+        color: var(--teal-700);
+        font-weight: 600;
+        margin-top: 1px;
+    }
+    .pw-delivery-footer {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.75rem;
+        color: var(--gray-600);
+        border-top: 1px solid var(--gray-200);
+        padding-top: 8px;
+    }
+    .pw-delivery-footer i {
+        color: var(--gray-400);
+    }
+    .pw-delivery-footer a {
+        color: var(--teal-600);
+        font-weight: 600;
+        text-decoration: underline;
+    }
+
+    /* Right Info Panel */
+    .pw-product-info {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .pw-product-brand-category {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--teal-700);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .pw-product-title-heading {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--gray-800);
+        line-height: 1.3;
+    }
+    .pw-store-link-text {
+        font-size: 0.9rem;
+        color: var(--teal-600);
+        font-weight: 600;
+        margin: -8px 0 4px 0;
+    }
+    .pw-store-link-text span {
+        color: var(--teal-700);
+        font-weight: 600;
+    }
+    .pw-rating-stars {
+        color: #f59e0b;
+        font-size: 0.9rem;
+    }
+    .pw-product-desc {
+        font-size: 0.9rem;
+        color: var(--gray-600);
+        line-height: 1.5;
+        margin: 0;
+    }
+
+    #pw-variant-selector-container { display: flex; flex-direction: column; gap: 20px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--gray-200); }
+
+    /* Attributes Selection Pills */
+    .pw-attr-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 4px;
+    }
+    .pw-attr-title {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--gray-700);
+    }
+    .pw-attr-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .pw-attr-pill {
+        padding: 8px 14px;
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        background: #fff;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--gray-700);
+        cursor: pointer;
+        transition: .2s;
+    }
+    .pw-attr-pill:hover {
+        border-color: var(--teal-500);
+    }
+    .pw-attr-pill.active {
+        background: var(--teal-50);
+        border-color: var(--teal-600);
+        color: var(--teal-700);
+        box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.15);
+    }
+    .pw-attr-pill.disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+        border-style: dashed;
+        background: var(--gray-100) !important;
+        color: var(--gray-400) !important;
+    }
+
+    /* Price & Stock Display Box */
+    .pw-price-stock-box {
+        background: var(--gray-50);
+        border: 1px solid var(--gray-200);
+        border-radius: 12px;
+        padding: 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 8px;
+    }
+    .pw-price-display {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--teal-700);
+    }
+    .pw-stock-display {
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: var(--green-700);
+        background: var(--green-50);
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid #bbf7d0;
+    }
+
+    .pw-ready-badge {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        background: var(--green-50);
+        color: var(--green-700);
+        border: 1px solid #bbf7d0;
+        padding: 12px;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-top: 10px;
+    }
+
+    /* --------------------------------------------------
+       Publish Result Box
+    -------------------------------------------------- */
+    .pw-publish-result {
+        background: var(--blue-50);
+        border: 1px solid #bfdbfe;
+        border-radius: 12px;
+        padding: 20px;
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        margin-bottom: 24px;
+    }
+    .pw-publish-result i {
+        font-size: 1.25rem;
+        color: var(--blue-500);
+        margin-top: 2px;
+    }
+    .pw-publish-result h4 {
+        margin: 0 0 4px 0;
+        color: var(--blue-700);
+        font-size: 1rem;
+    }
+    .pw-publish-result p {
+        margin: 0;
+        color: var(--gray-700);
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    /* --------------------------------------------------
+       Read-only Variant Table
+    -------------------------------------------------- */
+    .pw-table-wrapper {
+        width: 100%;
+        overflow-x: auto;
+        border: 1px solid var(--gray-200);
+        border-radius: 12px;
+        background: #fff;
+    }
+    .pw-table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+    }
+    .pw-table th {
+        background: var(--gray-50);
+        padding: 14px 16px;
+        font-weight: 600;
+        color: var(--gray-700);
+        font-size: .85rem;
+        border-bottom: 1px solid var(--gray-200);
+        white-space: nowrap;
+    }
+    .pw-table td {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--gray-100);
+        vertical-align: middle;
+        font-size: 0.9rem;
+        color: var(--gray-800);
+    }
+    .pw-table tr:last-child td { border-bottom: none; }
+    .pw-table tr:hover td { background: var(--gray-50); }
+
+    .pw-badge-main {
+        background: var(--teal-50);
+        color: var(--teal-700);
+        border: 1px solid var(--teal-100);
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: inline-block;
+    }
+
+    /* Footer & Buttons */
+    .pw-footer{
+        position: sticky;
+        bottom: 0;
+        background: white;
+        z-index: 50;
+        box-shadow: 0 -10px 20px rgba(0,0,0,0.02);
+        border-radius: var(--radius);
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:16px;
+        padding:24px 28px;
+        border-top:1px solid var(--gray-200);
+    }
+    .pw-btn{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        gap:8px;
+        white-space:nowrap;
+        padding:12px 24px;
+        border:none;
+        border-radius:10px;
+        font-weight:600;
+        text-decoration:none;
+        cursor:pointer;
+        transition:.2s;
+    }
+    .pw-btn:disabled{ opacity:.6; cursor:not-allowed; }
+    .pw-btn:hover:not(:disabled){ transform:translateY(-1px); opacity:.95; }
+    .pw-btn-primary{ background:var(--teal-600); color:white; font-size: 1rem; }
+    .pw-btn-outline{ background:white; color:var(--teal-700); border:1px solid var(--teal-600); }
+
+    @media (max-width: 900px) {
+        .pw-preview-grid { grid-template-columns: 1fr; }
+        .pw-summary { grid-template-columns: 1fr 1fr; }
+        .pw-gallery-container { position: relative; top: 0; }
+    }
+    @media (max-width: 768px) {
+        .pw-steps { flex-direction: column; align-items: stretch; }
+        .pw-step::after { display: none; }
+        .pw-step.current-step .pw-number { box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.2); transform: scale(1.1); }
+        .pw-footer { flex-direction: column-reverse; }
+        .pw-gallery-container { position: relative; top: 0; }
+        .pw-btn { width: 100%; }
+        .pw-main-image-box { height: 320px; }
+    }
+</style>
+
+<div id="wizard-toast-container"></div>
+
+<div class="pw-wrapper">
+    <!-- Breadcrumb -->
+    <nav class="pw-breadcrumb">
+        <a href="{% url 'store:store_list' %}">Mağazalarım</a>
+        <i class="fas fa-chevron-right"></i>
+        <a href="{% url 'products:store_product_list' store_slug=store.slug %}">{{ store.store_name }}</a>
+        <i class="fas fa-chevron-right"></i>
+        <a href="{% url 'products:wizard_step1_edit' store_slug=store.slug draft_id=draft.id %}">Ürün Bilgileri</a>
+        <i class="fas fa-chevron-right"></i>
+        <a href="{% url 'products:wizard_step2' store_slug=store.slug draft_id=draft.id %}">Varyantlar</a>
+        <i class="fas fa-chevron-right"></i>
+        <a href="{% url 'products:wizard_step3' store_slug=store.slug draft_id=draft.id %}">Görseller</a>
+        <i class="fas fa-chevron-right"></i>
+        <a href="{% url 'products:wizard_step4' store_slug=store.slug draft_id=draft.id %}">Satış Bilgileri</a>
+        <i class="fas fa-chevron-right"></i>
+        <span>Yayınla & Önizleme</span>
+    </nav>
+
+    <!-- Wizard Steps -->
+    <div class="pw-steps">
+        <div class="pw-step active">
+            <span class="pw-number"><i class="fa-solid fa-check"></i></span>
+            <div><strong>Ürün Bilgileri</strong><br><small>Temel bilgiler</small></div>
+        </div>
+        <div class="pw-step active">
+            <span class="pw-number"><i class="fa-solid fa-check"></i></span>
+            <div><strong>Varyantlar</strong><br><small>Ürün seçenekleri</small></div>
+        </div>
+        <div class="pw-step active">
+            <span class="pw-number"><i class="fa-solid fa-check"></i></span>
+            <div><strong>Görseller</strong><br><small>Fotoğraflar</small></div>
+        </div>
+        <div class="pw-step active">
+            <span class="pw-number"><i class="fa-solid fa-check"></i></span>
+            <div><strong>Satış</strong><br><small>Fiyat • Stok</small></div>
+        </div>
+        <div class="pw-step active  current-step">
+            <span class="pw-number">5</span>
+            <div><strong>Yayınla</strong><br><small>Önizleme</small></div>
+        </div>
+    </div>
+
+    <!-- Product Summary Cards -->
+    <div class="pw-summary">
+        <div class="pw-summary-item">
+            <span class="pw-summary-label">Ürün Adı</span>
+            <div class="pw-summary-value">{{ draft.name }}</div>
+        </div>
+        <div class="pw-summary-item">
+            <span class="pw-summary-label">Kategori</span>
+            <div class="pw-summary-value">{{ draft.category.name }}</div>
+        </div>
+        <div class="pw-summary-item">
+            <span class="pw-summary-label">Marka</span>
+            <div class="pw-summary-value">{{ draft.brand.name|default:"Belirtilmedi" }}</div>
+        </div>
+        <div class="pw-summary-item">
+            <span class="pw-summary-label">Toplam Envanter</span>
+            <div class="pw-summary-value">{{ variants|length }} Varyant / {{ total_stock }} Stok</div>
+        </div>
+    </div>
+
+    <!-- Yayın Sonucu / Eşleşme Bilgilendirme Kutusu -->
+    <div class="pw-publish-result">
+        <i class="fa-solid fa-circle-info"></i>
+
+        <div>
+            {% if matched_product %}
+                <h4>Katalog Eşleşmesi Tespit Edildi</h4>
+                <p>Sistemde bu ürüne çok benzeyen <strong>"{{ matched_product.name }}"</strong> adlı global ürün bulundu.
+                Yayına aldığınızda yeni bir ürün sayfası oluşturulmayacak, mevcut ürüne mağaza teklifiniz eklenecektir.
+                </p>
+                <div class="pw-publish-modes">
+                            <label class="pw-publish-mode-label">
+                                <input type="radio" name="inline_publish_decision" value="use_existing" checked>
+                                Mevcut ürüne bağla (Önerilen)
+                            </label>
+                            <label class="pw-publish-mode-label">
+                                <input type="radio" name="inline_publish_decision" value="create_new">
+                                Hayır, yepyeni bir ürün olarak oluştur
+                            </label>
+                        </div>
+                <p style="margin-top: 8px; font-weight: 600; color: var(--blue-700);">
+                    <i class="fa-solid fa-code-merge"></i> Bu ürünle birleştirirseniz:
+                    {{ match_result.matched_count }} varyantınıza doğrudan teklif eklenecek,
+                    {% if match_result.new_count > 0 %}
+                        <span style="color: var(--teal-700);">{{ match_result.new_count }} yeni varyant ise kataloğa eklenecektir.</span>
+                </p>
+                        <!-- Backend'e ürün IDsini göndermek için gizli input -->
+                        <input type="hidden" id="inline_matched_product_id" value="{{ matched_product.id }}">
+                        <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;">
+                            {% for new_var in match_result.new_variants %}
+                                <span style="background: var(--teal-50); color: var(--teal-700); border: 1px solid var(--teal-100); padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600;">
+                                    {% for val in new_var.attribute_values.all %}
+                                        {{ val.value }}{% if not forloop.last %} / {% endif %}
+                                    {% empty %}
+                                        Standart
+                                    {% endfor %}
+                                </span>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        kataloğa yeni bir varyant eklenmeyecektir.
+                    {% endif %}
+                </p>
+
+            {% else %}
+                <h4>Yeni Katalog Ürünü</h4>
+                <p>
+                    Yayınlama sırasında sistem katalogdaki mevcut ürünleri otomatik olarak kontrol edecektir.
+                    Katalogda benzer ürün bulunamazsa yepyeni bir global ürün oluşturulacaktır.
+                </p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Preview Card (Müşteri Önizlemesi) -->
+    <div class="pw-card">
+        <div class="pw-card-header">
+            <div class="pw-card-icon"><i class="fa-solid fa-eye"></i></div>
+            <div>
+                <h2 class="pw-card-title">Müşteri Görünümü Önizlemesi</h2>
+                <div class="pw-card-subtitle">Müşterilerin ürün detay sayfasında göreceği interaktif simülasyon.</div>
+            </div>
+        </div>
+
+        <div class="pw-card-body">
+            <div class="pw-preview-grid">
+                
+                <!-- Sol Kolon: Görsel Galerisi -->
+                <div class="pw-gallery-container">
+                    <div class="pw-main-image-box">
+                        <div class="pw-image-track js-image-track" data-current-index="0">
+                            {% for img in images %}
+                                <img src="{{ img.image.url }}" alt="{{ img.alt_text|default:draft.name }}" >
+                            {% empty %}
+                                <div style="width: 100%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <i class="fa-regular fa-image" style="font-size: 48px; color: var(--gray-400);"></i>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% if images %}
+                    <div class="pw-thumbnail-row">
+                        {% for img in images %}
+                            <div class="pw-thumbnail-item {% if forloop.first %}active{% endif %}" 
+                            onclick="changeMainImage('{{ img.image.url }}', this)" 
+                            data-index="{{ forloop.counter0 }}"
+                            data-attrs="{% for val in img.group.visual_attribute_values.all %}{{ val.attribute.name }}:{{ val.value }}{% if not forloop.last %},{% endif %}{% endfor %}">
+                                <img src="{{ img.image.url }}" alt="Thumbnail">
+                            </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <!-- Teslimat ve Kargo Bilgilendirme Kutusu -->
+                    <div class="pw-delivery-box">
+                        <div class="pw-delivery-header">
+                            <div class="pw-delivery-icon">
+                                <i class="fa-solid fa-truck-fast"></i>
+                            </div>
+                            <div>
+                                <div class="pw-delivery-title">Yarın Kargoda!</div>
+                                <div class="pw-delivery-timer" id="js-shipping-timer">Hesaplanıyor...</div>
+                            </div>
+                        </div>
+                        <div class="pw-delivery-footer">
+                            <i class="fa-solid fa-location-dot"></i>
+                            <span>En hızlı teslimat ve noktaları görmek için <a href="javascript:void(0);" onclick="alert('Konum seçme simülasyonu')">konumunu seç</a>.</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sağ Kolon: Ürün Bilgileri ve İnteraktif Seçiciler -->
+                <div class="pw-product-info">
+                    <div class="pw-product-brand-category">
+                        {{ draft.brand.name|default:"Genel" }} / {{ draft.category.name }}
+                    </div>
+                    
+                    <h1 class="pw-product-title-heading">{{ draft.name }}</h1>
+                    
+                    <div class="pw-rating-stars">
+                        <i class="fa-solid fa-star"></i>
+                        <i class="fa-solid fa-star"></i>
+                        <i class="fa-solid fa-star"></i>
+                        <i class="fa-solid fa-star"></i>
+                        <i class="fa-solid fa-star"></i>
+                        <span style="color: var(--gray-400); font-size: 0.8rem; margin-left: 6px;">(Yeni Ürün)</span>
+                    </div>
+
+                    <div class="pw-store-link-text">
+                        Mağaza: <span>{{ store.store_name }}</span>
+                    </div>
+
+                    <p class="pw-product-desc">
+                        {{ draft.description|default:"Ürün açıklaması girilmemiş."|linebreaksbr }}
+                    </p>
+
+                    <!-- Dinamik Varyant Seçim Alanları (JavaScript ile yönetilecek) -->
+                    <div id="pw-variant-selector-container">
+                        <!-- Örnek Attribute Seçimleri JS ile doldurulacak veya dinamik üretilecek -->
+                    </div>
+
+                    <!-- Fiyat ve Stok Gösterge Kutusu -->
+                    <div class="pw-price-stock-box">
+                        <div class="pw-price-display" id="pw-preview-price">
+                            {% if price_min == price_max %}
+                                ₺<span class="js-price-format" data-raw="{{ price_min }}">{{ price_min }}</span>
+                            {% else %}
+                                ₺<span class="js-price-format" data-raw="{{ price_min }}">{{ price_min }}</span> - ₺<span class="js-price-format" data-raw="{{ price_max }}">{{ price_max }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="pw-stock-display" id="pw-preview-stock">
+                            Toplam Stok: {{ total_stock }} adet
+                        </div>
+                    </div>
+
+                    <div class="pw-ready-badge">
+                        <i class="fa-solid fa-check-circle"></i> Yayınlanmaya Hazır
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Varyant Özeti Tablosu (Read-Only) -->
+    <div class="pw-card">
+        <div class="pw-card-header">
+            <div class="pw-card-icon"><i class="fa-solid fa-table-list"></i></div>
+            <div>
+                <h2 class="pw-card-title">Varyant Satış Özeti</h2>
+                <div class="pw-card-subtitle">Yayınlandığında kaydedilecek olan nihai envanter tablosu.</div>
+            </div>
+        </div>
+
+        <div class="pw-card-body" style="padding: 0;">
+            <div class="pw-table-wrapper" style="border: none; border-radius: 0;">
+                <table class="pw-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px; text-align: center;">Durum</th>
+                            <th>Varyant Kombinasyonu</th>
+                            <th style="width: 140px;">SKU</th>
+                            <th style="width: 140px;">Barkod</th>
+                            <th style="width: 120px;">Fiyat (TL)</th>
+                            <th style="width: 100px;">Stok</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for variant in variants %}
+                        <tr class="js-preview-row" 
+                            data-price="{{ variant.price }}" 
+                            data-stock="{{ variant.stock }}" 
+                            data-attrs="{% for value in variant.attribute_values.all %}{{ value.attribute.name }}||{{ value.value }}{% if not forloop.last %}##{% endif %}{% endfor %}">
+                            
+                            <td style="text-align: center;">
+                                {% if variant.is_default %}
+                                    <span class="pw-badge-main">Ana</span>
+                                {% else %}
+                                    <span style="color: var(--gray-400); font-size: 0.8rem;">Varyant</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <!-- Burası sadece müşterinin gözüyle okuması için kaldı, JS burayı okumayacak -->
+                                <div style="font-weight: 600;">
+                                    {% for value in variant.attribute_values.all %}
+                                        {{ value.attribute.name }}: {{ value.value }}{% if not forloop.last %} / {% endif %}
+                                    {% empty %}
+                                        Standart Ürün
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            <td><code>{{ variant.sku|default:"-" }}</code></td>
+                            <td><code>{{ variant.barcode|default:"-" }}</code></td>
+                            <td style="font-weight: 600; color: var(--teal-700);">₺<span class="js-price-format" data-raw="{{ variant.price }}">{{ variant.price }}</span></td>
+                            <td>{{ variant.stock }} adet</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Butonları -->
+    <div class="pw-footer">
+        <a href="{% url 'products:wizard_step4' store_slug=store.slug draft_id=draft.id %}" class="pw-btn pw-btn-outline">
+            <i class="fa-solid fa-arrow-left"></i> Satış Bilgilerine Dön
+        </a>
+
+        <form id="step5-publish-form" method="post" action="{% url 'products:wizard_publish' store_slug=store.slug draft_id=draft.id %}">
+            {% csrf_token %}
+            <button type="submit" class="pw-btn pw-btn-primary js-btn-publish">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Ürünü Yayınla
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- JavaScript Dosyaları -->
+<script src="{% static 'products/js/wizard_ui.js' %}"></script>
+<script src="{% static 'products/js/step5.js' %}"></script>
+{% endblock %}

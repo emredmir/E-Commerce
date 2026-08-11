@@ -1,0 +1,178 @@
+{% extends 'store/store_dashboard_base.html' %}
+
+{% block dashboard_content %}
+    <h2 style="margin-top: 0; color: var(--primary-dark);">Mağaza Ayarları</h2>
+    
+    {% if store.status == 'approved' %}
+    <div style="background-color: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+        <i class="fas fa-exclamation-triangle"></i>
+        <div>
+            <strong>Dikkat:</strong> Mağazanız şu an yayındadır. İsim veya logo değişikliği yaparsanız, Admin onaylayana kadar mevcut bilgileriniz müşterilere görünmeye devam eder.
+        </div>
+    </div>
+    {% endif %}
+
+    {% if pending_request %}
+    <div style="background-color: #e0f7fa; border-left: 5px solid #00b4d8; padding: 20px; margin-bottom: 25px; border-radius: 4px;">
+        <h4 style="color: #0077b6; margin-top: 0; font-size: 1.1rem;">
+            <i class="fas fa-clock"></i> Onay Bekleyen Değişiklikleriniz Var
+        </h4>
+        <p style="margin-bottom: 15px; font-size: 0.95rem; color: #555;">
+            Aşağıdaki değişiklikler admin onayı bekliyor. Dilerseniz aşağıdaki formu kullanarak bu talebinizi güncelleyebilirsiniz.
+        </p>
+        
+        <ul style="margin-bottom: 0; padding-left: 20px; color: #333; font-size: 0.95rem;">
+            {% if pending_request.new_store_name and pending_request.new_store_name != store.store_name %}
+                <li style="margin-bottom: 5px;">
+                    <strong>Adı:</strong> <del style="color: #999;">{{ store.store_name }}</del> 
+                    <i class="fas fa-arrow-right mx-2" style="color: #00b4d8;"></i> 
+                    <span style="color: #28a745; font-weight: 500;">{{ pending_request.new_store_name }}</span>
+                </li>
+            {% endif %}
+            
+            {% if pending_request.new_contact_email and pending_request.new_contact_email != store.contact_email %}
+                <li style="margin-bottom: 5px;">
+                    <strong>E-posta:</strong> <del style="color: #999;">{{ store.contact_email }}</del> 
+                    <i class="fas fa-arrow-right mx-2" style="color: #00b4d8;"></i> 
+                    <span style="color: #28a745; font-weight: 500;">{{ pending_request.new_contact_email }}</span>
+                </li>
+            {% endif %}
+
+            {% if pending_request.new_contact_phone and pending_request.new_contact_phone != store.contact_phone %}
+                <li style="margin-bottom: 5px;">
+                    <strong>Telefon:</strong> <del style="color: #999;">{{ store.contact_phone|default:"-" }}</del> 
+                    <i class="fas fa-arrow-right mx-2" style="color: #00b4d8;"></i> 
+                    <span style="color: #28a745; font-weight: 500;">{{ pending_request.new_contact_phone }}</span>
+                </li>
+            {% endif %}
+
+            {% if pending_request.new_address and pending_request.new_address != store.address %}
+                <li style="margin-bottom: 5px;">
+                    <strong>Adres:</strong> <del style="color: #999;">{{ store.address|default:"-" }}</del> 
+                    <i class="fas fa-arrow-right mx-2" style="color: #00b4d8;"></i> 
+                    <span style="color: #28a745; font-weight: 500;">{{ pending_request.new_address }}</span>
+                </li>
+            {% endif %}
+
+            {% if pending_request.new_logo %}
+                <li style="margin-bottom: 5px;"><strong style="color: #28a745;">+ Yeni Logo Yüklendi</strong></li>
+            {% endif %}
+
+            {% if pending_request.new_banner %}
+                <li style="margin-bottom: 5px;"><strong style="color: #28a745;">+ Yeni Banner Yüklendi</strong></li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" style="max-width: 800px;">
+        {% csrf_token %}
+        
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Mağaza Adı</label>
+            {{ form.store_name }}
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px;">
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">İletişim E-posta</label>
+                {{ form.contact_email }}
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">İletişim Telefon</label>
+                {{ form.contact_phone }}
+            </div>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Adres</label>
+            {{ form.address }}
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Logo</label>
+                {{ form.logo }}
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Banner</label>
+                {{ form.banner }}
+            </div>
+        </div>
+        {% if store.status != 'archived' %}
+        <button type="submit" style="background-color: var(--primary-color); color: white; border: none; padding: 12px 30px; border-radius: 25px; cursor: pointer; font-size: 1rem; font-weight: 600;">
+            Değişiklikleri Kaydet
+        </button>
+        {% endif %}
+    </form>
+    {% if store.status != 'archived' %}
+        <div style="max-width: 800px; margin-top: 50px; padding-top: 30px; border-top: 1px solid #dee2e6;">
+            <h4 style="color: #dc3545; margin-top: 0; margin-bottom: 15px;">Tehlikeli Alan</h4>
+            <p style="color: #666; font-size: 0.95rem; margin-bottom: 20px;">
+                Mağazanızı kapatmak istiyorsanız aşağıdaki butonu kullanabilirsiniz. Kapatılan mağazalar müşterilere gösterilmez ancak geçmiş kayıtlarınız sistemde arşivlenir.
+            </p>
+            <button type="button" onclick="openArchiveModal()" style="background-color: transparent; color: #dc3545; border: 2px solid #dc3545; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.2s;">
+                <i class="fas fa-trash-alt"></i> Mağazayı Sil (Kapat)
+            </button>
+        </div>
+
+        <div id="archiveModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(4px);">
+            <div style="background: white; padding: 40px; border-radius: 16px; max-width: 450px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                
+                <div style="width: 70px; height: 70px; background-color: #f8d7da; color: #dc3545; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; margin: 0 auto 20px auto;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                
+                {% if not store.approved_at %}
+                    <h3 style="margin-top: 0; color: #333;">Başvuruyu İptal Ediyorsunuz</h3>
+                    <p style="color: #666; margin-bottom: 30px; line-height: 1.5;">
+                        <b>{{ store.store_name }}</b> adlı mağaza başvurunuzu iptal etmek istediğinize emin misiniz? <br><br>
+                        Bu mağaza henüz admin tarafından hiç onaylanmadığı için tüm kayıtlarıyla birlikte <b>sistemden tamamen silinecektir.</b>
+                    </p>
+                {% else %}
+                    <h3 style="margin-top: 0; color: #333;">Mağazayı Kapatıyorsunuz</h3>
+                    <p style="color: #666; margin-bottom: 30px; line-height: 1.5;">
+                        <b>{{ store.store_name }}</b> adlı mağazanızı kapatmak istediğinize emin misiniz? <br><br>
+                        Mağazanız vitrinden tamamen kaldırılacaktır. Ancak geçmiş sipariş ve muhasebe kayıtlarınız <b>arşivde tutulmaya devam edecektir.</b>
+                    </p>
+                {% endif %}
+                
+                <form method="post" action="{% url 'store:archive_store' store.slug %}">
+                    {% csrf_token %}
+                    <div style="display: flex; gap: 15px; justify-content: center;">
+                        <button type="button" onclick="closeArchiveModal()" style="padding: 12px 25px; border: none; border-radius: 25px; cursor: pointer; background: #e2e3e5; color: #333; font-weight: 600; width: 120px;">Vazgeç</button>
+                        
+                        <button type="submit" style="padding: 12px 25px; border: none; border-radius: 25px; cursor: pointer; background: #dc3545; color: white; font-weight: 600; width: 150px; box-shadow: 0 4px 10px rgba(220,53,69,0.3);">
+                            {% if not store.approved_at %}Evet, Tamamen Sil{% else %}Evet, Kapat{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script>
+            function openArchiveModal() {
+                document.getElementById('archiveModal').style.display = 'flex';
+            }
+            function closeArchiveModal() {
+                document.getElementById('archiveModal').style.display = 'none';
+            }
+            
+            window.onclick = function(event) {
+                var modal = document.getElementById('archiveModal');
+                if (event.target == modal) {
+                    closeArchiveModal();
+                }
+            }
+        </script>
+    
+    {% else %}
+        <div style="max-width: 800px; margin-top: 50px; padding: 20px; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; color: #721c24; text-align: center;">
+            <i class="fas fa-archive" style="font-size: 2rem; margin-bottom: 10px; opacity: 0.8;"></i>
+            <h4 style="margin: 0 0 10px 0; font-size: 1.2rem;">Bu Mağaza Arşivlenmiştir</h4>
+            <p style="margin: 0; font-size: 0.95rem; opacity: 0.9;">
+                Bu mağaza kapatılmış ve vitrinden kaldırılmıştır. Yalnızca geçmiş sipariş ve muhasebe kayıtlarınızı görüntüleyebilirsiniz.
+            </p>
+        </div>
+    {% endif %}
+{% endblock %}

@@ -1,0 +1,934 @@
+{% extends "core/home.html" %}
+{% load static %}
+
+{% block title %}
+Satış Bilgileri — {{ store.store_name }}
+{% endblock %}
+
+{% block content %}
+<style>
+    :root{
+        --teal-50:#e6fffb;
+        --teal-100:#c7f9f4;
+        --teal-500:#14b8a6;
+        --teal-600:#0d9488;
+        --teal-700:#0f766e;
+
+        --gray-50:#fafafa;
+        --gray-100:#f4f4f5;
+        --gray-200:#e4e4e7;
+        --gray-300:#d4d4d8;
+        --gray-400:#a1a1aa;
+        --gray-600:#52525b;
+        --gray-700:#3f3f46;
+        --gray-800:#27272a;
+
+        --red:#dc2626;
+        --blue-50: #eff6ff;
+        --blue-500: #3b82f6;
+        --blue-700: #1d4ed8;
+
+        --radius:14px;
+        --shadow:0 8px 30px rgba(0,0,0,.05);
+    }
+
+    .pw-wrapper{
+        max-width:900px;
+        margin:40px auto;
+        padding:0 20px;
+    }
+
+    .pw-breadcrumb{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        font-size:.88rem;
+        color:var(--gray-400);
+        margin-bottom:26px;
+    }
+
+    .pw-breadcrumb a{
+        text-decoration:none;
+        color:var(--teal-700);
+    }
+
+    .pw-breadcrumb a:hover{
+        text-decoration:underline;
+    }
+
+    #wizard-toast-container{
+        position:fixed !important;
+        top:24px !important;
+        right:24px !important;
+
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+
+        width:360px;
+        max-width:calc(100vw - 40px);
+
+        z-index:99999;
+
+        pointer-events:none;
+    }
+
+    .wizard-toast{
+
+        display:flex;
+        align-items:flex-start;
+        gap:12px;
+
+        padding:16px 18px;
+
+        border-radius:12px;
+
+        box-shadow:0 12px 30px rgba(0,0,0,.15);
+
+        color:#fff;
+
+        opacity:0;
+        transform:translateY(-10px);
+
+        transition:
+            opacity .25s ease,
+            transform .25s ease;
+
+        pointer-events:auto;
+    }
+
+    .wizard-toast.show{
+        opacity:1;
+        transform:none;
+    }
+
+    .wizard-toast-success{
+        background:#16a34a;
+    }
+
+    .wizard-toast-error{
+        background:#dc2626;
+    }
+
+    .wizard-toast-warning{
+        background:#d97706;
+    }
+
+    .wizard-toast-info{
+        background:#2563eb;
+    }
+
+    .wizard-toast i{
+        margin-top:2px;
+    }
+
+    .wizard-toast > div{
+        flex:1;
+    }
+
+    .wizard-toast-close{
+
+        margin-left:auto;
+
+        border:none;
+        background:none;
+
+        color:inherit;
+
+        cursor:pointer;
+
+        font-size:1.2rem;
+        line-height:1;
+
+        opacity:.7;
+
+        transition:opacity .2s;
+
+    }
+
+    .wizard-toast-close:hover{
+
+        opacity:1;
+
+    }
+
+    /* --------------------------------------------------
+       Wizard Progress
+    -------------------------------------------------- */
+    .pw-steps{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:16px;
+
+        margin-bottom:28px;
+        padding:18px 22px;
+
+        background:#fff;
+        border-radius:var(--radius);
+        box-shadow:var(--shadow);
+    }
+
+    .pw-step{
+        flex:1;
+
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        gap:10px;
+
+        position:relative;
+
+        color:var(--gray-400);
+        font-size:.85rem;
+        font-weight:600;
+        text-align:center;
+    }
+
+    .pw-step:not(:last-child)::after{
+
+        content:"";
+
+        position:absolute;
+
+        top:18px;
+        left:50%;
+        right:auto;
+
+        width:100%;
+        height:2px;
+
+        background:var(--gray-200);
+
+        z-index:0;
+
+    }
+
+    .pw-number{
+
+        width:36px;
+        height:36px;
+
+        border-radius:50%;
+
+        display:flex;
+        align-items:center;
+        justify-content:center;
+
+        background:var(--gray-200);
+        color:var(--gray-600);
+        font-weight:700;
+        transition:.25s;
+
+        position:relative;
+        z-index:1;
+
+    }
+
+    .pw-step.active{
+
+        color:var(--teal-700);
+
+    }
+
+    .pw-step.active .pw-number{
+
+        background:var(--teal-500);
+        color:white;
+
+    }
+    .pw-step.current-step .pw-number { box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.2); transform: scale(1.1); }
+
+    /* --------------------------------------------------
+       Card & Summary
+    -------------------------------------------------- */
+    .pw-card{
+        background:#fff;
+        border-radius:var(--radius);
+        box-shadow:var(--shadow);
+        overflow:hidden;
+        margin-bottom:24px;
+    }
+    .pw-card-header{
+        display:flex;
+        align-items:center;
+        gap:16px;
+        padding:22px 26px;
+        border-bottom:1px solid var(--gray-200);
+    }
+    .pw-card-icon{
+        width:48px;
+        height:48px;
+        border-radius:12px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:var(--teal-50);
+        color:var(--teal-600);
+        font-size:1.2rem;
+    }
+    .pw-card-title{ margin:0; font-size:1.1rem; color:var(--gray-800); }
+    .pw-card-subtitle{ margin-top:4px; color:var(--gray-400); font-size:.88rem; }
+    .pw-card-body{ padding:28px; }
+
+    .pw-summary{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+    .pw-summary-item{ padding:18px; background:var(--gray-50); border:1px solid var(--gray-200); border-radius:12px; }
+    .pw-summary-label{ display:block; font-size:.82rem; color:var(--gray-400); margin-bottom:6px; }
+    .pw-summary-value{ font-weight:600; color:var(--gray-800); }
+
+
+    .pw-radio-card {
+        background: #fff;
+        border: 1px solid #bfdbfe;
+        border-radius: 8px;
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        transition: .2s;
+    }
+    .pw-radio-card:hover {
+        border-color: var(--blue-500);
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+    }
+    .pw-radio-card input[type="radio"] {
+        accent-color: var(--blue-500);
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+    .pw-radio-card span {
+        font-weight: 500;
+        color: var(--gray-800);
+        font-size: 0.9rem;
+    }
+
+    /* --------------------------------------------------
+       Bulk Apply (Toplu İşlem Formu)
+    -------------------------------------------------- */
+    .pw-bulk-section {
+        background: #fff;
+        border: 1px solid var(--teal-100);
+        border-radius: 12px;
+        padding: 20px 20px 10px 20px;
+        margin-bottom: 28px;
+        box-shadow: 0 4px 15px rgba(20, 184, 166, 0.08);
+    }
+    .pw-bulk-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--teal-700);
+        font-weight: 600;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+
+    .pw-bulk-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--gray-800);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .pw-bulk-title i { color: var(--teal-600); }
+
+    /* Segmented Control (Toggle Hap) */
+    .pw-bulk-toggle {
+        display: inline-flex;
+        background: var(--gray-200);
+        padding: 4px;
+        border-radius: 8px;
+    }
+    .pw-bulk-toggle input { display: none; }
+    .pw-bulk-toggle label {
+        padding: 6px 14px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--gray-600);
+        cursor: pointer;
+        border-radius: 6px;
+        transition: 0.2s;
+    }
+    .pw-bulk-toggle input:checked + label {
+        background: #fff;
+        color: var(--gray-800);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+    }
+
+    /* Toplu İşlem Input Grid */
+
+    .pw-bulk-grid {
+        display: flex;
+        gap: 16px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+        align-items: start;
+    }
+    .pw-bulk-field {
+        flex: 1;
+        min-width: 140px;
+        padding-bottom: 22px;
+    }
+    .pw-bulk-label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--gray-600);
+        margin-bottom: 6px;
+    }
+    .pw-bulk-input {
+        width: 100%;
+        padding: 10px 14px;
+        border: 1px solid var(--teal-100);
+        border-radius: 10px;
+        font-family: inherit;
+        font-size: 0.9rem;
+        background: #fff;
+        box-sizing: border-box;
+        
+    }
+    .pw-bulk-input:focus {
+        outline: none;
+        border-color: var(--teal-500);
+        box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.1);
+    }
+
+    .pw-bulk-footer {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 16px;
+        gap: 16px;
+        border-top: 1px solid var(--gray-200);
+        padding-top: 15px;
+    }
+    .pw-bulk-modes {
+        display: flex;
+        background: var(--gray-100);
+        border-radius: 10px;
+        padding: 4px;
+        gap: 4px;
+    }
+    .pw-bulk-mode-label {
+        text-align: center;
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--gray-600);
+        cursor: pointer;
+        transition: .2s;
+    }
+    .pw-bulk-mode-label input { display: none; }
+    .pw-bulk-mode-label:has(input:checked) {
+        background: #fff;
+        color: var(--teal-700);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    
+    .pw-btn-bulk-apply {
+        height: 44px;
+        padding: 0 24px;
+        border-radius: 10px;
+    }
+
+    .pw-bulk-options {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-top: 16px;
+    }
+
+    .pw-input-group {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+    .pw-input-group .pw-bulk-input {
+        padding-right: 40px; /* Buton için boşluk */
+    }
+    .pw-magic-btn {
+        position: absolute;
+        right: 6px;
+        background: var(--teal-50);
+        color: var(--teal-600);
+        border: none;
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: .2s;
+    }
+    .pw-magic-btn:hover {
+        background: var(--teal-100);
+        color: var(--teal-700);
+        transform: scale(1.05);
+    }
+
+    /* Tablo içi hata mesajları ve kapsayıcı */
+    .pw-input-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .pw-error-text {
+        color: var(--red);
+        font-size: 0.75rem;
+        font-weight: 500;
+        display: none; /* JS ile block yapılacak */
+        line-height: 1.2;
+    }
+    .pw-table th i {
+        color: var(--gray-400);
+        font-size: 0.8rem;
+        margin-left: 4px;
+        cursor: help;
+    }
+
+    .pw-sku-field-wrapper {
+        position: relative;
+        padding-bottom: 18px; /* Önizleme çıkınca taşmasın/kaydırmasın diye sabit alt boşluk */
+    }
+
+    .pw-sku-preview {
+        position: absolute;
+        bottom: 0;
+        left: 4px;
+        font-size: 0.75rem;
+        color: var(--teal-600);
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 95%;
+        display: none;
+    }
+    .pw-sku-preview span {
+        color: var(--gray-800);
+        font-family: monospace;
+    }
+
+    /* --------------------------------------------------
+       Variant Table
+    -------------------------------------------------- */
+    .pw-table-wrapper {
+        width: 100%;
+        max-height: 500px;
+        overflow-x: auto;
+        border: 1px solid var(--gray-200);
+        border-radius: 12px;
+        background: #fff;
+    }
+
+    .pw-table-wrapper::-webkit-scrollbar { width: 8px; height: 8px; }
+    .pw-table-wrapper::-webkit-scrollbar-track { background: var(--gray-50); border-radius: 12px; }
+    .pw-table-wrapper::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 12px; }
+    .pw-table-wrapper::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
+
+    .pw-table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+    }
+    .pw-table th {
+        position: sticky;
+        top: 0;
+        background: var(--gray-100);
+        padding: 14px 16px;
+        font-weight: 600;
+        color: var(--gray-700);
+        font-size: .85rem;
+        border-bottom: 1px solid var(--gray-200);
+        white-space: nowrap;
+        z-index: 10;
+        box-shadow: 0 1px 0 var(--gray-200);
+    }
+    .pw-table td {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--gray-100);
+        vertical-align: middle;
+    }
+    .pw-table tr:last-child td {
+        border-bottom: none;
+    }
+    .pw-table tr:hover td {
+        background: var(--gray-50);
+    }
+    .pw-table-input {
+        width: 100%;
+        min-width: 90px;
+        padding: 8px 12px;
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        font-size: .9rem;
+        transition: .2s;
+        background: #fff;
+    }
+    .pw-table-input:focus {
+        border-color: var(--teal-500);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(20,184,166,.1);
+    }
+    .pw-table-input.is-invalid {
+        border-color: var(--red);
+        background: #fef2f2;
+    }
+    .pw-variant-cell {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 180px;
+    }
+    .pw-variant-thumb {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--gray-200);
+        background: var(--gray-50);
+        flex-shrink: 0;
+    }
+    .pw-variant-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .pw-variant-name {
+        font-weight: 600;
+        color: var(--gray-800);
+        font-size: 0.9rem;
+    }
+
+
+    /* Radio (Varsayılan Seçim) */
+    .pw-default-radio {
+        width: 20px;
+        height: 20px;
+        accent-color: var(--teal-600);
+        cursor: pointer;
+    }
+
+    /* Footer & Buttons */
+    .pw-footer{
+        position: sticky;
+        bottom: 0;
+        background: white;
+        z-index: 50;
+        box-shadow: 0 -10px 20px rgba(0,0,0,0.02);
+        border-radius: var(--radius);
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:16px;
+        padding:24px 28px;
+        border-top:1px solid var(--gray-200);
+    }
+    .pw-btn{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        gap:8px;
+        white-space:nowrap;
+        padding:12px 22px;
+        border:none;
+        border-radius:10px;
+        font-weight:600;
+
+        text-decoration:none;
+        cursor:pointer;
+        transition:.2s;
+    }
+    .pw-btn:disabled{ opacity:.6; cursor:not-allowed; }
+    .pw-btn:hover:not(:disabled){ transform:translateY(-1px); opacity:.95; }
+    .pw-btn-primary{ background:var(--teal-600); color:white; }
+    .pw-btn-outline{ background:white; color:var(--teal-700); border:1px solid var(--teal-600); }
+
+    /* Form Checkbox for Bulk Apply */
+    .pw-checkbox-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+    .pw-checkbox-wrapper input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--teal-600);
+        cursor: pointer;
+    }
+    .pw-checkbox-wrapper span {
+        font-size: 0.9rem;
+        color: var(--teal-700);
+        font-weight: 500;
+    }
+
+    @media (max-width:992px){
+        .pw-summary { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width:768px){
+        .pw-steps{ flex-direction:column; align-items:stretch; }
+        .pw-step::after{ display:none; }
+        .pw-step.current-step .pw-number { box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.2); transform: scale(1.1); }
+        .pw-footer{ flex-direction:column-reverse; }
+        .pw-btn{ width:100%; }
+        .pw-summary{ grid-template-columns: 1fr 1fr; }
+        .pw-bulk-grid { grid-template-columns: 1fr; }
+    }
+</style>
+
+<div id="wizard-toast-container"></div>
+
+<div class="pw-wrapper">
+    
+
+    <!-- Breadcrumb -->
+    <nav class="pw-breadcrumb">
+        <a href="{% url 'store:store_list' %}">Mağazalarım</a>
+        <i class="fas fa-chevron-right"></i>
+        <a href="{% url 'products:store_product_list' store_slug=store.slug %}">{{ store.store_name }}</a>
+        <i class="fas fa-chevron-right"></i>
+        <a href="{% url 'products:wizard_step1_edit' store_slug=store.slug draft_id=draft.id %}">Ürün Bilgileri</a>
+        <i class="fas fa-chevron-right"></i>
+        <a href="{% url 'products:wizard_step2' store_slug=store.slug draft_id=draft.id %}">Varyantlar</a>
+        <i class="fas fa-chevron-right"></i>
+        <a href="{% url 'products:wizard_step3' store_slug=store.slug draft_id=draft.id %}">Görseller</a>
+        <i class="fas fa-chevron-right"></i>
+        <span>Satış Bilgileri</span>
+    </nav>
+
+    
+
+    <!-- Wizard Steps -->
+    <div class="pw-steps">
+        <div class="pw-step active">
+            <span class="pw-number"><i class="fa-solid fa-check"></i></span>
+            <div><strong>Ürün Bilgileri</strong><br><small>Temel bilgiler</small></div>
+        </div>
+        <div class="pw-step active">
+            <span class="pw-number"><i class="fa-solid fa-check"></i></span>
+            <div><strong>Varyantlar</strong><br><small>Ürün seçenekleri</small></div>
+        </div>
+        <div class="pw-step active">
+            <span class="pw-number"><i class="fa-solid fa-check"></i></span>
+            <div><strong>Görseller</strong><br><small>Fotoğraflar</small></div>
+        </div>
+        <div class="pw-step active current-step">
+            <span class="pw-number">4</span>
+            <div><strong>Satış</strong><br><small>Fiyat • Stok</small></div>
+        </div>
+        <div class="pw-step">
+            <span class="pw-number">5</span>
+            <div><strong>Yayınla</strong><br><small>Önizleme</small></div>
+        </div>
+    </div>
+
+
+
+    <!-- Product Summary -->
+    <div class="pw-summary">
+        <div class="pw-summary-item">
+            <span class="pw-summary-label">Ürün</span>
+            <div class="pw-summary-value">{{ draft.name }}</div>
+        </div>
+        <div class="pw-summary-item">
+            <span class="pw-summary-label">Kategori</span>
+            <div class="pw-summary-value">{{ draft.category.name }}</div>
+        </div>
+        <div class="pw-summary-item">
+            <span class="pw-summary-label">Marka</span>
+            <div class="pw-summary-value">{{ draft.brand.name|default:"Belirtilmedi" }}</div>
+        </div>
+        <div class="pw-summary-item">
+            <span class="pw-summary-label">Toplam Varyant</span>
+            <div class="pw-summary-value">{{ draft.active_variant_count }}</div>
+        </div>
+    </div>
+
+
+
+    <div class="pw-card">
+        <div class="pw-card-header">
+            <div class="pw-card-icon"><i class="fa-solid fa-tags"></i></div>
+            <div>
+                <h2 class="pw-card-title">Satış ve Envanter Bilgileri</h2>
+                <div class="pw-card-subtitle">Varyantlarınızın fiyat, stok ve opsiyonel kodlarını (SKU, Barkod) girin.</div>
+            </div>
+        </div>
+
+        <div class="pw-card-body">
+            
+            <!-- Toplu İşlem (Bulk Apply) Paneli -->
+            <div class="pw-bulk-section">
+                <div class="pw-bulk-header">
+                    <div class="pw-bulk-title">
+                        <i class="fa-solid fa-bolt"></i> Toplu Değer Ata
+                    </div>
+                </div>
+                <div class="pw-bulk-grid">
+                    <div class="pw-bulk-field">
+                        <label class="pw-bulk-label">Fiyat (TL)</label>
+                        <input type="text" inputmode="decimal" class="pw-bulk-input js-bulk-price" placeholder="Örn: 499,90">
+                    </div>
+                    <div class="pw-bulk-field">
+                        <label class="pw-bulk-label">Stok</label>
+                        <input type="number" min="0" class="pw-bulk-input js-bulk-stock" placeholder="Örn: 50">
+                    </div>
+                    <div class="pw-bulk-field pw-sku-field-wrapper">
+                        <label class="pw-bulk-label">SKU Öneki (Opsiyonel)</label>
+                        <div class="pw-input-group">
+                            <input type="text" class="pw-bulk-input js-bulk-sku" placeholder="Örn: TSHIRT-">
+                            <button type="button" class="pw-magic-btn js-generate-sku-prefix" title="Otomatik SKU Öneki Üret" data-product-name="{{ draft.name }}">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            </button>
+                        </div>
+                        <div class="pw-sku-preview js-sku-preview">
+                            Örnek: <span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="pw-bulk-footer">
+                    <!-- Segmented Control Mod Seçimi -->
+                    <div class="pw-bulk-modes">
+                        <label class="pw-bulk-mode-label">
+                            <input type="radio" name="bulk_mode" value="empty" checked>
+                            Sadece Boş Alanlar
+                        </label>
+                        <label class="pw-bulk-mode-label">
+                            <input type="radio" name="bulk_mode" value="all">
+                            Tüm Varyantlar
+                        </label>
+                    </div>
+
+                    <button type="button" class="pw-btn pw-btn-outline pw-btn-bulk-apply js-btn-bulk-apply">
+                        Varyantlara Uygula
+                    </button>
+                </div>
+
+                
+            </div>
+
+            <!-- Varyant Tablosu -->
+            <form id="step4-form" method="post" data-save-url="{% url 'products:wizard_step4_save' store_slug=store.slug draft_id=draft.id %}">
+                {% csrf_token %}
+                <div class="pw-table-wrapper">
+                    <table class="pw-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px; text-align: center;" title="Ürün listelemesinde ilk bu varyant gösterilir.">Ana</th>
+                                <th>Varyant</th>
+                                <th style="width: 130px;">Fiyat (TL) <span class="pw-required">*</span></th>
+                                <th style="width: 100px;">Stok <span class="pw-required">*</span></th>
+                                <th style="width: 160px;">SKU <i class="fa-solid fa-circle-info" title="Stok takibi için isteğe bağlı mağaza içi kodunuz."></i></th>
+                                <th style="width: 160px;">Barkod <i class="fa-solid fa-circle-info" title="EAN / UPC (İsteğe bağlı)"></i></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for variant, form in variants %}
+                            <tr class="js-variant-row" data-variant-id="{{ variant.id }}"
+                            data-attributes="{% for value in variant.attribute_values.all %}{{ value.value|slugify }}{% if not forloop.last %}-{% endif %}{% endfor %}">
+                                
+                                <!-- Varsayılan Seçimi -->
+                                <td style="text-align: center;">
+                                    {% if draft.active_variant_count == 1 %}
+                                        <!-- Sadece 1 varyant varsa mecburidir, otomatik check ve readonly yapıyoruz -->
+                                        <input type="radio" name="global_default_variant" value="{{ variant.id }}" class="pw-default-radio js-default-radio" checked readonly style="cursor: not-allowed; opacity: 0.6;">
+                                        <div hidden>
+                                            <!-- Post yaparken True gitmesi için form.is_default checkbox'ını da True yapıyoruz -->
+                                            <input type="checkbox" name="{{ form.is_default.html_name }}" checked>
+                                        </div>
+                                    {% else %}
+                                        <!-- Birden fazla varyant varsa normal akış -->
+                                        <input type="radio" name="global_default_variant" value="{{ variant.id }}" class="pw-default-radio js-default-radio" {% if form.is_default.value %}checked{% endif %}>
+                                        <div hidden>{{ form.is_default }}</div>
+                                    {% endif %}
+                                </td>
+
+                                <!-- Görsel ve İsim -->
+                                 <td>
+                                    <div class="pw-variant-cell">
+                                            <div class="pw-variant-thumb">
+                                                {% if variant.thumbnail_url %}
+                                                    <img src="{{ variant.thumbnail_url }}" alt="Görsel">
+                                                {% else %}
+                                                    <i class="fa-regular fa-image" style="color: var(--gray-400); font-size: 20px; display: flex; align-items: center; justify-content: center; height: 100%;"></i>
+                                                {% endif %}
+                                            </div>
+                                            <div class="pw-variant-name">
+                                                {% for value in variant.attribute_values.all %}
+                                                    {{ value.value }}{% if not forloop.last %} / {% endif %}
+                                                {% empty %}
+                                                    Standart Varyant
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {{ form.id }}
+                                </td>
+
+                                <!-- Fiyat -->
+                                <td>
+                                    <div class="pw-input-wrapper">
+                                        <input type="text" inputmode="decimal" name="{{ form.price.html_name }}" value="{{ form.price.value|default_if_none:'' }}" class="pw-table-input js-input-price" placeholder="0,00">
+                                        <div class="pw-error-text" data-error-for="{{ form.price.html_name }}"></div>
+                                    </div>
+                                </td>
+
+                                <!-- Stok -->
+                                <td>
+                                    <div class="pw-input-wrapper">
+                                        <input type="number" name="{{ form.stock.html_name }}" value="{{ form.stock.value|default_if_none:'' }}" min="0" class="pw-table-input js-input-stock" placeholder="0">
+                                        <div class="pw-error-text" data-error-for="{{ form.stock.html_name }}"></div>
+                                    </div>
+                                </td>
+
+                                <!-- SKU -->
+                                <td>
+                                    <div class="pw-input-wrapper">
+                                        <input type="text" name="{{ form.sku.html_name }}" value="{{ form.sku.value|default_if_none:'' }}" class="pw-table-input js-input-sku" placeholder="İsteğe Bağlı">
+                                        <div class="pw-error-text" data-error-for="{{ form.sku.html_name }}"></div>
+                                    </div>
+                                </td>
+
+                                <!-- Barkod -->
+                                <td>
+                                    <div class="pw-input-wrapper">
+                                        <input type="text" name="{{ form.barcode.html_name }}" value="{{ form.barcode.value|default_if_none:'' }}" class="pw-table-input js-input-barcode" placeholder="EAN / UPC">
+                                        <div class="pw-error-text" data-error-for="{{ form.barcode.html_name }}"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Footer Butonları -->
+    <div class="pw-footer">
+        <a href="{% url 'products:wizard_step3' store_slug=store.slug draft_id=draft.id %}" class="pw-btn pw-btn-outline">
+            <i class="fa-solid fa-arrow-left"></i> Önceki Adım
+        </a>
+
+        <!-- Gerçek Complete Submit Formu -->
+        <form id="step4-complete-form" method="post" action="{% url 'products:wizard_step4_complete' store_slug=store.slug draft_id=draft.id %}">
+            {% csrf_token %}
+            <button type="submit" class="pw-btn pw-btn-primary js-btn-complete">
+                Kaydet ve Önizle <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </form>
+    </div>
+</div>
+
+<script src="{% static 'products/js/wizard_ui.js' %}"></script>
+<script src="{% static 'products/js/step4.js' %}"></script>
+
+{% endblock %}
