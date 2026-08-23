@@ -1,15 +1,8 @@
 from django.urls import path
 from .views_old import (
     # Satıcı dashboard view'ları
-    ProductSearchView,
-    ProductCreateView,
-    StoreProductUpdateView,
-    ProductUpdateView,
-    StoreProductArchiveView,
-
+    
     # Müşteri vitrini view'ları
-    ProductListView,
-    CategoryProductListView,
     ProductDetailView,
 )
 
@@ -46,7 +39,9 @@ from products.views.api import (
 
 from products.views.offer import OfferCreateView, OfferCustomVariantCreateView, CategoryAttributesAPIView
 
-from products.views.inventory import StoreProductListView
+from products.views.inventory import StoreProductListView, StoreProductUpdateView, ProductUpdateView, StoreProductArchiveView
+
+from products.views.storefront import ProductListView, CategoryProductListView
 
 app_name = 'products'
 
@@ -60,21 +55,29 @@ urlpatterns = [
     # Satıcı Dashboard
     # path('store/<slug:store_slug>/products/', StoreProductListView.as_view(), name='store_product_list'),
 
-    path('store/<slug:store_slug>/products/search/', ProductSearchView.as_view(), name='product_search'),
+    # path('store/<slug:store_slug>/products/search/', ProductSearchView.as_view(), name='product_search'),
 
 
 
-    path('store/<slug:store_slug>/products/offer/<int:pk>/update/', StoreProductUpdateView.as_view(), name='offer_update'),
+    # path('store/<slug:store_slug>/products/offer/<int:pk>/update/', StoreProductUpdateView.as_view(), name='offer_update'),
 
-    path('store/<slug:store_slug>/products/<slug:product_slug>/edit/', ProductUpdateView.as_view(), name='product_update',),
+    # path('store/<slug:store_slug>/products/<slug:product_slug>/edit/', ProductUpdateView.as_view(), name='product_update',),
 
-    path('store/<slug:store_slug>/products/offer/<int:pk>/archive/', StoreProductArchiveView.as_view(), name='offer_archive'),
+    # path('store/<slug:store_slug>/products/offer/<int:pk>/archive/', StoreProductArchiveView.as_view(), name='offer_archive'),
+
+
 
 
 
 
 
     path('seller/<slug:store_slug>/inventory/', StoreProductListView.as_view(), name='store_product_list'),
+
+    path('seller/<slug:store_slug>/inventory/offer/<int:pk>/update/', StoreProductUpdateView.as_view(), name='offer_update',),
+
+    path('seller/<slug:store_slug>/inventory/<slug:product_slug>/edit/', ProductUpdateView.as_view(), name='product_update',),
+
+    path('seller/<slug:store_slug>/inventory/offer/<int:pk>/archive/', StoreProductArchiveView.as_view(), name='offer_archive'),
 
     #----------------------- yeni wizard
     # ==========================================================

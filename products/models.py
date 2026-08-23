@@ -229,6 +229,15 @@ class Product(models.Model):
 
     default_variant = models.ForeignKey("ProductVariant", null=True, blank=True, on_delete=models.SET_NULL, related_name="default_for_product",)
 
+    created_by_store = models.ForeignKey(
+        "store.Store",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_products",
+        verbose_name="Oluşturan Mağaza",
+    )
+
     normalized_name = models.CharField(
         max_length=255,
         editable=False,

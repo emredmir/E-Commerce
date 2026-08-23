@@ -1,524 +1,190 @@
 {% extends "core/home.html" %}
+{% load static %}
 
-{% block title %}Teklif Düzenle — {{ store.store_name }}{% endblock %}
+{% block title %}{{ store.store_name }} — Teklif Düzenle{% endblock %}
 
 {% block content %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <style>
     :root {
-        --teal-600: #00b4d8;
-        --teal-700: #0096c7;
-        --teal-800: #0077b6;
-        --teal-50:  #e0f7fa;
-        --gray-50:  #f8f9fa;
-        --gray-100: #e9ecef;
-        --gray-200: #dee2e6;
-        --gray-500: #adb5bd;
-        --gray-700: #495057;
-        --gray-900: #212529;
-        --green-bg: #d4edda;
-        --green-tx: #155724;
-        --yellow-bg:#fff3cd;
-        --yellow-tx:#856404;
-        --red-tx:   #dc3545;
-        --red-bg:   #f8d7da;
-        --muted-bg: #e2e3e5;
-        --muted-tx: #383d41;
-        --radius:   10px;
-        --shadow:   0 2px 8px rgba(0,0,0,0.07);
+        --teal-50: #caf0f8;
+        --teal-100: #ade8f4;
+        --teal-500: #00b4d8;
+        --teal-600: #0096c7;
+        --teal-700: #0077b6;
+        --teal-900: #03045e;
+
+        --gray-50: #fafafa;
+        --gray-100: #f4f4f5;
+        --gray-200: #e4e4e7;
+        --gray-300: #d4d4d8;
+        --gray-400: #a1a1aa;
+        --gray-500: #71717a;
+        --gray-600: #52525b;
+        --gray-700: #3f3f46;
+        --gray-800: #27272a;
+        --gray-900: #18181b;
+
+        --red-50: #fef2f2;
+        --red-600: #dc2626;
+        
+        --yellow-50: #fefce8;
+        --yellow-600: #ca8a04;
+
+        --green-50: #f0fdf4;
+        --green-600: #16a34a;
+
+        --radius: 12px;
+        --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
+        --shadow-md: 0 8px 24px rgba(0,0,0,0.06);
     }
 
+    body { background-color: var(--gray-50); }
+
     .ou-wrapper {
-        max-width: 860px;
-        margin: 36px auto;
-        padding: 0 20px;
+        max-width: 1000px;
+        margin: 32px auto;
+        padding: 0 24px;
         display: grid;
-        grid-template-columns: 1fr 280px;
-        gap: 20px;
+        grid-template-columns: 1fr 300px;
+        gap: 24px;
         align-items: start;
     }
 
-    /* Breadcrumb */
-    .ou-breadcrumb {
+    /* --- BREADCRUMB --- */
+    .ou-breadcrumb { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--gray-500); margin-bottom: 8px; }
+    .ou-breadcrumb a { color: var(--teal-600); text-decoration: none; font-weight: 600; }
+    .ou-breadcrumb a:hover { text-decoration: underline; color: var(--teal-700); }
+    .ou-breadcrumb i { font-size: 0.75rem; }
+
+    /* --- HIGHLIGHT BANNER --- */
+    .ou-highlight {
+        grid-column: 1 / -1; 
+        background: #fff; 
+        border-radius: var(--radius); 
+        border: 1px solid var(--gray-200); 
+        box-shadow: var(--shadow-sm);
+        padding: 24px; 
+        display: flex; 
+        align-items: center; 
+        justify-content: space-between;
+        gap: 20px; 
+        margin-bottom: 8px;
+        flex-wrap: wrap; 
+    }
+    
+    .ou-highlight-left { display: flex; align-items: center; gap: 20px; flex: 1; min-width: 300px; }
+    .ou-highlight-img { width: 84px; height: 84px; border-radius: 12px; object-fit: contain; border: 1px solid var(--gray-200); background: var(--gray-50); padding: 4px; flex-shrink: 0; }
+    .ou-highlight-info { flex: 1; min-width: 0; }
+    
+    .ou-highlight-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .badge-active { background: var(--green-50); color: var(--green-600); border: 1px solid #bbf7d0; }
+    .badge-archived { background: var(--yellow-50); color: var(--yellow-600); border: 1px solid #fef08a; }
+    .badge-out_of_stock { background: var(--red-50); color: var(--red-600); border: 1px solid #fecaca; }
+
+    .ou-highlight h1 { margin: 8px 0 4px 0; font-size: 1.25rem; font-weight: 700; color: var(--gray-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ou-highlight p { margin: 0; font-size: 0.85rem; color: var(--gray-500); }
+    
+    .ou-variant-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .ou-chip { background: var(--teal-50); color: var(--teal-700); padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; border: 1px solid var(--teal-100); }
+    .ou-chip.sku { background: var(--gray-100); color: var(--gray-700); border-color: var(--gray-200); }
+
+    .ou-highlight-action { flex-shrink: 0; }
+
+
+    .ou-message {
+        padding: 14px 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        font-weight: 600;
         display: flex;
         align-items: center;
-        gap: 8px;
-        font-size: 0.85rem;
-        color: var(--gray-500);
-        margin-bottom: 24px;
-        grid-column: 1 / -1;
+        gap: 10px;
+    }
+    
+    .ou-message-success {
+        background: var(--green-50);
+        color: var(--green-600);
+        border: 1px solid #bbf7d0;
+    }
+    
+    .ou-message-error {
+        background: var(--red-50);
+        color: var(--red-600);
+        border: 1px solid #fecaca;
     }
 
-    .ou-breadcrumb a { color: var(--teal-700); text-decoration: none; }
-    .ou-breadcrumb a:hover { text-decoration: underline; }
-
-    /* Sol: Form */
-    .ou-main {}
-
-    /* Kart */
-    .ou-card {
-        background: white;
-        border-radius: var(--radius);
-        box-shadow: var(--shadow);
-        overflow: hidden;
-        margin-bottom: 16px;
-    }
-
-    .ou-card-header {
-        padding: 18px 24px;
-        border-bottom: 1px solid var(--gray-100);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-
-    .ou-card-header-icon {
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
-        background: var(--teal-50);
-        color: var(--teal-700);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1rem;
-        flex-shrink: 0;
-    }
-
-    .ou-card-header h2 {
-        margin: 0 0 2px 0;
-        font-size: 1rem;
-        font-weight: 700;
-        color: var(--gray-900);
-    }
-
-    .ou-card-header p {
-        margin: 0;
-        font-size: 0.82rem;
-        color: var(--gray-500);
-    }
-
+    /* --- CARDS --- */
+    .ou-card { background: #fff; border-radius: var(--radius); border: 1px solid var(--gray-200); box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 24px; }
+    .ou-card-header { padding: 20px 24px; border-bottom: 1px solid var(--gray-100); display: flex; align-items: center; gap: 12px; background: var(--gray-50); }
+    .ou-card-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--teal-50); color: var(--teal-600); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+    .ou-card-header h2 { margin: 0 0 2px 0; font-size: 1.05rem; font-weight: 700; color: var(--gray-900); }
+    .ou-card-header p { margin: 0; font-size: 0.85rem; color: var(--gray-500); }
     .ou-card-body { padding: 24px; }
 
-    /* Ürün özeti */
-    .ou-product-summary {
-        background: white;
-        border-radius: var(--radius);
-        box-shadow: var(--shadow);
-        padding: 18px 20px;
-        margin-bottom: 16px;
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        border-left: 4px solid var(--teal-600);
-        grid-column: 1 / -1;
-    }
+    /* --- FORM FIELDS --- */
+    .ou-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    .ou-field { margin-bottom: 20px; }
+    .ou-label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--gray-700); margin-bottom: 8px; }
+    .ou-label .req { color: var(--red-600); }
+    .ou-label .opt { color: var(--gray-400); font-weight: 400; font-size: 0.8rem; margin-left: 4px; }
+    
+    .ou-input-group { display: flex; border: 1px solid var(--gray-200); border-radius: 10px; overflow: hidden; transition: .2s; }
+    .ou-input-group:focus-within { border-color: var(--teal-500); box-shadow: 0 0 0 3px rgba(0,180,216,0.1); }
+    .ou-input-prefix { background: var(--gray-50); padding: 12px 16px; border-right: 1px solid var(--gray-200); color: var(--gray-600); font-weight: 600; font-size: 0.95rem; }
+    .ou-input-group input { flex: 1; border: none; padding: 12px 16px; outline: none; font-size: 0.95rem; font-family: inherit; color: var(--gray-900); width: 100%; box-sizing: border-box;}
+    
+    .pw-input, .pw-textarea { width: 100%; border: 1px solid var(--gray-200); border-radius: 10px; padding: 12px 16px; font-size: 0.95rem; outline: none; transition: .2s; box-sizing: border-box; font-family: inherit; }
+    .pw-input:focus, .pw-textarea:focus { border-color: var(--teal-500); box-shadow: 0 0 0 3px rgba(0,180,216,0.1); }
+    .pw-input.is-invalid, .pw-textarea.is-invalid, .ou-input-group.is-invalid { border-color: var(--red-600); background: #fef2f2; }
 
-    .ou-product-icon {
-        width: 44px;
-        height: 44px;
-        border-radius: 9px;
-        background: var(--teal-50);
-        color: var(--teal-600);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.2rem;
-        flex-shrink: 0;
-    }
+    .ou-field-error { color: var(--red-600); font-size: 0.8rem; margin-top: 6px; display: flex; align-items: center; gap: 4px; font-weight: 500;}
 
-    .ou-product-info { flex: 1; min-width: 0; }
+    /* --- RADIO CARDS (STATUS) --- */
+    .ou-radio-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .ou-radio-option { position: relative; }
+    .ou-radio-option input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
+    
+    .ou-radio-card { display: flex; align-items: center; gap: 14px; padding: 16px; border: 2px solid var(--gray-200); border-radius: 10px; cursor: pointer; transition: .2s; background: #fff; }
+    .ou-radio-card:hover { border-color: var(--teal-100); }
+    
+    .ou-radio-option input[value="active"]:checked + .ou-radio-card { border-color: var(--teal-600); background: var(--teal-50); box-shadow: 0 4px 12px rgba(0,180,216,0.1); }
+    .ou-radio-option input[value="archived"]:checked + .ou-radio-card { border-color: var(--yellow-600); background: var(--yellow-50); }
+    .ou-radio-option input[value="active"]:checked + .ou-radio-card.is-out-of-stock { border-color: var(--red-600); background: var(--red-50); box-shadow: 0 4px 12px rgba(220,38,38,0.1); }
+    
+    .ou-radio-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; transition: .2s; }
+    .ou-radio-text strong { display: block; font-size: 0.95rem; color: var(--gray-900); margin-bottom: 2px; }
+    .ou-radio-text span { font-size: 0.8rem; color: var(--gray-500); }
 
-    .ou-product-name {
-        font-size: 1rem;
-        font-weight: 700;
-        color: var(--gray-900);
-        margin: 0 0 5px 0;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+    /* --- SIDEBAR SUMMARY & TIPS --- */
+    .summary-card { background: #fff; border-radius: var(--radius); border: 1px solid var(--gray-200); box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 20px; }
+    .summary-header { padding: 16px 20px; background: var(--gray-50); border-bottom: 1px solid var(--gray-100); font-size: 0.85rem; font-weight: 700; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.5px; }
+    .summary-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--gray-100); font-size: 0.9rem; }
+    .summary-row:last-child { border-bottom: none; }
+    .summary-label { color: var(--gray-500); }
+    .summary-value { font-weight: 600; color: var(--gray-900); }
+    .summary-value.price { color: var(--teal-700); font-size: 1.05rem; }
 
-    .ou-product-attrs {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-    }
+    /* --- BUTTONS --- */
+    .ou-footer { display: flex; justify-content: space-between; align-items: center; padding: 24px; border-top: 1px solid var(--gray-200); background: var(--gray-50); }
+    
+    /* box-sizing Eklendi */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 24px; border-radius: 10px; font-weight: 600; font-size: 0.95rem; cursor: pointer; text-decoration: none; border: none; transition: .2s; box-sizing: border-box; }
+    .btn:hover { transform: translateY(-1px); }
+    
+    .btn-primary { background: var(--teal-600); color: #fff; box-shadow: 0 4px 12px rgba(0, 150, 199, 0.2); }
+    .btn-primary:hover { background: var(--teal-700); }
+    
+    .btn-outline { background: #fff; color: var(--gray-700); border: 1px solid var(--gray-300); }
+    .btn-outline:hover { border-color: var(--teal-600); background: var(--teal-50); color: var(--teal-700); }
 
-    .ou-attr-chip {
-        background: var(--teal-50);
-        color: var(--teal-800);
-        border-radius: 20px;
-        padding: 2px 10px;
-        font-size: 0.8rem;
-        font-weight: 500;
-    }
-
-    /* Status badge */
-    .ou-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 600;
-    }
-
-    .ou-badge.active       { background: var(--green-bg);  color: var(--green-tx);  }
-    .ou-badge.draft        { background: var(--muted-bg);  color: var(--muted-tx);  }
-    .ou-badge.out_of_stock { background: var(--yellow-bg); color: var(--yellow-tx); }
-    .ou-badge.archived     { background: var(--red-bg);    color: var(--red-tx);    }
-
-    /* Form alanları */
-    .ou-field { margin-bottom: 18px; }
-
-    .ou-label {
-        display: block;
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: var(--gray-700);
-        margin-bottom: 6px;
-    }
-
-    .ou-label .required { color: var(--red-tx); margin-left: 2px; }
-    .ou-label .optional {
-        color: var(--gray-500);
-        font-weight: 400;
-        font-size: 0.8rem;
-        margin-left: 4px;
-    }
-    .ou-label .hint {
-        color: var(--gray-500);
-        font-weight: 400;
-        font-size: 0.78rem;
-        margin-left: 6px;
-    }
-
-    .ou-input,
-    .ou-select,
-    .ou-textarea {
-        width: 100%;
-        border: 1.5px solid var(--gray-200);
-        border-radius: 8px;
-        padding: 10px 14px;
-        font-size: 0.9rem;
-        color: var(--gray-900);
-        outline: none;
-        transition: border-color 0.2s, box-shadow 0.2s;
-        box-sizing: border-box;
-        font-family: inherit;
-    }
-
-    .ou-input:focus,
-    .ou-select:focus,
-    .ou-textarea:focus {
-        border-color: var(--teal-600);
-        box-shadow: 0 0 0 3px rgba(0,180,216,0.1);
-    }
-
-    .ou-textarea { resize: vertical; min-height: 90px; }
-
-    .ou-grid-2 {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-    }
-
-    /* Input prefix */
-    .ou-input-group {
-        display: flex;
-        border: 1.5px solid var(--gray-200);
-        border-radius: 8px;
-        overflow: hidden;
-        transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .ou-input-group:focus-within {
-        border-color: var(--teal-600);
-        box-shadow: 0 0 0 3px rgba(0,180,216,0.1);
-    }
-
-    .ou-input-prefix {
-        background: var(--gray-50);
-        border-right: 1.5px solid var(--gray-200);
-        padding: 10px 14px;
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: var(--gray-700);
-        display: flex;
-        align-items: center;
-    }
-
-    .ou-input-group input {
-        flex: 1;
-        border: none;
-        padding: 10px 14px;
-        font-size: 0.9rem;
-        color: var(--gray-900);
-        outline: none;
-        font-family: inherit;
-        width: 100%;
-    }
-
-    /* Status radio */
-    .ou-status-group {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-
-    .ou-status-option { position: relative; }
-
-    .ou-status-option input[type="radio"] {
-        position: absolute;
-        opacity: 0;
-        width: 0;
-        height: 0;
-    }
-
-    .ou-status-label {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 12px 16px;
-        border: 2px solid var(--gray-200);
-        border-radius: 9px;
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .ou-status-label:hover { border-color: var(--teal-500); }
-
-    .ou-status-option input:checked + .ou-status-label {
-        border-color: var(--teal-600);
-        background: var(--teal-50);
-    }
-
-    .ou-status-icon {
-        width: 32px;
-        height: 32px;
-        border-radius: 7px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.9rem;
-        flex-shrink: 0;
-    }
-
-    .ou-status-icon.draft        { background: var(--muted-bg);  color: var(--muted-tx);  }
-    .ou-status-icon.active       { background: var(--green-bg);  color: var(--green-tx);  }
-    .ou-status-icon.out_of_stock { background: var(--yellow-bg); color: var(--yellow-tx); }
-
-    .ou-status-text strong {
-        display: block;
-        font-size: 0.86rem;
-        font-weight: 700;
-        color: var(--gray-900);
-    }
-
-    .ou-status-text span { font-size: 0.78rem; color: var(--gray-500); }
-
-    /* Alan hatası */
-    .ou-field-errors { margin-top: 5px; }
-
-    .ou-field-error {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        color: var(--red-tx);
-        font-size: 0.82rem;
-        margin-top: 3px;
-    }
-
-    /* Genel hata */
-    .ou-error-box {
-        background: var(--red-bg);
-        color: var(--red-tx);
-        border-radius: 8px;
-        padding: 12px 16px;
-        font-size: 0.88rem;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 16px;
-    }
-
-    /* Footer */
-    .ou-footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 20px 24px;
-        border-top: 1px solid var(--gray-100);
-    }
-
-    /* Sağ panel */
-    .ou-sidebar {}
-
-    /* Özet kutusu */
-    .ou-summary-card {
-        background: white;
-        border-radius: var(--radius);
-        box-shadow: var(--shadow);
-        overflow: hidden;
-        margin-bottom: 16px;
-    }
-
-    .ou-summary-card-header {
-        padding: 14px 18px;
-        border-bottom: 1px solid var(--gray-100);
-        font-size: 0.85rem;
-        font-weight: 700;
-        color: var(--gray-700);
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }
-
-    .ou-summary-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 10px 18px;
-        border-bottom: 1px solid var(--gray-100);
-        font-size: 0.88rem;
-    }
-
-    .ou-summary-row:last-child { border-bottom: none; }
-
-    .ou-summary-label { color: var(--gray-500); }
-
-    .ou-summary-value {
-        font-weight: 600;
-        color: var(--gray-900);
-    }
-
-    .ou-summary-value.price { color: var(--teal-800); font-size: 1rem; }
-
-    .ou-stock-low  { color: var(--red-tx); }
-    .ou-stock-ok   { color: var(--green-tx); }
-
-    /* Fiyat Geçmişi */
-    .ou-price-history {}
-
-    .ou-ph-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px 18px;
-        border-bottom: 1px solid var(--gray-100);
-        font-size: 0.82rem;
-    }
-
-    .ou-ph-item:last-child { border-bottom: none; }
-
-    .ou-ph-price { font-weight: 600; color: var(--gray-700); }
-
-    .ou-ph-date { color: var(--gray-500); }
-
-    /* Tehlikeli zone */
-    .ou-danger-card {
-        background: white;
-        border-radius: var(--radius);
-        box-shadow: var(--shadow);
-        overflow: hidden;
-        border: 1px solid var(--red-bg);
-    }
-
-    .ou-danger-header {
-        padding: 14px 18px;
-        border-bottom: 1px solid var(--red-bg);
-        font-size: 0.85rem;
-        font-weight: 700;
-        color: var(--red-tx);
-    }
-
-    .ou-danger-body {
-        padding: 16px 18px;
-        font-size: 0.83rem;
-        color: var(--gray-500);
-    }
-
-    .ou-danger-body p { margin: 0 0 12px 0; }
-
-    /* Butonlar */
-    .btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        padding: 10px 22px;
-        border-radius: 9px;
-        font-size: 0.9rem;
-        font-weight: 600;
-        cursor: pointer;
-        border: none;
-        text-decoration: none;
-        transition: opacity 0.15s, transform 0.1s;
-        white-space: nowrap;
-    }
-
-    .btn:hover  { opacity: 0.9; transform: translateY(-1px); }
-    .btn:active { transform: translateY(0); }
-
-    .btn-primary {
-        background: linear-gradient(135deg, var(--teal-600), var(--teal-800));
-        color: white;
-    }
-
-    .btn-outline {
-        background: white;
-        color: var(--teal-700);
-        border: 1px solid var(--teal-600);
-    }
-
-    .btn-danger {
-        background: white;
-        color: var(--red-tx);
-        border: 1px solid var(--red-tx);
-        width: 100%;
-        justify-content: center;
-    }
-
-    .btn-sm { padding: 7px 14px; font-size: 0.82rem; }
-
-    /* Modal */
-    .ou-modal-overlay {
-        display: none;
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,0.45);
-        z-index: 1000;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .ou-modal-overlay.open { display: flex; }
-
-    .ou-modal {
-        background: white;
-        border-radius: 14px;
-        padding: 32px;
-        max-width: 400px;
-        width: 90%;
-        text-align: center;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-    }
-
-    .ou-modal h3 {
-        margin: 0 0 10px 0;
-        color: var(--red-tx);
-        font-size: 1.1rem;
-    }
-
-    .ou-modal p {
-        color: var(--gray-700);
-        font-size: 0.9rem;
-        margin: 0 0 24px 0;
-    }
-
-    .ou-modal-actions {
-        display: flex;
-        gap: 10px;
-        justify-content: center;
+    @media (max-width: 900px) {
+        .ou-wrapper { grid-template-columns: 1fr; }
+        .ou-grid-2 { grid-template-columns: 1fr; }
+        .ou-radio-grid { grid-template-columns: 1fr; }
+        .ou-highlight-left { flex-direction: column; text-align: center; }
+        .ou-highlight-action { width: 100%; text-align: center; margin-top: 10px; }
     }
 </style>
 
@@ -526,483 +192,405 @@
 
     <!-- Breadcrumb -->
     <nav class="ou-breadcrumb">
-        <a href="{% url 'store:store_list' %}">Mağazalarım</a>
-        <i class="fas fa-chevron-right" style="font-size:0.7rem;"></i>
-        <a href="{% url 'products:store_product_list' store_slug=store.slug %}">{{ store.store_name }}</a>
-        <i class="fas fa-chevron-right" style="font-size:0.7rem;"></i>
+        <a href="{% url 'store:store_dashboard' store.slug %}">Özet Paneli</a>
+        <i class="fa-solid fa-chevron-right"></i>
+        <a href="{% url 'products:store_product_list' store_slug=store.slug %}">Envanter</a>
+        <i class="fa-solid fa-chevron-right"></i>
         <span>Teklif Düzenle</span>
     </nav>
 
-    <!-- Ürün Özeti -->
-    <div class="ou-product-summary">
-        <div class="ou-product-icon">
-            <i class="fas fa-box"></i>
-        </div>
-        <div class="ou-product-info">
-            <p class="ou-product-name">{{ offer.variant.product.name }}</p>
-            <div class="ou-product-attrs">
-                {% for av in offer.variant.attribute_values.all %}
-                    <span class="ou-attr-chip">
-                        {{ av.attribute.name }}: {{ av.value|title }}
-                    </span>
-                {% empty %}
-                    <span style="font-size:0.82rem; color:var(--gray-500); font-style:italic;">
-                        Standart varyant
-                    </span>
-                {% endfor %}
-                {% if offer.sku %}
-                    <span class="ou-attr-chip" style="background:var(--gray-100); color:var(--gray-500);">
-                        <i class="fas fa-barcode"></i> SKU: {{ offer.sku }}
-                    </span>
-                {% elif offer.variant.barcode %}
-                    <span class="ou-attr-chip" style="background:var(--gray-100); color:var(--gray-500);">
-                        <i class="fas fa-barcode"></i> {{ offer.variant.barcode }}
-                    </span>
-                {% endif %}
+    <!-- Highlight Banner -->
+    <div class="ou-highlight">
+        <div class="ou-highlight-left">
+            <img src="{% if offer.thumbnail_url %}{{ offer.thumbnail_url }}{% else %}{% static 'core/images/placeholder.png' %}{% endif %}" alt="Product" class="ou-highlight-img">
+            <div class="ou-highlight-info">
+                <div class="ou-highlight-badge badge-{{ offer.status }}">
+                    {% if offer.status == 'active' %}<i class="fa-solid fa-check-circle"></i> Yayında
+                    {% elif offer.status == 'out_of_stock' %}<i class="fa-solid fa-exclamation-circle"></i> Tükendi
+                    {% elif offer.status == 'archived' %}<i class="fa-solid fa-archive"></i> Arşivlendi
+                    {% else %}<i class="fa-solid fa-file"></i> Bilinmiyor{% endif %}
+                </div>
+                
+                <h1>{{ offer.variant.product.name }}</h1>
+                <p>{{ offer.variant.product.brand.name|default:"Genel Marka" }} • {{ offer.variant.product.category.name }}</p>
+                
+                <!-- Varyant Özellikleri (İlk Satır) -->
+                <div class="ou-variant-chips">
+                    {% for av in offer.variant.attribute_values.all %}
+                        <span class="ou-chip">{{ av.attribute.name }}: {{ av.value|title }}</span>
+                    {% empty %}
+                        <span class="ou-chip" style="background:var(--gray-100); color:var(--gray-600); border:none;">Standart Varyant</span>
+                    {% endfor %}
+                </div>
+                
+                <!-- SKU ve Barkod (Alt Satır) -->
+                <div class="ou-variant-chips" style="margin-top: 8px;">
+                    {% if offer.sku %}
+                        <span class="ou-chip sku"><i class="fa-solid fa-tag"></i> SKU: {{ offer.sku }}</span>
+                    {% endif %}
+                    {% if offer.variant.barcode %}
+                        <span class="ou-chip sku"><i class="fa-solid fa-barcode"></i> Barkod: {{ offer.variant.barcode }}</span>
+                    {% endif %}
+                </div>
+
             </div>
         </div>
-        <span class="ou-badge {{ offer.status }}">
-            {% if offer.status == 'active' %}<i class="fas fa-check-circle"></i>
-            {% elif offer.status == 'draft' %}<i class="fas fa-file"></i>
-            {% elif offer.status == 'out_of_stock' %}<i class="fas fa-exclamation-circle"></i>
+
+        <div class="ou-highlight-action">
+            {% if offer.variant.product.created_by_store == store %}
+                <!-- YETKİSİ OLAN MAĞAZA (ÜRÜNÜ OLUŞTURAN) -->
+                <a href="{% url 'products:product_update' store_slug=store.slug product_slug=offer.variant.product.slug %}?offer_id={{ offer.pk }}" class="btn btn-outline" style="font-size: 0.85rem; padding: 10px 16px;">
+                    <i class="fa-solid fa-pen"></i> Katalog Bilgilerini Düzenle
+                </a>
+                <div style="font-size: 0.75rem; color: var(--gray-400); text-align: center; margin-top: 6px;">
+                    Açıklama ve görseller içindir
+                </div>
+            {% else %}
+                <!-- YETKİSİ OLMAYAN MAĞAZA -->
+                <div style="background: var(--gray-50); border: 1px dashed var(--gray-300); padding: 12px 16px; border-radius: 10px; text-align: center; max-width: 280px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);">
+                    <i class="fa-solid fa-lock" style="color: var(--gray-400); margin-bottom: 6px; font-size: 1.15rem;"></i>
+                    <div style="font-size: 0.8rem; color: var(--gray-600); line-height: 1.5;">
+                        Açıklama ve görsel değişikliği için katalog sahibi <strong style="color: var(--teal-700);">@{{ offer.variant.product.created_by_store.store_name }}</strong> ile iletişime geçebilirsiniz.
+                    </div>
+                </div>
             {% endif %}
-            {{ offer.get_status_display }}
-        </span>
-    </div>
-
-    <!-- Ürün Detay Kartı -->
-    <div class="ou-card" style="margin-bottom: 16px; grid-column: 1 / -1;">
-        <div class="ou-card-header">
-            <div class="ou-card-header-icon">
-                <i class="fas fa-info-circle"></i>
-            </div>
-            <div>
-                <h2>Ürün Bilgileri</h2>
-                <p>Katalog bilgileri — Ürün ismini değiştirmek için yöneticiye başvurun</p>
-            </div>
-        </div>
-        <div class="ou-card-body">
-            <div style="display: flex; gap: 20px; align-items: flex-start;">
-            
-                <!-- Kapak Görseli -->
-                {% with image=offer.variant.product.main_images|first %}
-                <div style="flex-shrink: 0;">
-                    {% if image %}
-                        <img src="{{ image.image.url }}"
-                             alt="{{ offer.variant.product.name }}"
-                             style="width: 100px; height: 100px; object-fit: contain;
-                                    border-radius: 10px; border: 1px solid var(--gray-200);
-                                    background: var(--gray-50);">
-                    {% else %}
-                        <div style="width: 100px; height: 100px; border-radius: 10px;
-                                    background: var(--gray-100); display: flex;
-                                    align-items: center; justify-content: center;
-                                    color: var(--gray-500); font-size: 2rem;">
-                            <i class="fas fa-image"></i>
-                        </div>
-                    {% endif %}
-                </div>
-                {% endwith %}
-            
-                <!-- Bilgiler -->
-                <div style="flex: 1; min-width: 0;">
-                    <h3 style="margin: 0 0 8px 0; font-size: 1.05rem; color: var(--gray-900);">
-                        {{ offer.variant.product.name }}
-                    </h3>
-                
-                    <!-- Kategori & Marka -->
-                    <div style="display: flex; gap: 12px; flex-wrap: wrap;
-                                font-size: 0.83rem; color: var(--gray-500); margin-bottom: 10px;">
-                        {% if offer.variant.product.category %}
-                        <span>
-                            <i class="fas fa-tag"></i>
-                            {{ offer.variant.product.category.name }}
-                        </span>
-                        {% endif %}
-                        {% if offer.variant.product.brand %}
-                        <span>
-                            <i class="fas fa-building"></i>
-                            {{ offer.variant.product.brand.name }}
-                        </span>
-                        {% endif %}
-                    </div>
-                
-                    <!-- Varyant Özellikleri -->
-                    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
-                        {% for av in offer.variant.attribute_values.all %}
-                            <span style="background: var(--teal-50); color: var(--teal-800);
-                                         border-radius: 20px; padding: 3px 12px;
-                                         font-size: 0.82rem; font-weight: 500;">
-                                {{ av.attribute.name }}: {{ av.value|title }}
-                            </span>
-                        {% empty %}
-                            <span style="font-size: 0.82rem; color: var(--gray-500);
-                                         font-style: italic;">
-                                Standart varyant
-                            </span>
-                        {% endfor %}
-                        {% if offer.variant.barcode %}
-                            <span style="background: var(--gray-100); color: var(--gray-500);
-                                         border-radius: 20px; padding: 3px 12px; font-size: 0.82rem;">
-                                <i class="fas fa-barcode"></i> {{ offer.variant.barcode }}
-                            </span>
-                        {% endif %}
-                    </div>
-                
-                    <!-- Açıklama -->
-                    {% if offer.variant.product.description %}
-                    <p style="margin: 0; font-size: 0.85rem; color: var(--gray-500);
-                               line-height: 1.5; display: -webkit-box;
-                               line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-                               overflow: hidden;">
-                        {{ offer.variant.product.description }}
-                    </p>
-                    {% endif %}
-
-                    <a href="{% url 'products:product_update' store_slug=store.slug product_slug=offer.variant.product.slug %}"
-                        class="btn btn-outline btn-sm"
-                        style="margin-top: 12px;">
-                        <i class="fas fa-edit"></i> Görsel &amp; Açıklama Düzenle
-                    </a>
-                </div>
-            </div>
         </div>
     </div>
 
-    <!-- Sol: Form -->
+    <!-- MAIN FORM -->
     <div class="ou-main">
-
-        <!-- Genel Hata -->
         {% if messages %}
             {% for message in messages %}
-            {% if 'error' in message.tags %}
-            <div class="ou-error-box">
-                <i class="fas fa-exclamation-circle"></i> {{ message }}
-            </div>
-            {% endif %}
+                <div class="ou-message {% if message.tags == 'success' %}ou-message-success{% else %}ou-message-error{% endif %}">
+                    <i class="fa-solid {% if message.tags == 'success' %}fa-check-circle{% else %}fa-circle-exclamation{% endif %}"></i>
+                    <span>{{ message }}</span>
+                </div>
             {% endfor %}
         {% endif %}
 
         <form method="post" id="updateForm">
             {% csrf_token %}
-
-            <!-- Fiyat & Stok -->
+            
             <div class="ou-card">
                 <div class="ou-card-header">
-                    <div class="ou-card-header-icon">
-                        <i class="fas fa-tag"></i>
-                    </div>
+                    <div class="ou-card-icon"><i class="fa-solid fa-money-bill-wave"></i></div>
                     <div>
-                        <h2>Fiyat &amp; Stok</h2>
-                        <p>Sadece kendi mağazanıza ait bilgiler</p>
+                        <h2>Satış & Stok Bilgileri</h2>
+                        <p>Kendi mağazanıza ait fiyat ve envanter verileri</p>
                     </div>
                 </div>
                 <div class="ou-card-body">
-
                     <div class="ou-grid-2">
                         <!-- Fiyat -->
                         <div class="ou-field">
-                            <label class="ou-label">
-                                Satış Fiyatı <span class="required">*</span>
-                                <span class="hint">KDV dahil</span>
-                            </label>
-                            <div class="ou-input-group">
+                            <label class="ou-label">Satış Fiyatı <span class="req">*</span> <span class="opt">(KDV Dahil)</span></label>
+                            <div class="ou-input-group {% if form.price.errors %}is-invalid{% endif %}">
                                 <span class="ou-input-prefix">₺</span>
-                                <input type="number"
-                                       name="{{ form.price.html_name }}"
-                                       value="{{ form.price.value|default:'' }}"
-                                       step="0.01"
-                                       min="0.01"
-                                       placeholder="0.00">
+                                <input type="text" inputmode="decimal" name="{{ form.price.html_name }}" value="{{ form.price.value|default:'' }}" placeholder="0,00" class="js-price-input">
                             </div>
                             {% if form.price.errors %}
-                            <div class="ou-field-errors">
                                 {% for error in form.price.errors %}
-                                <p class="ou-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                                    <div class="ou-field-error"><i class="fa-solid fa-triangle-exclamation"></i> {{ error }}</div>
                                 {% endfor %}
-                            </div>
                             {% endif %}
                         </div>
 
                         <!-- Stok -->
                         <div class="ou-field">
-                            <label class="ou-label">
-                                Stok Adedi <span class="required">*</span>
-                            </label>
-                            <input type="number"
-                                   name="{{ form.stock.html_name }}"
-                                   class="ou-input"
-                                   value="{{ form.stock.value|default_if_none:'' }}"
-                                   min="0"
-                                   placeholder="0">
+                            <label class="ou-label">Stok Adedi <span class="req">*</span></label>
+                            <input type="number" name="{{ form.stock.html_name }}" class="pw-input {% if form.stock.errors %}is-invalid{% endif %}" value="{{ form.stock.value|default_if_none:'' }}" min="0" placeholder="0" id="stockInput">
                             {% if form.stock.errors %}
-                            <div class="ou-field-errors">
                                 {% for error in form.stock.errors %}
-                                <p class="ou-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                                    <div class="ou-field-error"><i class="fa-solid fa-triangle-exclamation"></i> {{ error }}</div>
                                 {% endfor %}
-                            </div>
                             {% endif %}
                         </div>
                     </div>
 
-                    <!-- SKU -->
                     <div class="ou-field">
-                        <label class="ou-label">
-                            Stok Kodu (SKU) <span class="optional">(opsiyonel)</span>
-                        </label>
-                        <input type="text"
-                               name="{{ form.sku.html_name }}"
-                               class="ou-input"
-                               value="{{ form.sku.value|default:'' }}"
-                               placeholder="Kendi stok takip kodunuz">
+                        <label class="ou-label">Stok Kodu (SKU) <span class="opt">(İsteğe Bağlı)</span></label>
+                        <input type="text" name="{{ form.sku.html_name }}" class="pw-input {% if form.sku.errors %}is-invalid{% endif %}" value="{{ form.sku.value|default:'' }}" placeholder="Mağaza içi takip kodunuz">
                         {% if form.sku.errors %}
-                        <div class="ou-field-errors">
                             {% for error in form.sku.errors %}
-                            <p class="ou-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                                <div class="ou-field-error"><i class="fa-solid fa-triangle-exclamation"></i> {{ error }}</div>
                             {% endfor %}
-                        </div>
                         {% endif %}
                     </div>
 
-                    <!-- Satıcı Notu -->
-                    <div class="ou-field">
-                        <label class="ou-label">
-                            Ek Açıklama <span class="optional">(opsiyonel)</span>
-                        </label>
-                        <textarea name="{{ form.seller_notes.html_name }}"
-                                  class="ou-textarea"
-                                  placeholder="Ürün hakkında eklemek istediğiniz notlar...">{{ form.seller_notes.value|default:'' }}</textarea>
+                    <div class="ou-field" style="margin-bottom: 0;">
+                        <label class="ou-label">Satıcı Notları <span class="opt">(Gizli)</span></label>
+                        <textarea name="{{ form.seller_notes.html_name }}" class="pw-textarea" rows="3" placeholder="Sadece sizin görebileceğiniz notlar...">{{ form.seller_notes.value|default:'' }}</textarea>
                     </div>
-
                 </div>
             </div>
 
             <!-- Yayın Durumu -->
             <div class="ou-card">
                 <div class="ou-card-header">
-                    <div class="ou-card-header-icon">
-                        <i class="fas fa-toggle-on"></i>
-                    </div>
+                    <div class="ou-card-icon"><i class="fa-solid fa-power-off"></i></div>
                     <div>
                         <h2>Yayın Durumu</h2>
-                        <p>Stok 0 olduğunda otomatik "Tükendi" durumuna geçer</p>
+                        <p>Ürününüzün vitrindeki görünürlüğü</p>
                     </div>
                 </div>
                 <div class="ou-card-body">
-                    <div class="ou-status-group">
-
-                        {% for value, label in form.status.field.widget.choices %}
-                        <div class="ou-status-option">
-                            <input type="radio"
-                                   id="status_{{ value }}"
-                                   name="{{ form.status.html_name }}"
-                                   value="{{ value }}"
-                                   {% if form.status.value == value %}checked{% endif %}>
-                            <label class="ou-status-label" for="status_{{ value }}">
-                                <div class="ou-status-icon {{ value }}">
-                                    {% if value == 'active' %}<i class="fas fa-check-circle"></i>
-                                    {% elif value == 'draft' %}<i class="fas fa-file"></i>
-                                    {% elif value == 'out_of_stock' %}<i class="fas fa-exclamation-circle"></i>
-                                    {% endif %}
-                                </div>
-                                <div class="ou-status-text">
-                                    <strong>{{ label }}</strong>
-                                    <span>
-                                        {% if value == 'active' %}Müşteriler görebilir
-                                        {% elif value == 'draft' %}Müşterilere görünmez
-                                        {% elif value == 'out_of_stock' %}Stok girince otomatik yayına alınır
-                                        {% endif %}
-                                    </span>
+                    <div class="ou-radio-grid">
+                        
+                        <div class="ou-radio-option">
+                            <input type="radio" id="status_active" name="{{ form.status.html_name }}" value="active" {% if offer.status == 'active' or offer.status == 'out_of_stock' %}checked{% endif %}>
+                            <label class="ou-radio-card" for="status_active" id="label_active">
+                                <div class="ou-radio-icon" id="icon_active"></div>
+                                <div class="ou-radio-text">
+                                    <strong id="text_active">Yayında</strong>
+                                    <span id="subtext_active">Müşterilere açık</span>
                                 </div>
                             </label>
                         </div>
-                        {% endfor %}
+
+                        <div class="ou-radio-option">
+                            <input type="radio" id="status_archived" name="{{ form.status.html_name }}" value="archived" {% if offer.status == 'archived' %}checked{% endif %}>
+                            <label class="ou-radio-card" for="status_archived">
+                                <div class="ou-radio-icon" style="background: var(--gray-100); color: var(--gray-600);">
+                                    <i class="fa-solid fa-archive"></i>
+                                </div>
+                                <div class="ou-radio-text">
+                                    <strong>Arşivle</strong>
+                                    <span>Kalıcı olarak gizle (Satışa kapalı)</span>
+                                </div>
+                            </label>
+                        </div>
 
                     </div>
                     {% if form.status.errors %}
-                    <div class="ou-field-errors" style="margin-top:8px;">
                         {% for error in form.status.errors %}
-                        <p class="ou-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                            <div class="ou-field-error" style="margin-top: 10px;"><i class="fa-solid fa-triangle-exclamation"></i> {{ error }}</div>
                         {% endfor %}
-                    </div>
                     {% endif %}
                 </div>
             </div>
 
-            <!-- Footer -->
-            <div class="ou-card">
+            <div class="ou-card" style="margin-bottom: 0;">
                 <div class="ou-footer">
-                    <a href="{% url 'products:store_product_list' store_slug=store.slug %}"
-                       class="btn btn-outline">
-                        <i class="fas fa-arrow-left"></i> Geri Dön
-                    </a>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Değişiklikleri Kaydet
-                    </button>
+                    <a href="{% url 'products:store_product_list' store_slug=store.slug %}" class="btn btn-outline">İptal Et</a>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Değişiklikleri Kaydet</button>
                 </div>
             </div>
-
         </form>
     </div>
 
-    <!-- Sağ: Özet & Geçmiş -->
+    <!-- SIDEBAR -->
     <aside class="ou-sidebar">
-
-        <!-- Mevcut Özet -->
-        <div class="ou-summary-card">
-            <div class="ou-summary-card-header">Mevcut Bilgiler</div>
-            <div class="ou-summary-row">
-                <span class="ou-summary-label">Fiyat</span>
-                <span class="ou-summary-value price">{{ offer.price }} ₺</span>
+        
+        <!-- Güncel Özet -->
+        <div class="summary-card">
+            <div class="summary-header">Şu Anki Durum</div>
+            <div class="summary-row">
+                <span class="summary-label">Satış Fiyatı</span>
+                <span class="summary-value price">₺<span class="js-format-money">{{ offer.price }}</span></span>
             </div>
-            <div class="ou-summary-row">
-                <span class="ou-summary-label">Stok</span>
-                <span class="ou-summary-value {% if offer.stock <= 5 %}ou-stock-low{% else %}ou-stock-ok{% endif %}">
-                    {{ offer.stock }} adet
+            <div class="summary-row">
+                <span class="summary-label">Stok</span>
+                <span class="summary-value {% if offer.stock <= 5 %}ou-stock-low{% else %}ou-stock-ok{% endif %}">
+                    {{ offer.stock }} Adet
                 </span>
             </div>
-            <div class="ou-summary-row">
-                <span class="ou-summary-label">Satılan</span>
-                <span class="ou-summary-value">{{ offer.sold_count }}</span>
+            <div class="summary-row">
+                <span class="summary-label">Toplam Satış</span>
+                <span class="summary-value">{{ offer.sold_count }}</span>
             </div>
-            {% if offer.sku %}
-            <div class="ou-summary-row">
-                <span class="ou-summary-label">SKU</span>
-                <span class="ou-summary-value" style="font-size:0.82rem;">{{ offer.sku }}</span>
-            </div>
-            {% endif %}
-            <div class="ou-summary-row">
-                <span class="ou-summary-label">Son Güncelleme</span>
-                <span class="ou-summary-value" style="font-size:0.82rem;">
-                    {{ offer.updated_at|date:"d.m.Y H:i" }}
+            <div class="summary-row" style="background: var(--gray-50);">
+                <span class="summary-label" style="font-size: 0.8rem;">Son İşlem</span>
+                <span class="summary-value js-local-time" data-utc="{{ offer.updated_at|date:'c' }}" style="font-size: 0.8rem;">
+                    <!-- JS Dolduracak -->
                 </span>
             </div>
         </div>
-
-        <!-- Fiyat Geçmişi -->
-        {% with history=offer.price_history.all|slice:":5" %}
-        {% if history %}
-        <div class="ou-summary-card">
-            <div class="ou-summary-card-header">
-                <i class="fas fa-history"></i> Fiyat Geçmişi
+        
+        <!-- BuyBox İpucu Kartı -->
+        <div class="summary-card" style="background: var(--teal-50); border-color: var(--teal-100);">
+            <div class="summary-header" style="background: transparent; color: var(--teal-700); border-bottom: none; padding-bottom: 8px;">
+                <i class="fa-solid fa-lightbulb"></i> Satış İpucu
             </div>
-            <div class="ou-price-history">
-                {% for entry in history %}
-                <div class="ou-ph-item">
-                    <span class="ou-ph-price">{{ entry.price }} ₺</span>
-                    <span class="ou-ph-date">{{ entry.created_at|date:"d.m.Y" }}</span>
-                </div>
-                {% endfor %}
+            <div style="padding: 0 20px 20px; font-size: 0.85rem; color: var(--teal-900); line-height: 1.5;">
+                Ürününüzün <strong>BuyBox</strong> sıralamasında öne çıkması için fiyatınızı rekabetçi tutmaya ve stoğunuzun tükenmemesine özen gösterin.
             </div>
         </div>
-        {% endif %}
-        {% endwith %}
 
-        <!-- Arşivleme -->
-        {% if offer.status != 'archived' %}
-        <div class="ou-danger-card">
-            <div class="ou-danger-header">
-                <i class="fas fa-exclamation-triangle"></i> Tehlikeli Bölge
-            </div>
-            <div class="ou-danger-body">
-                <p>Teklifinizi arşivlerseniz müşterilere gösterilmez. Veritabanından silinmez.</p>
-                <button onclick="openArchiveModal()" class="btn btn-danger btn-sm">
-                    <i class="fas fa-archive"></i> Teklifi Arşivle
-                </button>
-            </div>
-        </div>
-        {% endif %}
+        <!-- Müşteri Gözünden Gör Butonu -->
+        <a href="{% url 'products:product_detail' slug=offer.variant.product.slug %}?variant={{ offer.variant.id }}" target="_blank" class="btn btn-outline" style="width: 100%; justify-content: center;">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> Müşteri Gözünden Gör
+        </a>
 
     </aside>
-</div>
 
-<!-- Arşivleme Modalı -->
-<div id="archiveModal" class="ou-modal-overlay">
-    <div class="ou-modal">
-        <h3><i class="fas fa-archive"></i> Teklifi Arşivle</h3>
-        <p>
-            "<strong>{{ offer.variant.product.name }}</strong>" teklifinizi arşivlemek
-            istediğinize emin misiniz? Müşterilere gösterilmez.
-        </p>
-        <form method="post"
-              action="{% url 'products:offer_archive' store_slug=store.slug pk=offer.pk %}">
-            {% csrf_token %}
-            <div class="ou-modal-actions">
-                <button type="button"
-                        onclick="closeArchiveModal()"
-                        class="btn btn-outline">
-                    Vazgeç
-                </button>
-                <button type="submit"
-                        class="btn btn-primary"
-                        style="background:linear-gradient(135deg,#dc3545,#b02a37);">
-                    Arşivle
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Stok 0 Uyarı Modalı -->
-<div id="stockWarningModal" class="ou-modal-overlay">
-    <div class="ou-modal">
-        <h3 style="color: var(--yellow-tx);">
-            <i class="fas fa-exclamation-triangle"></i> Stok Sıfırlanıyor
-        </h3>
-        <p>
-            Stok adedini <strong>0</strong> olarak kaydederseniz teklifiniz
-            otomatik olarak <strong>"Tükendi"</strong> durumuna geçecek ve
-            müşterilere gösterilmeyecektir.
-        </p>
-        <p style="font-size: 0.82rem; color: var(--gray-500);">
-            Stok girdiğinizde otomatik yeniden yayına alınır.
-        </p>
-        <div class="ou-modal-actions">
-            <button type="button"
-                    onclick="document.getElementById('stockWarningModal').classList.remove('open')"
-                    class="btn btn-outline">
-                Geri Dön
-            </button>
-            <button type="button"
-                    id="confirmStockZero"
-                    class="btn btn-primary"
-                    style="background: linear-gradient(135deg, var(--yellow-tx), #6d4e00);">
-                Anladım, Kaydet
-            </button>
-        </div>
-    </div>
 </div>
 
 <script>
-function openArchiveModal() {
-    document.getElementById('archiveModal').classList.add('open');
-}
+document.addEventListener("DOMContentLoaded", () => {
+    
+    // --- UTC SAATİ TARAYICININ YEREL SAATİNE ÇEVİRME ---
+    document.querySelectorAll('.js-local-time').forEach(el => {
+        const utcDateStr = el.dataset.utc;
+        if(utcDateStr) {
+            const date = new Date(utcDateStr);
+            if (!isNaN(date)) {
+                el.innerText = date.toLocaleString('tr-TR', { 
+                    day: '2-digit', month: '2-digit', year: 'numeric', 
+                    hour: '2-digit', minute: '2-digit' 
+                });
+            }
+        }
+    });
 
-function closeArchiveModal() {
-    document.getElementById('archiveModal').classList.remove('open');
-}
+    // --- 1. FIYAT FORMATLAMA ---
+    function formatPriceField(e) {
+        let input = e.target;
+        let cursorPosition = input.selectionStart; 
+        let oldLength = input.value.length;
 
-document.getElementById('archiveModal').addEventListener('click', function(e) {
-    if (e.target === this) closeArchiveModal();
-});
+        let val = input.value.replace(/[^0-9.,]/g, '');
+        let parts = val.split(',');
+        if (parts.length > 2) {
+            val = parts[0] + ',' + parts.slice(1).join('').replace(/,/g, '');
+            parts = val.split(',');
+        }
 
-document.getElementById('updateForm').addEventListener('submit', function(e) {
-    const stock = parseInt(document.querySelector('input[name="stock"]').value) || 0;
-    const activeRadio = document.getElementById('status_active');
-    const isActive = activeRadio && activeRadio.checked;
+        let integerPart = parts.length > 0 ? parts[0] : '';
+        let decimalPart = parts.length > 1 ? ',' + parts[1] : '';
 
-    // Stok 0 ve durum active ise uyar
-    if (stock === 0 && isActive) {
-        e.preventDefault();
+        integerPart = integerPart.replace(/\./g, '');
+        if (integerPart.length > 1 && integerPart.startsWith('0')) {
+            integerPart = parseInt(integerPart, 10).toString();
+        }
 
-        document.getElementById('stockWarningModal').classList.add('open');
+        if (integerPart !== '') {
+            integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        }
 
-        // Onay butonuna tıklayınca formu gönder
-        document.getElementById('confirmStockZero').onclick = function() {
-            document.getElementById('updateForm').submit();
-        };
+        let newValue = integerPart + decimalPart;
+        input.value = newValue;
+
+        let newLength = newValue.length;
+        cursorPosition = cursorPosition + (newLength - oldLength);
+        if (cursorPosition < 0) cursorPosition = 0;
+        try { input.setSelectionRange(cursorPosition, cursorPosition); } catch(err) {}
     }
+    
+    function handlePriceBlur(e) {
+        let input = e.target;
+        let val = String(input.value);
+        if (!val) return;
+        let cleanVal = val.replace(/\./g, '').replace(/[^0-9,]/g, '');
+        let parts = cleanVal.split(',');
+        let integerPart = parts[0] || '0';
+        integerPart = parseInt(integerPart, 10).toString(); 
+        if (integerPart === 'NaN') integerPart = '0';
+        let decimalPart = parts.length > 1 ? parts[1] : '';
+        if (decimalPart.length === 0) decimalPart = '00';
+        else if (decimalPart.length === 1) decimalPart += '0';
+        else decimalPart = decimalPart.substring(0, 2);
+
+        input.value = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + ',' + decimalPart;
+    }
+
+    const priceInput = document.querySelector('.js-price-input');
+    if (priceInput) {
+        let pVal = String(priceInput.value);
+        if (pVal && pVal.includes('.') && !pVal.includes(',')) {
+            pVal = pVal.replace('.', ',');
+        }
+        priceInput.value = pVal;
+        handlePriceBlur({target: priceInput});
+
+        priceInput.addEventListener('input', formatPriceField);
+        priceInput.addEventListener('blur', handlePriceBlur);
+    }
+
+    document.querySelectorAll('.js-format-money').forEach(el => {
+        const val = parseFloat(el.innerText.replace(',', '.'));
+        if(!isNaN(val)) {
+            el.innerText = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+        }
+    });
+
+    // 2. STOK DURUMUNA GÖRE "YAYINDA/TÜKENDİ" BUTONU DİNAMİĞİ
+    const stockInput = document.getElementById("stockInput");
+    const labelActive = document.getElementById("label_active");
+    const iconActive = document.getElementById("icon_active");
+    const textActive = document.getElementById("text_active");
+    const subtextActive = document.getElementById("subtext_active");
+
+    function updateStatusUI() {
+        const stockVal = parseInt(stockInput.value) || 0;
+        
+        if (stockVal === 0) {
+            iconActive.style.background = "var(--red-50)";
+            iconActive.style.color = "var(--red-600)";
+            iconActive.innerHTML = '<i class="fa-solid fa-exclamation-circle"></i>';
+            textActive.textContent = "Tükendi (Stok Yok)";
+            subtextActive.textContent = "Stok girene kadar vitrinden kalkar.";
+            labelActive.classList.add("is-out-of-stock");
+        } else {
+            iconActive.style.background = "var(--teal-100)";
+            iconActive.style.color = "var(--teal-700)";
+            iconActive.innerHTML = '<i class="fa-solid fa-check"></i>';
+            textActive.textContent = "Yayında (Satışa Açık)";
+            subtextActive.textContent = "Müşteriler ürünü satın alabilir.";
+            labelActive.classList.remove("is-out-of-stock");
+        }
+    }
+
+    stockInput.addEventListener("input", updateStatusUI);
+    updateStatusUI();
+
+    // --- 3. GÜVENLİ FORM GÖNDERİMİ VE POPUP ONAYLARI ---
+    const updateForm = document.getElementById("updateForm");
+    const initialStatus = "{{ offer.status }}";
+    
+    updateForm.addEventListener("submit", async function(e) {
+        e.preventDefault(); 
+
+        const selectedRadio = document.querySelector('input[name="{{ form.status.html_name }}"]:checked');
+        const selectedStatus = selectedRadio ? selectedRadio.value : initialStatus;
+        const offerName = "{{ offer.variant.product.name|escapejs }}";
+        
+        let shouldSubmit = true;
+        
+        if (initialStatus !== 'archived' && selectedStatus === 'archived') {
+            const confirm = await Swal.fire({
+                title: 'Teklifi Arşivle',
+                html: `<strong>${offerName}</strong> satış teklifini arşivlemek istediğinize emin misiniz?<br><br><span style="font-size:0.9rem; color:var(--gray-500);">Arşivlenen teklifler müşterilere gösterilmez, ancak ürün bilgileriniz kaybolmaz.</span>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc2626',
+                cancelButtonColor: '#71717a',
+                confirmButtonText: 'Evet, Arşivle',
+                cancelButtonText: 'Vazgeç'
+            });
+            shouldSubmit = confirm.isConfirmed;
+        } 
+        else if (initialStatus === 'archived' && selectedStatus === 'active') {
+            const confirm = await Swal.fire({
+                title: 'Tekrar Yayına Al',
+                html: `<strong>${offerName}</strong> teklifini arşivden çıkarıp tekrar yayına almak üzeresiniz. Onaylıyor musunuz?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: 'var(--teal-600)',
+                cancelButtonColor: '#71717a',
+                confirmButtonText: 'Evet, Yayına Al',
+                cancelButtonText: 'Vazgeç'
+            });
+            shouldSubmit = confirm.isConfirmed;
+        }
+
+        if (shouldSubmit) {
+            if (priceInput && priceInput.value) {
+                priceInput.value = priceInput.value.replace(/\./g, '').replace(',', '.');
+            }
+            updateForm.submit();
+        }
+    });
+
 });
 </script>
-
 {% endblock %}

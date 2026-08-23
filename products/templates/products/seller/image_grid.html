@@ -1,0 +1,35 @@
+{% if group.images.all %}
+<div class="pw-image-grid js-sortable-grid" data-group-id="{{ group.id }}">
+    {% for img in group.images.all %}
+    <div class="pw-image-card js-image-item" data-id="{{ img.id }}">
+        
+        <div class="pw-image-preview">
+            {% if img.is_main %}
+                <span class="pw-image-main-badge"><i class="fa-solid fa-star"></i> Kapak</span>
+            {% endif %}
+            <img src="{{ img.image.url }}" alt="{{ img.alt_text|default:'Ürün görseli' }}">
+        </div>
+
+        <div class="pw-image-actions">
+            <div class="pw-image-actions-group">
+                <button type="button" class="pw-btn-text js-make-main {% if img.is_main %}is-main{% endif %}" data-id="{{ img.id }}" title="Kapak Yap">
+                    <i class="fa-solid fa-star"></i> {% if img.is_main %}Kapak{% else %}Kapak Yap{% endif %}
+                </button>
+                <button type="button" class="pw-btn-text js-edit-alt {% if img.alt_text %}has-alt{% endif %}" data-id="{{ img.id }}" data-current-alt="{{ img.alt_text }}" title="Alt Metin Düzenle">
+                    <i class="fa-solid fa-pen"></i> {% if img.alt_text %}Metni Düzenle{% else %}Alt Metin Ekle{% endif %}
+                </button>
+            </div>
+            <button type="button" class="pw-image-delete js-delete-image" data-id="{{ img.id }}" title="Görseli Sil">
+                <i class="fa-solid fa-trash-can"></i>
+            </button>
+        </div>
+
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<div style="text-align:center; padding: 0 0 30px 0; color: var(--gray-400);">
+    <p>Bu gruba henüz görsel yüklenmemiş.</p>
+</div>
+{% endif %}

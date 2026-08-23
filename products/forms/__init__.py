@@ -16,7 +16,6 @@ from .store_product import (
 
 from .search import (
     ProductSearchForm,
-    ProductFilterForm,
 )
 
 from .offer import (
@@ -24,6 +23,7 @@ from .offer import (
     OfferCustomVariantForm
 )
 
+from .storefront import ProductFilterForm
 
 from .wizard import *
 

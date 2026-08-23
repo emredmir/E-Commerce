@@ -92,7 +92,7 @@
     .btn-outline:hover { border-color: var(--gray-400); background: var(--gray-50); }
 
     /* Sekmeler */
-    .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .metric-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
     .metric-card { background: #fff; border-radius: var(--radius); padding: 20px; border: 1px solid var(--gray-200); box-shadow: var(--shadow-sm); cursor: pointer; text-decoration: none; transition: .2s; position: relative; overflow: hidden; }
     .metric-card:hover { border-color: var(--teal-500); transform: translateY(-2px); }
     .metric-card.active { border-color: var(--teal-600); background: var(--teal-50); box-shadow: 0 4px 15px rgba(0, 180, 216, 0.1); }
@@ -291,6 +291,10 @@
                 <div class="metric-title" style="color: var(--red-600);">Tükendi</div>
                 <div class="metric-value">{{ status_counts.out_of_stock }}</div>
             </a>
+            <a href="?status=draft{% if current_q %}&q={{ current_q }}{% endif %}" class="metric-card {% if current_status == 'draft' %}active{% endif %}">
+                <div class="metric-title" style="color: var(--gray-600);">Taslaklar</div>
+                <div class="metric-value">{{ status_counts.draft|default:"0" }}</div>
+            </a>
             <a href="?status=archived{% if current_q %}&q={{ current_q }}{% endif %}" class="metric-card {% if current_status == 'archived' %}active{% endif %}">
                 <div class="metric-title" style="color: var(--yellow-600);">Arşivlenenler</div>
                 <div class="metric-value">{{ status_counts.archived }}</div>
@@ -316,6 +320,7 @@
 
         <!-- GİZLİ VERİ ALANI: Backend'den gelen tüm varyantlar burada JS için tutulur -->
         <div id="raw-offer-data" style="display: none;">
+            <!-- AKTİF, TÜKENMİŞ ve ARŞİVLENMİŞ TEKLİFLER -->
             {% for offer in store_products %}
             <div class="js-raw-offer"
                  data-offer-id="{{ offer.pk }}"
@@ -335,11 +340,35 @@
                  data-updated="{{ offer.updated_at|date:'d.m.Y' }}">
             </div>
             {% endfor %}
+
+            <!-- TASLAK (YARIM KALMIŞ) ÜRÜNLER -->
+            {% for product in draft_products %}
+                {% if not current_status or current_status == 'draft' %}
+                <div class="js-raw-offer"
+                     data-offer-id="draft-{{ product.pk }}"
+                     data-product-id="draft-{{ product.pk }}"
+                     data-product-name="{{ product.name }}"
+                     data-brand="{{ product.brand.name|default:'Belirtilmedi' }}"
+                     data-category="{{ product.category.name|default:'Belirtilmedi' }}"
+                     data-common-image="{{ product.cover_image_url }}"
+                     data-variant-image=""
+                     data-variant-name="Taslak (Adım {{ product.current_step }})"
+                     data-price="0"
+                     data-stock="0"
+                     data-sku="-"
+                     data-barcode="-"
+                     data-status="draft"
+                     data-status-display="Taslak"
+                     data-updated="{{ product.updated_at|date:'d.m.Y' }}"
+                     data-resume-url="{{ product.resume_url }}">
+                </div>
+                {% endif %}
+            {% endfor %}
         </div>
 
         <!-- TABLO KARTI (JS İLE DOLDURULACAK) -->
         <div class="table-card">
-            {% if store_products %}
+            {% if store_products or draft_products %}
                 <table class="sp-table">
                     <thead>
                         <tr>
@@ -356,7 +385,7 @@
                 </table>
                 
                 <!-- Orijinal Django Pagination -->
-                {% if is_paginated %}
+                {% if is_paginated and current_status != 'draft' %}
                 <div class="sp-pagination">
                     {% if page_obj.has_previous %}
                         <a href="?page={{ page_obj.previous_page_number }}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_q %}&q={{ current_q }}{% endif %}" class="sp-page-btn"><i class="fas fa-chevron-left"></i></a>
@@ -405,7 +434,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function formatMoney(val) {
         return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
     }
-    const placeholderImg = "{% static 'core/images/placeholder.png' %}";
+    const placeholderImg = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%22%20height%3D%22100%22%20viewBox%3D%220%200%20100%20100%22%3E%3Crect%20width%3D%22100%22%20height%3D%22100%22%20fill%3D%22%23f4f4f5%22%2F%3E%3Cpath%20d%3D%22M35%2040c0-2.76%202.24-5%205-5s5%202.24%205%205-2.24%205-5%205-5-2.24-5-5zm22.41%204.59L48%2054l-5.41-5.41a2%202%200%200%200-2.83%200L30%2058.17V60h40v-5.83l-9.76-9.58a2%202%200%200%200-2.83%200zM30%2030h40a2%202%200%200%201%202%202v36a2%202%200%200%201-2%202H30a2%202%200%200%201-2-2V32a2%202%200%200%201%202-2z%22%20fill%3D%22%23a1a1aa%22%2F%3E%3C%2Fsvg%3E";
     
     function getCookie(name) {
         let cookieValue = null;
@@ -431,6 +460,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     rawRows.forEach(row => {
         const pId = row.dataset.productId;
+
+        // Django'nun "None" metni göndermesine karşı güvenlik kalkanı
+        const cImage = (row.dataset.commonImage && row.dataset.commonImage !== "None") ? row.dataset.commonImage : null;
+        const vImage = (row.dataset.variantImage && row.dataset.variantImage !== "None") ? row.dataset.variantImage : null;
         
         if(!products[pId]) {
             products[pId] = {
@@ -439,7 +472,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 brand: row.dataset.brand,
                 category: row.dataset.category,
                 // ANA ÜRÜN İÇİN: Varsa ortak kapak resmini al, yoksa varyant resmini al, o da yoksa placeholder
-                image: row.dataset.commonImage || row.dataset.variantImage || placeholderImg,
+                image: cImage || vImage || placeholderImg,
                 offers: [],
                 totalStock: 0,
                 minPrice: Infinity,
@@ -455,12 +488,13 @@ document.addEventListener("DOMContentLoaded", () => {
             variantName: row.dataset.variantName,
             sku: row.dataset.sku,
             barcode: row.dataset.barcode,
-            image: row.dataset.variantImage || products[pId].image, // VARYANT İÇİN Kendi resmi
+            image: vImage || products[pId].image, // VARYANT İÇİN Kendi resmi
             price: price,
             stock: stock,
             status: row.dataset.status,
             statusDisplay: row.dataset.statusDisplay,
-            updated: row.dataset.updated
+            updated: row.dataset.updated,
+            resumeUrl: row.dataset.resumeUrl
         });
 
         products[pId].totalStock += stock;
@@ -526,7 +560,10 @@ document.addEventListener("DOMContentLoaded", () => {
             const trVar = document.createElement("tr");
             trVar.className = "variant-row";
             
-            const editUrl = updateUrlTemplate.replace("000000", offer.id);
+            const isDraft = offer.status === 'draft';
+            
+            // Eğer taslaksa editUrl olarak resumeUrl (Sihirbaza Devam Et) linkini kullan
+            const editUrl = isDraft && offer.resumeUrl ? offer.resumeUrl : updateUrlTemplate.replace("000000", offer.id);
             const archiveUrl = archiveUrlTemplate.replace("000000", offer.id);
             
             trVar.innerHTML = `
@@ -556,8 +593,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 </td>
                 <td>
                     <div class="actions-group">
-                        <a href="${editUrl}" class="btn-icon" title="Fiyat/Stok Güncelle"><i class="fa-solid fa-pen"></i></a>
-                        ${offer.status !== 'archived' ? `
+                        <a href="${editUrl}" class="btn-icon" title="${isDraft ? 'Sihirbaza Devam Et' : 'Fiyat/Stok Güncelle'}">
+                            <i class="fa-solid ${isDraft ? 'fa-wand-magic-sparkles' : 'fa-pen'}"></i>
+                        </a>
+                        
+                        <!-- Eğer ürün taslak değilse (!isDraft) ve arşivlenmemişse Arşivle butonunu göster -->
+                        ${!isDraft && offer.status !== 'archived' ? `
                             <button type="button" class="btn-icon danger js-archive-btn" data-id="${offer.id}" data-name="${prod.name} - ${offer.variantName}" data-url="${archiveUrl}" title="Arşivle">
                                 <i class="fa-solid fa-archive"></i>
                             </button>

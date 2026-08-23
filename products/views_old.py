@@ -12,12 +12,10 @@ from store.models import Store
 from .models import (
     Product, ProductVariant, ProductImage,
     StoreProduct, StoreProductStatus,
-    Category, ProductStatus
+    Category, ProductStatus, ProductImageGroup
 )
 from .forms import (
-    ProductForm, ProductVariantForm, ProductImageForm,
-    StoreProductForm, StoreProductUpdateForm,
-    ProductSearchForm, ProductFilterForm,
+    ProductSearchForm
 )
 
 #silinecekler 
@@ -224,132 +222,132 @@ class ProductSearchView(SellerRequiredMixin, StoreOwnerMixin, View):
 logger = logging.getLogger(__name__)
 
 
-class ProductCreateView(SellerRequiredMixin, StoreOwnerMixin, View):
-    """
-    Global kataloğa yeni bir ürün ekler.
+# class ProductCreateView(SellerRequiredMixin, StoreOwnerMixin, View):
+#     """
+#     Global kataloğa yeni bir ürün ekler.
 
-    Oluşturulan kayıtlar:
+#     Oluşturulan kayıtlar:
 
-        Product
-            └── ProductVariant
-                    └── ProductImage (opsiyonel)
+#         Product
+#             └── ProductVariant
+#                     └── ProductImage (opsiyonel)
 
-    Bu view mağazaya teklif oluşturmaz.
-    Başarılı kayıttan sonra kullanıcı teklif oluşturma sayfasına yönlendirilir.
+#     Bu view mağazaya teklif oluşturmaz.
+#     Başarılı kayıttan sonra kullanıcı teklif oluşturma sayfasına yönlendirilir.
 
-    Tüm kayıtlar tek transaction içerisinde oluşturulur.
-    """
+#     Tüm kayıtlar tek transaction içerisinde oluşturulur.
+#     """
 
-    template_name = "products/seller/product_create.html"
+#     template_name = "products/seller/product_create.html"
 
-    def get(self, request, *args, **kwargs):
-        context = self._get_forms()
-        context["store"] = self.get_store()
-        return render(request, self.template_name, context)
+#     def get(self, request, *args, **kwargs):
+#         context = self._get_forms()
+#         context["store"] = self.get_store()
+#         return render(request, self.template_name, context)
 
-    def post(self, request, *args, **kwargs):
-        store = self.get_store()
-        forms = self._get_forms(
-            data=request.POST,
-            files=request.FILES,
-        )
+#     def post(self, request, *args, **kwargs):
+#         store = self.get_store()
+#         forms = self._get_forms(
+#             data=request.POST,
+#             files=request.FILES,
+#         )
 
-        product_form = forms["product_form"]
-        variant_form = forms["variant_form"]
-        image_form = forms["image_form"]
+#         product_form = forms["product_form"]
+#         variant_form = forms["variant_form"]
+#         image_form = forms["image_form"]
 
-        # Short-circuit oluşmaması için tüm formlar ayrı ayrı doğrulanır.
-        product_valid = product_form.is_valid()
-        variant_valid = variant_form.is_valid()
-        image_valid = image_form.is_valid()
+#         # Short-circuit oluşmaması için tüm formlar ayrı ayrı doğrulanır.
+#         product_valid = product_form.is_valid()
+#         variant_valid = variant_form.is_valid()
+#         image_valid = image_form.is_valid()
 
-        if not (product_valid and variant_valid and image_valid):
-            messages.error(
-                request,
-                "Lütfen formdaki hataları düzeltin."
-            )
-            print(product_form.errors)
-            print(variant_form.errors)
-            print(image_form.errors)
+#         if not (product_valid and variant_valid and image_valid):
+#             messages.error(
+#                 request,
+#                 "Lütfen formdaki hataları düzeltin."
+#             )
+#             print(product_form.errors)
+#             print(variant_form.errors)
+#             print(image_form.errors)
 
-            forms["store"] = store
-            return render(request, self.template_name, forms)
+#             forms["store"] = store
+#             return render(request, self.template_name, forms)
 
-        try:
-            with transaction.atomic():
+#         try:
+#             with transaction.atomic():
 
-                # Product
-                product = product_form.save()
+#                 # Product
+#                 product = product_form.save()
 
-                # Variant
-                variant = variant_form.save(commit=False)
-                variant.product = product
-                variant.save()
+#                 # Variant
+#                 variant = variant_form.save(commit=False)
+#                 variant.product = product
+#                 variant.save()
 
-                variant_form.save_m2m()
+#                 variant_form.save_m2m()
 
-                # Product Image (opsiyonel)
-                if image_form.cleaned_data.get("image"):
-                    product_image = image_form.save(commit=False)
-                    product_image.product = product
+#                 # Product Image (opsiyonel)
+#                 if image_form.cleaned_data.get("image"):
+#                     product_image = image_form.save(commit=False)
+#                     product_image.product = product
 
-                    # Görsel ürünün geneline aittir.
-                    # Varyanta özel olması istenirse:
-                    # product_image.variant = variant
+#                     # Görsel ürünün geneline aittir.
+#                     # Varyanta özel olması istenirse:
+#                     # product_image.variant = variant
 
-                    product_image.save()
+#                     product_image.save()
 
-        except IntegrityError:
-            logger.exception(
-                "IntegrityError while creating product."
-            )
+#         except IntegrityError:
+#             logger.exception(
+#                 "IntegrityError while creating product."
+#             )
 
-            messages.error(
-                request,
-                "Ürün oluşturulurken bir veri çakışması oluştu. "
-                "Lütfen tekrar deneyin."
-            )
+#             messages.error(
+#                 request,
+#                 "Ürün oluşturulurken bir veri çakışması oluştu. "
+#                 "Lütfen tekrar deneyin."
+#             )
 
-            forms["store"] = store
-            return render(request, self.template_name, forms)
+#             forms["store"] = store
+#             return render(request, self.template_name, forms)
 
-        except DatabaseError:
-            logger.exception(
-                "DatabaseError while creating product."
-            )
+#         except DatabaseError:
+#             logger.exception(
+#                 "DatabaseError while creating product."
+#             )
 
-            messages.error(
-                request,
-                "Şu anda ürün kaydedilemiyor. "
-                "Lütfen birkaç dakika sonra tekrar deneyin."
-            )
+#             messages.error(
+#                 request,
+#                 "Şu anda ürün kaydedilemiyor. "
+#                 "Lütfen birkaç dakika sonra tekrar deneyin."
+#             )
 
-            forms["store"] = store
-            return render(request, self.template_name, forms)
+#             forms["store"] = store
+#             return render(request, self.template_name, forms)
 
-        messages.success(
-            request,
-            f'"{product.name}" başarıyla oluşturuldu. '
-            "Şimdi fiyat ve stok bilgilerinizi girerek satış teklifinizi oluşturabilirsiniz."
-        )
+#         messages.success(
+#             request,
+#             f'"{product.name}" başarıyla oluşturuldu. '
+#             "Şimdi fiyat ve stok bilgilerinizi girerek satış teklifinizi oluşturabilirsiniz."
+#         )
 
-        return redirect(
-            "products:offer_create",
-            store_slug=store.slug,
-            variant_id=variant.pk,
-        )
+#         return redirect(
+#             "products:offer_create",
+#             store_slug=store.slug,
+#             variant_id=variant.pk,
+#         )
 
-    def _get_forms(self, data=None, files=None):
-        """
-        Product oluşturma sayfasındaki formları hazırlar.
+#     def _get_forms(self, data=None, files=None):
+#         """
+#         Product oluşturma sayfasındaki formları hazırlar.
 
-        Offer (fiyat/stok) oluşturma işlemi bu view'ın sorumluluğunda değildir.
-        """
-        return {
-            "product_form": ProductForm(data=data),
-            "variant_form": ProductVariantForm(data=data),
-            "image_form": ProductImageForm(data=data, files=files),
-        }
+#         Offer (fiyat/stok) oluşturma işlemi bu view'ın sorumluluğunda değildir.
+#         """
+#         return {
+#             "product_form": ProductForm(data=data),
+#             "variant_form": ProductVariantForm(data=data),
+#             "image_form": ProductImageForm(data=data, files=files),
+#         }
 
 
 # class ProductOfferCreateView(SellerRequiredMixin, StoreOwnerMixin, View):
@@ -449,149 +447,149 @@ class ProductCreateView(SellerRequiredMixin, StoreOwnerMixin, View):
 #         return redirect('products:store_product_list', store_slug=store.slug)
 
 
-class StoreProductUpdateView(SellerRequiredMixin, StoreOwnerMixin, View): 
-    """ 
-    Satıcının mevcut satış teklifini günceller. 
+# class StoreProductUpdateView(SellerRequiredMixin, StoreOwnerMixin, View): 
+#     """ 
+#     Satıcının mevcut satış teklifini günceller. 
 
-    Sadece mağazaya ait bilgiler güncellenebilir. 
-    (Fiyat, stok, SKU, durum, notlar vb.) 
+#     Sadece mağazaya ait bilgiler güncellenebilir. 
+#     (Fiyat, stok, SKU, durum, notlar vb.) 
 
-    Varyant değiştirilemez. 
+#     Varyant değiştirilemez. 
 
-    URL: 
-        /stores/<store_slug>/products/offer/<pk>/update/ 
-    """ 
+#     URL: 
+#         /stores/<store_slug>/products/offer/<pk>/update/ 
+#     """ 
 
-    template_name = "products/seller/offer_update.html" 
+#     template_name = "products/seller/offer_update.html" 
 
 
-    def get(self, request, *args, **kwargs): 
-        store = self.get_store() 
-        offer = self._get_offer() 
+#     def get(self, request, *args, **kwargs): 
+#         store = self.get_store() 
+#         offer = self._get_offer() 
 
-        return render( 
-            request, 
-            self.template_name, 
-            { 
-                "store": store, 
-                "offer": offer, 
-                "form": self._get_form(instance=offer), 
-            }, 
-        ) 
+#         return render( 
+#             request, 
+#             self.template_name, 
+#             { 
+#                 "store": store, 
+#                 "offer": offer, 
+#                 "form": self._get_form(instance=offer), 
+#             }, 
+#         ) 
 
-    def post(self, request, *args, **kwargs): 
-        store = self.get_store() 
-        offer = self._get_offer() 
+#     def post(self, request, *args, **kwargs): 
+#         store = self.get_store() 
+#         offer = self._get_offer() 
 
-        form = self._get_form( 
-            data=request.POST, 
-            instance=offer, 
-        ) 
+#         form = self._get_form( 
+#             data=request.POST, 
+#             instance=offer, 
+#         ) 
 
-        if not form.is_valid(): 
-            messages.error( 
-                request, 
-                "Lütfen formdaki hataları düzeltin." 
-            ) 
+#         if not form.is_valid(): 
+#             messages.error( 
+#                 request, 
+#                 "Lütfen formdaki hataları düzeltin." 
+#             ) 
 
-            return render( 
-                request, 
-                self.template_name, 
-                { 
-                    "store": store, 
-                    "offer": offer, 
-                    "form": form, 
-                }, 
-            ) 
+#             return render( 
+#                 request, 
+#                 self.template_name, 
+#                 { 
+#                     "store": store, 
+#                     "offer": offer, 
+#                     "form": form, 
+#                 }, 
+#             ) 
 
-        try: 
-            with transaction.atomic(): 
-                offer = form.save() 
+#         try: 
+#             with transaction.atomic(): 
+#                 offer = form.save() 
 
-        except IntegrityError: 
-            logger.exception( 
-                "IntegrityError while updating store offer." 
-            ) 
+#         except IntegrityError: 
+#             logger.exception( 
+#                 "IntegrityError while updating store offer." 
+#             ) 
 
-            messages.error( 
-                request, 
-                "Teklif güncellenirken bir veri çakışması oluştu. " 
-                "Lütfen tekrar deneyin." 
-            ) 
+#             messages.error( 
+#                 request, 
+#                 "Teklif güncellenirken bir veri çakışması oluştu. " 
+#                 "Lütfen tekrar deneyin." 
+#             ) 
 
-            return render( 
-                request, 
-                self.template_name, 
-                { 
-                    "store": store, 
-                    "offer": offer, 
-                    "form": form, 
-                }, 
-            ) 
+#             return render( 
+#                 request, 
+#                 self.template_name, 
+#                 { 
+#                     "store": store, 
+#                     "offer": offer, 
+#                     "form": form, 
+#                 }, 
+#             ) 
 
-        except DatabaseError: 
-            logger.exception( 
-                "DatabaseError while updating store offer." 
-            ) 
+#         except DatabaseError: 
+#             logger.exception( 
+#                 "DatabaseError while updating store offer." 
+#             ) 
 
-            messages.error( 
-                request, 
-                "Şu anda teklif güncellenemiyor. " 
-                "Lütfen birkaç dakika sonra tekrar deneyin." 
-            ) 
+#             messages.error( 
+#                 request, 
+#                 "Şu anda teklif güncellenemiyor. " 
+#                 "Lütfen birkaç dakika sonra tekrar deneyin." 
+#             ) 
 
-            return render( 
-                request, 
-                self.template_name, 
-                { 
-                    "store": store, 
-                    "offer": offer, 
-                    "form": form, 
-                }, 
-            ) 
+#             return render( 
+#                 request, 
+#                 self.template_name, 
+#                 { 
+#                     "store": store, 
+#                     "offer": offer, 
+#                     "form": form, 
+#                 }, 
+#             ) 
 
-        messages.success( 
-            request, 
-            f'"{offer.variant.product.name}" için satış teklifiniz başarıyla güncellendi.' 
-        ) 
+#         messages.success( 
+#             request, 
+#             f'"{offer.variant.product.name}" için satış teklifiniz başarıyla güncellendi.' 
+#         ) 
 
-        return redirect( 
-            "products:store_product_list", 
-            store_slug=store.slug, 
-        ) 
+#         return redirect( 
+#             "products:store_product_list", 
+#             store_slug=store.slug, 
+#         ) 
 
-    def _get_offer(self): 
-        """ 
-        Güncellenecek teklifi getirir. 
+#     def _get_offer(self): 
+#         """ 
+#         Güncellenecek teklifi getirir. 
 
-        Store filtresi sayesinde başka mağazaların teklifleri 
-        düzenlenemez (IDOR koruması). 
-        """ 
-        if not hasattr(self, "_offer"): 
-            self._offer = get_object_or_404( 
-                StoreProduct.objects.select_related( 
-                    "variant__product", "variant__product__category", "variant__product__brand"
-                ).prefetch_related("variant__attribute_values", "variant__attribute_values__attribute", 
-                                   Prefetch(
-                                        "variant__product__images",
-                                        queryset=ProductImage.objects.filter(is_main=True),
-                                        to_attr="main_images"
-                                    ),
-                ), 
-                pk=self.kwargs["pk"], 
-                store=self.get_store(), 
-            ) 
+#         Store filtresi sayesinde başka mağazaların teklifleri 
+#         düzenlenemez (IDOR koruması). 
+#         """ 
+#         if not hasattr(self, "_offer"): 
+#             self._offer = get_object_or_404( 
+#                 StoreProduct.objects.select_related( 
+#                     "variant__product", "variant__product__category", "variant__product__brand"
+#                 ).prefetch_related("variant__attribute_values", "variant__attribute_values__attribute", 
+#                                    Prefetch(
+#                                         "variant__product__images",
+#                                         queryset=ProductImage.objects.filter(is_main=True),
+#                                         to_attr="main_images"
+#                                     ),
+#                 ), 
+#                 pk=self.kwargs["pk"], 
+#                 store=self.get_store(), 
+#             ) 
 
-        return self._offer 
+#         return self._offer 
 
-    def _get_form(self, data=None, instance=None): 
-        """ 
-        Teklif güncelleme formunu oluşturur. 
-        """ 
-        return StoreProductUpdateForm( 
-            data=data, 
-            instance=instance, 
-        )
+#     def _get_form(self, data=None, instance=None): 
+#         """ 
+#         Teklif güncelleme formunu oluşturur. 
+#         """ 
+#         return StoreProductUpdateForm( 
+#             data=data, 
+#             instance=instance, 
+#         )
 
 # ProductImageFormSet = inlineformset_factory(
 #     Product,
@@ -601,435 +599,416 @@ class StoreProductUpdateView(SellerRequiredMixin, StoreOwnerMixin, View):
 #     can_delete=True,
 # )
 
-class ProductUpdateView(SellerRequiredMixin, StoreOwnerMixin, View):
-    """
-    Satıcının kendi eklediği ürünün açıklama ve görsellerini günceller.
-    Başlık değiştirilemez — katalog bütünlüğü korunur.
+# class ProductUpdateView(SellerRequiredMixin, StoreOwnerMixin, View):
+#     """
+#     Satıcının kendi eklediği ürünün açıklama ve görsellerini günceller.
+#     Başlık değiştirilemez — katalog bütünlüğü korunur.
 
-    URL: /stores/<store_slug>/products/<product_slug>/edit/
-    """
-    template_name = "products/seller/product_update.html"
+#     URL: /stores/<store_slug>/products/<product_slug>/edit/
+#     """
+#     template_name = "products/seller/product_update.html"
 
-    def get_product(self):
-        if not hasattr(self, '_product'):
-            self._product = get_object_or_404(
-                Product.objects.prefetch_related(
-                    Prefetch(
-                        'images',
-                        queryset=ProductImage.objects.order_by('sort_order'),
-                    ),
-                    'variants',
-                ),
-                slug=self.kwargs['product_slug'],
-                status=ProductStatus.ACTIVE,
-            )
-        return self._product
+#     def get_product(self):
+#         if not hasattr(self, '_product'):
+#             self._product = get_object_or_404(
+#                 Product.objects.prefetch_related(
+#                     "image_groups__images",
+#                     'variants',
+#                 ),
+#                 slug=self.kwargs['product_slug'],
+#                 status=ProductStatus.ACTIVE,
+#             )
+#         return self._product
 
-    def get(self, request, *args, **kwargs):
-        store = self.get_store()
-        product = self.get_product()
-        form = ProductForm(instance=product)
-        # formset = ProductImageFormSet(instance=product)
+#     def get(self, request, *args, **kwargs):
+#         store = self.get_store()
+#         product = self.get_product()
+#         form = ProductForm(instance=product)
+#         context = {
+#             'store': store,
+#             'product': product,
+#             'form': form,
+#             # 'formset': formset,
+#         }
+#         return render(request, self.template_name, context)
 
-        context = {
-            'store': store,
-            'product': product,
-            'form': form,
-            # 'formset': formset,
-        }
-        return render(request, self.template_name, context)
-
-    def post(self, request, *args, **kwargs):
-        store = self.get_store()
-        product = self.get_product()
-        form = ProductForm(request.POST, instance=product)
-        # formset = ProductImageFormSet(
-        #     request.POST,
-        #     request.FILES,
-        #     instance=product,
-        # )
-
-        form_ok = form.is_valid()
-        # formset_ok = formset.is_valid()
-
-        # if not (form_ok and formset_ok):
-        #     messages.error(request, "Lütfen formdaki hataları düzeltin.")
-        #     context = {
-        #         'store': store,
-        #         'product': product,
-        #         'form': form,
-        #         'formset': formset,
-        #     }
-        #     return render(request, self.template_name, context)
-
-        # try:
-        #     with transaction.atomic():
-        #         # Başlık değişikliğini engelle
-        #         form.instance.name = product.name
-        #         form.save()
-        #         formset.save()
-
-        # except DatabaseError:
-        #     logger.exception("DatabaseError while updating product.")
-        #     messages.error(request, "Ürün güncellenirken bir hata oluştu.")
-        #     return render(request, self.template_name, {
-        #         'store': store, 'product': product,
-        #         'form': form, 'formset': formset,
-        #     })
-
-        messages.success(request, f'"{product.name}" başarıyla güncellendi.')
-        return redirect(
-            'products:store_product_list',
-            store_slug=store.slug,
-        )
+#     def post(self, request, *args, **kwargs):
+#         store = self.get_store()
+#         product = self.get_product()
+#         form = ProductForm(request.POST, instance=product)
 
 
-class StoreProductArchiveView(SellerRequiredMixin, StoreOwnerMixin, View):
-    """
-    Satıcının satış teklifini arşivler.
+#         form_ok = form.is_valid()
 
-    Kayıt veritabanından silinmez; yalnızca durumu ARCHIVED olarak güncellenir.
+#         messages.success(request, f'"{product.name}" başarıyla güncellendi.')
+#         return redirect(
+#             'products:store_product_list',
+#             store_slug=store.slug,
+#         )
 
-    Güvenlik:
-        - Sadece teklifin sahibi olan mağaza arşivleme yapabilir.
-        - GET isteği desteklenmez.
 
-    URL:
-        /stores/<store_slug>/products/offer/<pk>/archive/
-    """
+# class StoreProductArchiveView(SellerRequiredMixin, StoreOwnerMixin, View):
+#     """
+#     Satıcının satış teklifini arşivler.
 
-    def get(self, request, *args, **kwargs):
-        return redirect(
-            "products:store_product_list",
-            store_slug=self.get_store().slug,
-        )
+#     Kayıt veritabanından silinmez; yalnızca durumu ARCHIVED olarak güncellenir.
 
-    def post(self, request, *args, **kwargs):
-        store = self.get_store()
-        offer = self._get_offer()
+#     Güvenlik:
+#         - Sadece teklifin sahibi olan mağaza arşivleme yapabilir.
+#         - GET isteği desteklenmez.
 
-        if offer.status == StoreProductStatus.ARCHIVED:
-            messages.info(
-                request,
-                "Bu teklif zaten arşivlenmiş."
-            )
-            return redirect(
-                "products:store_product_list",
-                store_slug=store.slug,
-            )
+#     URL:
+#         /stores/<store_slug>/products/offer/<pk>/archive/
+#     """
 
-        try:
-            with transaction.atomic():
-                offer.status = StoreProductStatus.ARCHIVED
+#     def get(self, request, *args, **kwargs):
+#         return redirect(
+#             "products:store_product_list",
+#             store_slug=self.get_store().slug,
+#         )
 
-                offer.save(
-                    update_fields=[
-                        "status",
-                        "updated_at",
-                    ]
-                )
+#     def post(self, request, *args, **kwargs):
+#         store = self.get_store()
+#         offer = self._get_offer()
 
-        except DatabaseError:
-            logger.exception(
-                "DatabaseError while archiving store offer."
-            )
+#         if offer.status == StoreProductStatus.ARCHIVED:
+#             messages.info(
+#                 request,
+#                 "Bu teklif zaten arşivlenmiş."
+#             )
+#             return redirect(
+#                 "products:store_product_list",
+#                 store_slug=store.slug,
+#             )
 
-            messages.error(
-                request,
-                "Teklif arşivlenirken bir sistem hatası oluştu. "
-                "Lütfen tekrar deneyin."
-            )
+#         try:
+#             with transaction.atomic():
+#                 offer.status = StoreProductStatus.ARCHIVED
 
-            return redirect(
-                "products:store_product_list",
-                store_slug=store.slug,
-            )
+#                 offer.save(
+#                     update_fields=[
+#                         "status",
+#                         "updated_at",
+#                     ]
+#                 )
 
-        messages.success(
-            request,
-            f'"{offer.variant.product.name}" için satış teklifiniz başarıyla arşivlendi.'
-        )
+#         except DatabaseError:
+#             logger.exception(
+#                 "DatabaseError while archiving store offer."
+#             )
 
-        return redirect(
-            "products:store_product_list",
-            store_slug=store.slug,
-        )
+#             messages.error(
+#                 request,
+#                 "Teklif arşivlenirken bir sistem hatası oluştu. "
+#                 "Lütfen tekrar deneyin."
+#             )
 
-    def _get_offer(self):
-        """
-        Arşivlenecek teklifi getirir.
+#             return redirect(
+#                 "products:store_product_list",
+#                 store_slug=store.slug,
+#             )
 
-        Store filtresi sayesinde başka mağazalara ait teklifler
-        arşivlenemez (IDOR koruması).
-        """
-        if not hasattr(self, "_offer"):
-            self._offer = get_object_or_404(
-                StoreProduct.objects.select_related(
-                    "variant__product",
-                ),
-                pk=self.kwargs["pk"],
-                store=self.get_store(),
-            )
+#         messages.success(
+#             request,
+#             f'"{offer.variant.product.name}" için satış teklifiniz başarıyla arşivlendi.'
+#         )
 
-        return self._offer
+#         return redirect(
+#             "products:store_product_list",
+#             store_slug=store.slug,
+#         )
+
+#     def _get_offer(self):
+#         """
+#         Arşivlenecek teklifi getirir.
+
+#         Store filtresi sayesinde başka mağazalara ait teklifler
+#         arşivlenemez (IDOR koruması).
+#         """
+#         if not hasattr(self, "_offer"):
+#             self._offer = get_object_or_404(
+#                 StoreProduct.objects.select_related(
+#                     "variant__product",
+#                 ),
+#                 pk=self.kwargs["pk"],
+#                 store=self.get_store(),
+#             )
+
+#         return self._offer
 
 
 # ---------------------------------------------------------
 # Müşteri Vitrini View'ları
 # ---------------------------------------------------------
 
-class ProductListView(ListView):
-    """
-    Müşteri vitrini.
+# class ProductListView(ListView):
+#     """
+#     Müşteri vitrini.
 
-    Sadece satın alınabilir (aktif ve stokta bulunan) en az bir teklife sahip
-    ürünleri listeler.
+#     Sadece satın alınabilir (aktif ve stokta bulunan) en az bir teklife sahip
+#     ürünleri listeler.
 
-    Desteklenen filtreler:
-        - Kategori
-        - Marka
-        - Fiyat aralığı
+#     Desteklenen filtreler:
+#         - Kategori
+#         - Marka
+#         - Fiyat aralığı
 
-    Desteklenen sıralamalar:
-        - En düşük fiyat
-        - En yüksek fiyat
-        - En çok satan
-        - En yeni
-    """
+#     Desteklenen sıralamalar:
+#         - En düşük fiyat
+#         - En yüksek fiyat
+#         - En çok satan
+#         - En yeni
+#     """
 
-    model = Product
-    template_name = "products/public/product_list.html"
-    context_object_name = "products"
-    paginate_by = 24
+#     model = Product
+#     template_name = "products/public/product_list.html"
+#     context_object_name = "products"
+#     paginate_by = 24
 
-    ORDERING_MAP = {
-        "min_price": "min_price",
-        "-min_price": "-min_price",
-        "-sold": "-total_sold",
-        "-created": "-created_at",
-    }
+#     ORDERING_MAP = {
+#         "min_price": "min_price",
+#         "-min_price": "-min_price",
+#         "-sold": "-total_sold",
+#         "-created": "-created_at",
+#     }
 
-    def get_queryset(self):
-        queryset = (
-            Product.objects
-            .filter(
-                status=ProductStatus.ACTIVE,
-                variants__is_active=True,
-                variants__store_offers__status=StoreProductStatus.ACTIVE,
-                variants__store_offers__stock__gt=0,
-                variants__store_offers__store__is_active=True,
-            )
-            .distinct()
-            .select_related("category", "brand")
-            .prefetch_related(
-                Prefetch(
-                    "images",
-                    queryset=ProductImage.objects.filter(is_main=True),
-                    to_attr="main_images",
-                )
-            )
-            .annotate(
-                min_price=Min(
-                    "variants__store_offers__price",
-                    filter=Q(
-                        variants__store_offers__status=StoreProductStatus.ACTIVE,
-                        variants__store_offers__stock__gt=0,
-                        variants__store_offers__store__is_active=True,
-                    ),
-                ),
-                total_sold=Sum(
-                    "variants__store_offers__sold_count",
-                    filter=Q(
-                        variants__store_offers__status=StoreProductStatus.ACTIVE,
-                    ),
-                ),
-            )
-        )
+#     def get_queryset(self):
+#         main_images_qs = (
+#             ProductImageGroup.objects
+#             .filter(
+#                 is_active=True,
+#                 visual_attribute_values__isnull=True,
+#                 images__is_main=True,
+#             )
+#             .prefetch_related(
+#                 Prefetch(
+#                     "images",
+#                     queryset=ProductImage.objects.filter(is_main=True),
+#                     to_attr="main_images",
+#                 )
+#             )
+#             .order_by("sort_order", "id")
+#         )
+#         queryset = (
+#             Product.objects
+#             .filter(
+#                 status=ProductStatus.ACTIVE,
+#                 variants__is_active=True,
+#                 variants__store_offers__status=StoreProductStatus.ACTIVE,
+#                 variants__store_offers__stock__gt=0,
+#                 variants__store_offers__store__is_active=True,
+#             )
+#             .distinct()
+#             .select_related("category", "brand")
+#             .prefetch_related(
+#                 Prefetch(
+#                     "image_groups",
+#                     queryset=main_images_qs,
+#                     to_attr="active_image_groups",
+#                 )
+#             )
+#             .annotate(
+#                 min_price=Min(
+#                     "variants__store_offers__price",
+#                     filter=Q(
+#                         variants__store_offers__status=StoreProductStatus.ACTIVE,
+#                         variants__store_offers__stock__gt=0,
+#                         variants__store_offers__store__is_active=True,
+#                     ),
+#                 ),
+#                 total_sold=Sum(
+#                     "variants__store_offers__sold_count",
+#                     filter=Q(
+#                         variants__store_offers__status=StoreProductStatus.ACTIVE,
+#                     ),
+#                 ),
+#             )
+#         )
 
-        form = self.get_filter_form()
+#         form = self.get_filter_form()
 
-        if form.is_valid():
-            category = form.cleaned_data.get("category")
-            brand = form.cleaned_data.get("brand")
-            min_price = form.cleaned_data.get("min_price")
-            max_price = form.cleaned_data.get("max_price")
-            ordering = form.cleaned_data.get("ordering")
+#         if form.is_valid():
+#             category = form.cleaned_data.get("category")
+#             brand = form.cleaned_data.get("brand")
+#             min_price = form.cleaned_data.get("min_price")
+#             max_price = form.cleaned_data.get("max_price")
+#             ordering = form.cleaned_data.get("ordering")
 
-            if category:
-                queryset = queryset.filter(
-                    category_id__in=self._get_category_descendants(category)
-                )
+#             if category:
+#                 queryset = queryset.filter(
+#                     category_id__in=self._get_category_descendants(category)
+#                 )
 
-            if brand:
-                queryset = queryset.filter(
-                    brand=brand
-                )
+#             if brand:
+#                 queryset = queryset.filter(
+#                     brand=brand
+#                 )
 
-            if min_price is not None:
-                queryset = queryset.filter(
-                    min_price__gte=min_price
-                )
+#             if min_price is not None:
+#                 queryset = queryset.filter(
+#                     min_price__gte=min_price
+#                 )
 
-            if max_price is not None:
-                queryset = queryset.filter(
-                    min_price__lte=max_price
-                )
+#             if max_price is not None:
+#                 queryset = queryset.filter(
+#                     min_price__lte=max_price
+#                 )
 
-            queryset = queryset.order_by(
-                self.ORDERING_MAP.get(ordering, "-total_sold")
-            )
+#             queryset = queryset.order_by(
+#                 self.ORDERING_MAP.get(ordering, "-total_sold")
+#             )
 
-        else:
-            queryset = queryset.order_by("-created_at")
+#         else:
+#             queryset = queryset.order_by("-created_at")
 
-        return queryset
+#         return queryset
 
-    def get_filter_form(self):
-        """
-        Filtre formunu cache'ler.
+#     def get_filter_form(self):
+#         """
+#         Filtre formunu cache'ler.
 
-        Böylece aynı request içerisinde hem get_queryset() hem de
-        get_context_data() tarafından yeniden oluşturulmaz.
-        """
-        if not hasattr(self, "_filter_form"):
-            self._filter_form = ProductFilterForm(
-                self.request.GET or None
-            )
+#         Böylece aynı request içerisinde hem get_queryset() hem de
+#         get_context_data() tarafından yeniden oluşturulmaz.
+#         """
+#         if not hasattr(self, "_filter_form"):
+#             self._filter_form = ProductFilterForm(
+#                 self.request.GET or None
+#             )
 
-        return self._filter_form
+#         return self._filter_form
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+#     def get_context_data(self, **kwargs):
+#         context = super().get_context_data(**kwargs)
 
-        context["filter_form"] = self.get_filter_form()
+#         context["filter_form"] = self.get_filter_form()
 
-        context["active_filters"] = {
-            key: value
-            for key, value in self.request.GET.items()
-            if value and key not in {"page", "ordering"}
-        }
+#         context["active_filters"] = {
+#             key: value
+#             for key, value in self.request.GET.items()
+#             if value and key not in {"page", "ordering"}
+#         }
 
-        return context
+#         return context
 
-    def _get_category_descendants(self, category):
-        """
-        Verilen kategorinin kendisi ve tüm aktif alt kategorilerinin
-        ID listesini döndürür.
+#     def _get_category_descendants(self, category):
+#         """
+#         Verilen kategorinin kendisi ve tüm aktif alt kategorilerinin
+#         ID listesini döndürür.
 
-        Örnek:
-            Elektronik ->
-            [Elektronik, Telefon, Laptop, Tablet]
-        """
-        ids = [category.pk]
+#         Örnek:
+#             Elektronik ->
+#             [Elektronik, Telefon, Laptop, Tablet]
+#         """
+#         ids = [category.pk]
 
-        children = list(
-            category.children
-            .filter(is_active=True)
-            .values_list("pk", flat=True)
-        )
+#         children = list(
+#             category.children
+#             .filter(is_active=True)
+#             .values_list("pk", flat=True)
+#         )
 
-        while children:
-            ids.extend(children)
+#         while children:
+#             ids.extend(children)
 
-            children = list(
-                Category.objects
-                .filter(
-                    parent_id__in=children,
-                    is_active=True,
-                )
-                .values_list("pk", flat=True)
-            )
+#             children = list(
+#                 Category.objects
+#                 .filter(
+#                     parent_id__in=children,
+#                     is_active=True,
+#                 )
+#                 .values_list("pk", flat=True)
+#             )
 
-        return ids
+#         return ids
 
 
-class CategoryProductListView(ProductListView):
-    """
-    Belirli bir kategoriye ait ürünleri listeler.
+# class CategoryProductListView(ProductListView):
+#     """
+#     Belirli bir kategoriye ait ürünleri listeler.
 
-    Alt kategorilerde bulunan ürünler de otomatik olarak listeye dahil edilir.
+#     Alt kategorilerde bulunan ürünler de otomatik olarak listeye dahil edilir.
 
-    ProductListView'dan miras aldığı için filtreleme, sıralama,
-    sayfalama ve Buy Box mantığı aynen korunur.
+#     ProductListView'dan miras aldığı için filtreleme, sıralama,
+#     sayfalama ve Buy Box mantığı aynen korunur.
 
-    URL:
-        /products/category/<slug:slug>/
-    """
+#     URL:
+#         /products/category/<slug:slug>/
+#     """
 
-    template_name = "products/public/category_product_list.html"
+#     template_name = "products/public/category_product_list.html"
 
-    def get_category(self):
-        """
-        URL'deki slug ile kategoriyi getirir ve cache'ler.
-        """
-        if not hasattr(self, "_category"):
-            self._category = get_object_or_404(
-                Category.objects.select_related("parent"),
-                slug=self.kwargs["slug"],
-                is_active=True,
-            )
+#     def get_category(self):
+#         """
+#         URL'deki slug ile kategoriyi getirir ve cache'ler.
+#         """
+#         if not hasattr(self, "_category"):
+#             self._category = get_object_or_404(
+#                 Category.objects.select_related("parent"),
+#                 slug=self.kwargs["slug"],
+#                 is_active=True,
+#             )
 
-        return self._category
+#         return self._category
 
-    def get_queryset(self):
-        """
-        ProductListView queryset'ini alır ve yalnızca seçilen
-        kategori ile alt kategorilerine ait ürünleri döndürür.
-        """
-        category = self.get_category()
+#     def get_queryset(self):
+#         """
+#         ProductListView queryset'ini alır ve yalnızca seçilen
+#         kategori ile alt kategorilerine ait ürünleri döndürür.
+#         """
+#         category = self.get_category()
 
-        return (
-            super()
-            .get_queryset()
-            .filter(
-                category_id__in=self._get_category_descendants(category)
-            )
-        )
+#         return (
+#             super()
+#             .get_queryset()
+#             .filter(
+#                 category_id__in=self._get_category_descendants(category)
+#             )
+#         )
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+#     def get_context_data(self, **kwargs):
+#         context = super().get_context_data(**kwargs)
 
-        category = self.get_category()
+#         category = self.get_category()
 
-        context["category"] = category
-        context["breadcrumbs"] = self._get_breadcrumbs(category)
+#         context["category"] = category
+#         context["breadcrumbs"] = self._get_breadcrumbs(category)
 
-        context["subcategories"] = (
-            category.children
-            .filter(is_active=True)
-            .annotate(
-                product_count=Count(
-                    "products",
-                    filter=Q(
-                        products__is_active=True,
-                        products__variants__is_active=True,
-                        products__variants__store_offers__status=StoreProductStatus.ACTIVE,
-                        products__variants__store_offers__stock__gt=0,
-                        products__variants__store_offers__store__is_active=True,
-                    ),
-                    distinct=True,
-                )
-            )
-            .order_by("name")
-        )
+#         context["subcategories"] = (
+#             category.children
+#             .filter(is_active=True)
+#             .annotate(
+#                 product_count=Count(
+#                     "products",
+#                     filter=Q(
+#                         products__is_active=True,
+#                         products__variants__is_active=True,
+#                         products__variants__store_offers__status=StoreProductStatus.ACTIVE,
+#                         products__variants__store_offers__stock__gt=0,
+#                         products__variants__store_offers__store__is_active=True,
+#                     ),
+#                     distinct=True,
+#                 )
+#             )
+#             .order_by("name")
+#         )
 
-        return context
+#         return context
 
-    def _get_breadcrumbs(self, category):
-        """
-        Kategoriden köke doğru breadcrumb zinciri oluşturur.
+#     def _get_breadcrumbs(self, category):
+#         """
+#         Kategoriden köke doğru breadcrumb zinciri oluşturur.
 
-        Örnek:
-            Elektronik > Telefon > Akıllı Telefon
-        """
-        breadcrumbs = []
-        current = category
+#         Örnek:
+#             Elektronik > Telefon > Akıllı Telefon
+#         """
+#         breadcrumbs = []
+#         current = category
 
-        while current:
-            breadcrumbs.append(current)
-            current = current.parent
+#         while current:
+#             breadcrumbs.append(current)
+#             current = current.parent
 
-        return list(reversed(breadcrumbs))
+#         return list(reversed(breadcrumbs))
 
 
 class ProductDetailView(View):

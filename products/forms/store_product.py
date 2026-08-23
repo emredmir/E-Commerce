@@ -100,7 +100,7 @@ class StoreProductForm(BootstrapFormMixin, StoreProductValidationMixin, forms.Mo
 
         return cleaned_data
 
-
+#Silinecek
 class StoreProductUpdateForm(BootstrapFormMixin, StoreProductValidationMixin, forms.ModelForm):
     """
     Satıcının mevcut teklifini güncellerken kullandığı form.

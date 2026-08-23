@@ -141,6 +141,7 @@ class DraftPublishService:
                 brand=draft.brand,
                 name=draft.name,
                 description=draft.description,
+                created_by_store=draft.store,
                 normalized_key=draft.normalized_key,
                 tokens=draft.tokens,
                 status=ProductStatus.ACTIVE,

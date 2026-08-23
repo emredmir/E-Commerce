@@ -1,685 +1,814 @@
 {% extends "core/home.html" %}
+{% load static %}
 
-{% block title %}Ürün Düzenle — {{ product.name }}{% endblock %}
+{% block title %}{{ store.store_name }} — Katalog Düzenle{% endblock %}
 
 {% block content %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
 <style>
     :root {
-        --teal-600: #00b4d8;
-        --teal-700: #0096c7;
-        --teal-800: #0077b6;
-        --teal-50:  #e0f7fa;
-        --gray-50:  #f8f9fa;
-        --gray-100: #e9ecef;
-        --gray-200: #dee2e6;
-        --gray-500: #adb5bd;
-        --gray-700: #495057;
-        --gray-900: #212529;
-        --red-tx:   #dc3545;
-        --red-bg:   #f8d7da;
-        --green-bg: #d4edda;
-        --green-tx: #155724;
-        --radius:   10px;
-        --shadow:   0 2px 8px rgba(0,0,0,0.07);
+        --teal-50: #caf0f8;
+        --teal-100: #ade8f4;
+        --teal-500: #00b4d8;
+        --teal-600: #0096c7;
+        --teal-700: #0077b6;
+
+        --gray-50: #fafafa;
+        --gray-100: #f4f4f5;
+        --gray-200: #e4e4e7;
+        --gray-300: #d4d4d8;
+        --gray-400: #a1a1aa;
+        --gray-500: #71717a;
+        --gray-700: #3f3f46;
+        --gray-800: #27272a;
+        --gray-900: #18181b;
+
+        --red-50: #fef2f2;
+        --red-600: #dc2626;
+        --green-50: #f0fdf4;
+        --green-600: #16a34a;
+        --yellow-50: #fefce8;
+        --yellow-600: #ca8a04;
+
+        --radius: 12px;
+        --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
     }
 
-    .pu-wrapper {
-        max-width: 900px;
-        margin: 36px auto;
-        padding: 0 20px;
-    }
+    body { background-color: var(--gray-50); }
 
-    /* Breadcrumb */
-    .pu-breadcrumb {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 0.85rem;
-        color: var(--gray-500);
-        margin-bottom: 24px;
-    }
+    /* LAYOUT */
+    .pu-wrapper { max-width: 1000px; margin: 32px auto; padding: 0 24px; display: flex; flex-direction: column; gap: 24px; }
+    .pu-top-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
 
-    .pu-breadcrumb a { color: var(--teal-700); text-decoration: none; }
-    .pu-breadcrumb a:hover { text-decoration: underline; }
+    /* BREADCRUMB */
+    .pu-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--gray-500); }
+    .pu-breadcrumb a { color: var(--teal-600); text-decoration: none; font-weight: 600; }
+    .pu-breadcrumb a:hover { text-decoration: underline; color: var(--teal-700);}
+    .pu-breadcrumb i { font-size: 0.75rem; }
 
-    /* Kart */
-    .pu-card {
-        background: white;
-        border-radius: var(--radius);
-        box-shadow: var(--shadow);
-        overflow: hidden;
-        margin-bottom: 16px;
-    }
+    /* KATALOG BİLGİ BARI */
+    .pu-info-bar { background: #fff; border-radius: var(--radius); border: 1px solid var(--gray-200); box-shadow: var(--shadow-sm); padding: 16px 24px; display: flex; align-items: center; gap: 40px; flex-wrap: wrap; }
+    .pu-info-item { display: flex; flex-direction: column; gap: 4px; }
+    .pu-info-label { font-size: 0.75rem; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.5px; }
+    .pu-info-val { font-size: 0.95rem; font-weight: 600; color: var(--gray-900); }
 
-    .pu-card-header {
-        padding: 18px 24px;
-        border-bottom: 1px solid var(--gray-100);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-
-    .pu-card-header-icon {
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
-        background: var(--teal-50);
-        color: var(--teal-700);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1rem;
-        flex-shrink: 0;
-    }
-
-    .pu-card-header h2 {
-        margin: 0 0 2px 0;
-        font-size: 1rem;
-        font-weight: 700;
-        color: var(--gray-900);
-    }
-
-    .pu-card-header p {
-        margin: 0;
-        font-size: 0.82rem;
-        color: var(--gray-500);
-    }
-
+    /* KARTLAR */
+    .pu-card { background: #fff; border-radius: var(--radius); border: 1px solid var(--gray-200); box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 24px; }
+    .pu-card-header { padding: 20px 24px; border-bottom: 1px solid var(--gray-100); display: flex; align-items: center; gap: 12px; background: var(--gray-50); }
+    .pu-card-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--teal-50); color: var(--teal-600); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+    .pu-card-header h2 { margin: 0 0 2px 0; font-size: 1.05rem; font-weight: 700; color: var(--gray-900); }
+    .pu-card-header p { margin: 0; font-size: 0.85rem; color: var(--gray-500); }
     .pu-card-body { padding: 24px; }
+    .pu-card-footer { padding: 16px 24px; background: var(--gray-50); border-top: 1px solid var(--gray-200); display: flex; justify-content: flex-end;}
 
-    /* Form alanları */
-    .pu-field { margin-bottom: 18px; }
+    /* FORMLAR VE MESAJLAR */
+    .pw-textarea { width: 100%; border: 1px solid var(--gray-200); border-radius: 10px; padding: 16px; font-size: 0.95rem; outline: none; transition: .2s; box-sizing: border-box; font-family: inherit; resize: vertical; line-height: 1.6;}
+    .pw-textarea:focus { border-color: var(--teal-500); box-shadow: 0 0 0 3px rgba(0,150,199,0.1); }
+    .pw-textarea.is-invalid { border-color: var(--red-600); background: #fef2f2; }
+    
+    .field-error { color: var(--red-600); font-size: 0.85rem; margin-top: 6px; display: block; font-weight: 500;}
 
-    .pu-label {
-        display: block;
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: var(--gray-700);
-        margin-bottom: 6px;
+    /* BARKOD TABLOSU & İNPUTLARI */
+    .pu-table { width: 100%; border-collapse: collapse; text-align: left; table-layout: fixed;}
+    .pu-table th { padding: 12px 24px; font-size: 0.8rem; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.5px; background: var(--gray-50); border-bottom: 1px solid var(--gray-200); }
+    .pu-table td { padding: 16px 24px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+    
+    .variant-name-td { font-weight: 600; color: var(--gray-900); font-size: 0.95rem; }
+    
+    .pw-barcode-input { width: 100%; border: 1px solid var(--gray-300); border-radius: 8px; padding: 12px 16px; font-size: 0.95rem; font-family: 'Courier New', Courier, monospace; letter-spacing: 1px; font-weight: 600; color: var(--teal-900); background: var(--gray-50); outline: none; transition: .2s; box-sizing: border-box; }
+    .pw-barcode-input:focus { background: #fff; border-color: var(--teal-500); box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.1); }
+    .pw-barcode-input::placeholder { font-family: inherit; font-weight: 400; letter-spacing: normal; color: var(--gray-400); }
+
+    /* GÖRSEL YÖNETİMİ */
+    .pw-image-group { border: 1px solid var(--gray-200); border-radius: var(--radius); overflow: hidden; margin-bottom: 24px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.03);}
+    .pw-image-group-header { padding: 16px 24px; background: var(--gray-50); border-bottom: 1px solid var(--gray-200); display: flex; justify-content: space-between; align-items: center; }
+    .pw-image-group-title { margin: 0; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pw-image-group-badge { background: var(--teal-50); border: 1px solid var(--teal-100); padding: 4px 12px; border-radius: 20px; color: var(--teal-700); font-size: 0.85rem; font-weight: 500; }
+    .pw-image-group-body {
+        padding: 24px;
     }
 
-    .pu-label .readonly-tag {
-        background: var(--gray-100);
-        color: var(--gray-500);
-        font-size: 0.72rem;
-        font-weight: 500;
-        padding: 1px 7px;
-        border-radius: 10px;
-        margin-left: 6px;
-        vertical-align: middle;
-    }
-
-    .pu-input,
-    .pu-select,
-    .pu-textarea {
-        width: 100%;
-        border: 1.5px solid var(--gray-200);
-        border-radius: 8px;
-        padding: 10px 14px;
-        font-size: 0.9rem;
-        color: var(--gray-900);
-        outline: none;
-        transition: border-color 0.2s, box-shadow 0.2s;
-        box-sizing: border-box;
-        font-family: inherit;
-    }
-
-    .pu-input:focus,
-    .pu-select:focus,
-    .pu-textarea:focus {
-        border-color: var(--teal-600);
-        box-shadow: 0 0 0 3px rgba(0,180,216,0.1);
-    }
-
-    .pu-input[readonly] {
-        background: var(--gray-50);
-        cursor: not-allowed;
-        color: var(--gray-500);
-    }
-
-    .pu-textarea { resize: vertical; min-height: 120px; }
-
-    .pu-grid-2 {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-    }
-
-    /* Alan hatası */
-    .pu-field-error {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        color: var(--red-tx);
-        font-size: 0.82rem;
-        margin-top: 4px;
-    }
-
-    /* Genel hata */
-    .pu-error-box {
-        background: var(--red-bg);
-        color: var(--red-tx);
-        border-radius: 8px;
-        padding: 12px 16px;
-        font-size: 0.88rem;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 16px;
-    }
-
-    /* Görsel Formset */
-    .pu-images-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 16px;
-        margin-bottom: 16px;
-    }
-
-    .pu-image-card {
-        border: 1.5px solid var(--gray-200);
-        border-radius: 10px;
-        overflow: hidden;
-        transition: border-color 0.2s;
-        position: relative;
-    }
-
-    .pu-image-card:hover { border-color: var(--teal-600); }
-
-    .pu-image-card.marked-delete {
-        opacity: 0.4;
-        border-color: var(--red-tx);
-        border-style: dashed;
-    }
-
-    /* Görsel önizleme alanı */
-    .pu-image-preview {
-        height: 140px;
-        background: var(--gray-50);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        position: relative;
-    }
-
-    .pu-image-preview img {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-    }
-
-    .pu-image-preview-placeholder {
-        color: var(--gray-300);
-        font-size: 2.5rem;
-    }
-
-    .pu-main-badge {
-        position: absolute;
-        top: 8px;
-        left: 8px;
-        background: var(--teal-600);
-        color: white;
-        font-size: 0.72rem;
-        font-weight: 700;
-        padding: 2px 8px;
-        border-radius: 10px;
-    }
-
-    /* Görsel kart alt kısım */
-    .pu-image-controls {
-        padding: 10px 12px;
-        background: white;
-        border-top: 1px solid var(--gray-100);
-    }
-
-    .pu-image-controls-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 6px;
-    }
-
-    .pu-image-file-input {
-        width: 100%;
-        font-size: 0.8rem;
-        color: var(--gray-700);
-    }
-
-    .pu-image-file-input input[type="file"] {
-        width: 100%;
-        font-size: 0.78rem;
-        margin-top: 4px;
-    }
-
-    .pu-checkbox-row {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 0.8rem;
-        color: var(--gray-700);
-        margin-top: 6px;
-    }
-
-    .pu-checkbox-row input[type="checkbox"] {
-        accent-color: var(--teal-600);
-    }
-
-    .pu-delete-btn {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        background: rgba(220,53,69,0.85);
-        color: white;
+    .pw-upload-zone {
         border: none;
+        border-radius: 12px;
+        padding: 40px 20px;
+        text-align: center;
+        background: var(--gray-50);
         cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.75rem;
-        transition: background 0.15s;
-    }
-
-    .pu-delete-btn:hover { background: var(--red-tx); }
-
-    .pu-delete-overlay {
-        display: none;
-        position: absolute;
-        inset: 0;
-        background: rgba(220,53,69,0.1);
-        align-items: center;
-        justify-content: center;
-        font-size: 0.82rem;
-        font-weight: 600;
-        color: var(--red-tx);
-    }
-
-    .pu-image-card.marked-delete .pu-delete-overlay {
-        display: flex;
-    }
-
-    /* Yeni görsel ekle kartı */
-    .pu-add-image-card {
-        border: 2px dashed var(--gray-200);
-        border-radius: 10px;
-        height: 220px;
+        transition: all .2s ease;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 10px;
-        color: var(--gray-500);
-        cursor: pointer;
-        transition: border-color 0.2s, background 0.2s;
-        text-align: center;
-        padding: 16px;
     }
-
-    .pu-add-image-card:hover {
-        border-color: var(--teal-600);
+    .pw-upload-zone:hover, .pw-upload-zone.dragover {
+        transform: scale(1.01);
+        border-color: var(--teal-500);
         background: var(--teal-50);
-        color: var(--teal-700);
     }
-
-    .pu-add-image-card i { font-size: 2rem; }
-
-    .pu-add-image-card span { font-size: 0.85rem; font-weight: 500; }
-
-    /* Sort order input */
-    .pu-sort-input {
-        width: 56px;
-        border: 1px solid var(--gray-200);
-        border-radius: 6px;
-        padding: 4px 8px;
-        font-size: 0.8rem;
-        text-align: center;
-        outline: none;
+    .pw-upload-zone i {
+        font-size: 2.5rem;
+        color: var(--teal-500);
+        margin-bottom: 12px;
+        transition: transform .2s ease;
     }
-
-    .pu-sort-input:focus { border-color: var(--teal-600); }
-
-    /* Footer */
-    .pu-footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 20px 24px;
-        border-top: 1px solid var(--gray-100);
+    .pw-upload-zone:hover i {
+        transform: translateY(-4px);
     }
-
-    /* Butonlar */
-    .btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        padding: 10px 22px;
-        border-radius: 9px;
-        font-size: 0.9rem;
+    .pw-upload-zone-text {
         font-weight: 600;
-        cursor: pointer;
-        border: none;
-        text-decoration: none;
-        transition: opacity 0.15s, transform 0.1s;
+        color: var(--gray-700);
+        font-size: 1rem;
+        margin-bottom: 6px;
+    }
+    .pw-upload-zone-subtext {
+        color: var(--gray-400);
+        font-size: 0.85rem;
+    }
+    .pw-upload-input {
+        display: none;
+    }
+    
+    .pw-image-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 16px;
+        margin-top: 24px;
+    }
+    .pw-image-card {
+        border: 1px solid var(--gray-200);
+        border-radius: 12px;
+        background: #fff;
+        overflow: hidden;
+        position: relative;
+        transition: all .2s ease;
+        display: flex;
+        flex-direction: column;
+        cursor: grab;
     }
 
-    .btn:hover  { opacity: 0.9; transform: translateY(-1px); }
-    .btn:active { transform: translateY(0); }
+    .pw-image-card:active {
+        cursor: grabbing;
+    }
 
-    .btn-primary {
-        background: linear-gradient(135deg, var(--teal-600), var(--teal-800));
+    .pw-image-card:hover {
+        border-color: var(--teal-500);
+        box-shadow: 0 8px 16px rgba(20,184,166,.12);
+        transform: translateY(-2px);
+    }
+    
+    /* RESİMLERİN TAŞMASINI ENGELLEYEN KISIM (OBJECT-FIT) */
+    .pw-image-preview {
+        width: 100%;
+        height: 180px;
+        background: #f8f9fa;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .pw-image-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain; /* Resmi kutuya sığdırırken keser, orantıyı bozmaz */
+        object-position: center;
+        background-color: #f8f9fa;
+    }
+
+    /* Kapak Etiketi */
+    .pw-image-main-badge {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: var(--teal-600);
+        color: #fff;
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 5px 10px;
+        border-radius: 6px;
+        z-index: 10;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+
+
+    /* Aksiyon Çubuğu (Kapak Yap, Alt Metin, Sil) */
+    .pw-image-actions {
+        background: #fff;
+        border-top: 1px solid var(--gray-100);
+
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        padding: 10px 12px;
+    }
+    /* Sol taraftaki ikonlu butonları yan yana tutan grup */
+    .pw-image-actions-group {
+        display: flex; 
+        align-items: center; 
+        gap: 8px;
+    }
+
+    .pw-btn-text {
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 500;
+        transition: color .2s;
+
+        color: var(--gray-600);
+        
+    }
+
+
+    .pw-btn-text:hover {
+        opacity: 0.7;
+    }
+
+    /* Kapak seçiliyse (is-main) veya Alt metin girilmişse (has-alt) uygulanacak aktif durum */
+    .pw-btn-text.is-main,
+    .pw-btn-text.has-alt {
+        color: var(--teal-700);
+        font-weight: 700;
+    }
+    
+    /* İkon Butonlar (Silme) */
+    .pw-image-delete {
+        background: #fee2e2;
+        color: #dc2626;
+        border: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: 0.2s;
+    }
+    .pw-image-delete:hover {
+        background: #ef4444;
         color: white;
     }
 
-    .btn-outline {
-        background: white;
-        color: var(--teal-700);
-        border: 1px solid var(--teal-600);
+    /* Sortable Sürüklerken Efekt */
+    .sortable-ghost {
+        opacity: 0.4;
+        background: var(--teal-50);
+        border: 2px dashed var(--teal-500);
     }
 
-    .btn-sm { padding: 6px 12px; font-size: 0.82rem; }
+    /* BUTONLAR */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 24px; border-radius: 10px; font-weight: 600; font-size: 0.95rem; cursor: pointer; text-decoration: none; border: none; transition: .2s; box-sizing: border-box;}
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary { background: var(--teal-600); color: #fff; box-shadow: 0 4px 12px rgba(0, 150, 199, 0.2); }
+    .btn-primary:hover { background: var(--teal-700); }
+    .btn-outline { background: #fff; color: var(--gray-700); border: 1px solid var(--gray-300); }
+    .btn-outline:hover { background: var(--gray-50); border-color: var(--gray-400); }
+    .btn-danger { background: var(--red-600); color: #fff; border: 1px solid var(--red-600); }
+    .btn-danger:hover { background: #b91c1c; }
 
-    /* Gizli formset */
-    .pu-hidden-forms { display: none; }
+    /* TOAST KAPSAYICI */
+    #wizard-toast-container { position: fixed; top: 24px; right: 24px; display: flex; flex-direction: column; gap: 12px; width: 360px; max-width: calc(100vw - 40px); z-index: 99999; pointer-events: none; }
+    .wizard-toast { display: flex; align-items: flex-start; gap: 12px; padding: 16px 18px; border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.15); color: #fff; opacity: 0; transform: translateY(-10px); transition: opacity .25s ease, transform .25s ease; pointer-events: auto; }
+    .wizard-toast.show { opacity: 1; transform: none; }
+    .wizard-toast-success { background: var(--green-600); }
+    .wizard-toast-error { background: var(--red-600); }
+    .wizard-toast i { margin-top: 2px; }
+    .wizard-toast > div { flex: 1; }
+    .wizard-toast-close { margin-left: auto; border: none; background: none; color: inherit; cursor: pointer; font-size: 1.2rem; line-height: 1; opacity: .7; transition: opacity .2s; }
+    .wizard-toast-close:hover { opacity: 1; }
+
+    .wizard-toast-warning { 
+        background: #ffffff !important; 
+        color: var(--red-600) !important; 
+        border: 1px solid var(--red-600) !important; 
+    }
+    .wizard-toast-warning .wizard-toast-close {
+        color: var(--red-600) !important;
+    }
+
+    /* MODAL (CONFIRM) TASARIMI */
+    .pw-modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.45); z-index: 1000; }
+    .pw-modal[hidden] { display: none !important; }
+    .pw-modal-content { width: min(600px, 95%); background: #fff; border-radius: var(--radius); overflow: hidden; box-shadow: 0 25px 60px rgba(0,0,0,.15); }
+    .pw-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid var(--gray-200); }
+    .pw-modal-title-wrapper { display: flex; align-items: center; gap: 14px; }
+    .pw-modal-icon { width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 1.2rem; }
+    .pw-modal-icon-primary { background: var(--teal-50); color: var(--teal-600); }
+    .pw-modal-icon-danger { background: var(--red-50); color: var(--red-600); }
+    .pw-modal-header h3 { margin: 0; color: var(--gray-900); font-size: 1.1rem; }
+    .pw-modal-body { padding: 24px; }
+    .pw-modal-body p { margin: 0; color: var(--gray-600); line-height: 1.6; font-size: 0.95rem;}
+    .pw-modal-footer { display: flex; justify-content: flex-end; gap: 12px; padding: 20px 24px; border-top: 1px solid var(--gray-200); background: var(--gray-50); }
+    body.modal-open { overflow: hidden; }
+
+    /* SweetAlert Butonlarındaki Focus Çerçevesini Kaldırma */
+    button:focus,
+    input:focus,
+    .pw-upload-zone:focus,
+    .pw-upload-input:focus,
+    .pw-btn-text:focus,
+    .pw-image-delete:focus,
+    .swal2-confirm:focus, 
+    .swal2-cancel:focus,
+    .swal2-styled:focus {
+        outline: none !important;
+        box-shadow: none !important;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    [data-modal-confirm] {
+        outline: none !important;
+    }
+
+    [data-modal-confirm]:focus,
+    [data-modal-confirm]:focus-visible,
+    [data-modal-confirm]:active {
+        outline: none !important;
+        box-shadow: none !important;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    @media (max-width: 900px) {
+        .pu-info-bar { flex-direction: column; align-items: flex-start; gap: 16px; }
+    }
 </style>
 
 <div class="pu-wrapper">
+    <div id="wizard-toast-container"></div>
 
-    <!-- Breadcrumb -->
-    <nav class="pu-breadcrumb">
-        <a href="{% url 'store:store_list' %}">Mağazalarım</a>
-        <i class="fas fa-chevron-right" style="font-size:0.7rem;"></i>
-        <a href="{% url 'products:store_product_list' store_slug=store.slug %}">{{ store.store_name }}</a>
-        <i class="fas fa-chevron-right" style="font-size:0.7rem;"></i>
-        <span>Ürün Düzenle</span>
-    </nav>
+    <!-- 1. TOP BAR -->
+    <div class="pu-top-bar">
+        <nav class="pu-breadcrumb">
+            <a href="{% url 'store:store_dashboard' store.slug %}">Özet Paneli</a>
+            <i class="fa-solid fa-chevron-right"></i>
+            <a href="{% url 'products:store_product_list' store_slug=store.slug %}">Envanter</a>
+            <i class="fa-solid fa-chevron-right"></i>
+            <a href="{% url 'products:offer_update' store_slug=store.slug pk=source_offer_id %}">Teklif Düzenle</a>
+            <i class="fa-solid fa-chevron-right"></i>
+            <span>Katalog Düzenle</span>
+        </nav>
 
-    <!-- Hata -->
-    {% if messages %}
-        {% for message in messages %}
-        {% if 'error' in message.tags %}
-        <div class="pu-error-box">
-            <i class="fas fa-exclamation-circle"></i> {{ message }}
-        </div>
+        {% if source_offer_id %}
+            <a href="{% url 'products:offer_update' store_slug=store.slug pk=source_offer_id %}" class="btn btn-outline">
+                <i class="fa-solid fa-arrow-left"></i> Teklif Düzenlemeye Dön
+            </a>
+        {% else %}
+            <a href="{% url 'products:store_product_list' store_slug=store.slug %}" class="btn btn-outline">
+                <i class="fa-solid fa-arrow-left"></i> Envantere Dön
+            </a>
         {% endif %}
-        {% endfor %}
-    {% endif %}
+    </div>
 
-    <form method="post" enctype="multipart/form-data">
+    <!-- 2. YATAY KATALOG BİLGİ BARI -->
+    <div class="pu-info-bar">
+        <div class="pu-info-item">
+            <span class="pu-info-label">Katalog Ürün Adı</span>
+            <span class="pu-info-val">{{ product.name }}</span>
+        </div>
+        <div class="pu-info-item">
+            <span class="pu-info-label">Kategori</span>
+            <span class="pu-info-val">{{ product.category.name }}</span>
+        </div>
+        <div class="pu-info-item">
+            <span class="pu-info-label">Marka</span>
+            <span class="pu-info-val">{{ product.brand.name|default:"Markasız" }}</span>
+        </div>
+        <div class="pu-info-item">
+            <span class="pu-info-label">Yetki</span>
+            <span class="pu-info-val" style="color: var(--teal-600);"><i class="fa-solid fa-shield-halved"></i> Oluşturan</span>
+        </div>
+    </div>
+
+    <div style="background: #fffbeb; color: #b45309; border: 1px solid #fef08a; padding: 14px 20px; border-radius: 10px; font-size: 0.85rem; line-height: 1.5; box-shadow: var(--shadow-sm);">
+        <i class="fa-solid fa-triangle-exclamation" style="margin-right: 4px;"></i>
+        Açıklama ve barkodları düzenleme yetkisine sahipsiniz. Yapacağınız değişiklikler bu ürünü satan <strong>diğer tüm satıcıların vitrinini de etkileyecektir!</strong>
+    </div>
+
+    <!-- 3. AÇIKLAMA GÜNCELLEME FORMU -->
+    <form method="post" id="descriptionForm">
         {% csrf_token %}
-        {{ formset.management_form }}
+        <input type="hidden" name="source_offer_id" value="{{ source_offer_id|default:'' }}">
 
-        <!-- Ürün Bilgileri -->
         <div class="pu-card">
             <div class="pu-card-header">
-                <div class="pu-card-header-icon">
-                    <i class="fas fa-box"></i>
-                </div>
+                <div class="pu-card-icon"><i class="fa-solid fa-align-left"></i></div>
                 <div>
-                    <h2>Ürün Bilgileri</h2>
-                    <p>Başlık değiştirilemez — katalog bütünlüğü korunur</p>
+                    <h2>Ürün Açıklaması</h2>
+                    <p>Kataloğa yansıyacak genel detaylar</p>
                 </div>
             </div>
             <div class="pu-card-body">
-
-                <!-- Başlık — readonly -->
-                <div class="pu-field">
-                    <label class="pu-label">
-                        Ürün Adı
-                        <span class="readonly-tag"><i class="fas fa-lock"></i> Değiştirilemez</span>
-                    </label>
-                    <input type="text"
-                           class="pu-input"
-                           value="{{ product.name }}"
-                           readonly>
-                    <input type="hidden"
-                           name="{{ form.name.html_name }}"
-                           value="{{ product.name }}">
-                </div>
-
-                <!-- Kategori + Marka -->
-                <div class="pu-grid-2">
-                    <div class="pu-field">
-                        <label class="pu-label" for="{{ form.category.id_for_label }}">
-                            Kategori
-                        </label>
-                        <select id="{{ form.category.id_for_label }}"
-                                name="{{ form.category.html_name }}"
-                                class="pu-select">
-                            <option value="">— Seçiniz —</option>
-                            {% for choice in form.category.field.queryset %}
-                            <option value="{{ choice.pk }}"
-                                {% if form.category.value|stringformat:"s" == choice.pk|stringformat:"s" %}selected{% endif %}>
-                                {{ choice.name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                        {% if form.category.errors %}
-                            {% for error in form.category.errors %}
-                            <p class="pu-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
-                            {% endfor %}
-                        {% endif %}
-                    </div>
-
-                    <div class="pu-field">
-                        <label class="pu-label" for="{{ form.brand.id_for_label }}">
-                            Marka
-                        </label>
-                        <select id="{{ form.brand.id_for_label }}"
-                                name="{{ form.brand.html_name }}"
-                                class="pu-select">
-                            <option value="">— Seçiniz —</option>
-                            {% for choice in form.brand.field.queryset %}
-                            <option value="{{ choice.pk }}"
-                                {% if form.brand.value|stringformat:"s" == choice.pk|stringformat:"s" %}selected{% endif %}>
-                                {{ choice.name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Açıklama -->
-                <div class="pu-field">
-                    <label class="pu-label" for="{{ form.description.id_for_label }}">
-                        Genel Açıklama
-                    </label>
-                    <textarea id="{{ form.description.id_for_label }}"
-                              name="{{ form.description.html_name }}"
-                              class="pu-textarea">{{ form.description.value|default:'' }}</textarea>
-                    {% if form.description.errors %}
-                        {% for error in form.description.errors %}
-                        <p class="pu-field-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-
-            </div>
-        </div>
-
-        <!-- Görseller -->
-        <div class="pu-card">
-            <div class="pu-card-header">
-                <div class="pu-card-header-icon">
-                    <i class="fas fa-images"></i>
-                </div>
-                <div>
-                    <h2>Ürün Görselleri</h2>
-                    <p>Silmek istediğiniz görselin üzerindeki ✕ butonuna basın</p>
-                </div>
-            </div>
-            <div class="pu-card-body">
-
-                <div class="pu-images-grid" id="imagesGrid">
-
-                    <!-- Mevcut görseller -->
-                    {% for image_form in formset %}
-                    <div class="pu-image-card" id="imageCard-{{ forloop.counter0 }}">
-
-                        <!-- Gizli form alanları -->
-                        {{ image_form.id }}
-
-                        <!-- Silme checkbox (gizli) -->
-                        <div style="display:none;">{{ image_form.DELETE }}</div>
-
-                        <!-- Önizleme -->
-                        <div class="pu-image-preview">
-                            {% if image_form.instance.pk and image_form.instance.image %}
-                                {% if image_form.instance.is_main %}
-                                <span class="pu-main-badge">
-                                    <i class="fas fa-star"></i> Kapak
-                                </span>
-                                {% endif %}
-                                <img src="{{ image_form.instance.image.url }}"
-                                     alt="Görsel {{ forloop.counter }}"
-                                     id="preview-{{ forloop.counter0 }}">
-                            {% else %}
-                                <div class="pu-image-preview-placeholder">
-                                    <i class="fas fa-image"></i>
-                                </div>
-                            {% endif %}
-                            <div class="pu-delete-overlay">
-                                <span><i class="fas fa-trash"></i> Silinecek</span>
-                            </div>
-                            <!-- Sil butonu -->
-                            {% if image_form.instance.pk %}
-                            <button type="button"
-                                    class="pu-delete-btn"
-                                    onclick="markDelete({{ forloop.counter0 }})"
-                                    title="Görseli Sil">
-                                <i class="fas fa-times"></i>
-                            </button>
-                            {% endif %}
-                        </div>
-
-                        <!-- Kontroller -->
-                        <div class="pu-image-controls">
-
-                            <!-- Yeni dosya seç (sadece yeni formlar için) -->
-                            {% if not image_form.instance.pk %}
-                            <div class="pu-image-file-input">
-                                <span style="font-size:0.78rem; color:var(--gray-500);">Görsel seç:</span>
-                                <input type="file"
-                                       name="{{ image_form.image.html_name }}"
-                                       accept="image/*"
-                                       onchange="previewNewImage(this, {{ forloop.counter0 }})">
-                            </div>
-                            {% endif %}
-
-                            <!-- Varyant seç -->
-                            <div style="margin-top: 6px;">
-                                <select name="{{ image_form.variant.html_name }}"
-                                        style="width:100%; font-size:0.78rem; border:1px solid var(--gray-200);
-                                               border-radius:6px; padding:4px 8px; outline:none;">
-                                    <option value="">Tüm varyantlar</option>
-                                    {% for variant in product.variants.all %}
-                                    <option value="{{ variant.pk }}"
-                                        {% if image_form.variant.value|stringformat:"s" == variant.pk|stringformat:"s" %}selected{% endif %}>
-                                        Varyant #{{ variant.pk }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-
-                            <div class="pu-image-controls-row" style="margin-top: 6px;">
-                                <!-- Kapak mı? -->
-                                <label class="pu-checkbox-row">
-                                    <input type="checkbox"
-                                           name="{{ image_form.is_main.html_name }}"
-                                           {% if image_form.is_main.value %}checked{% endif %}>
-                                    Kapak
-                                </label>
-
-                                <!-- Sıralama -->
-                                <label style="display:flex; align-items:center; gap:4px; font-size:0.78rem; color:var(--gray-500);">
-                                    Sıra:
-                                    <input type="number"
-                                           name="{{ image_form.sort_order.html_name }}"
-                                           class="pu-sort-input"
-                                           value="{{ image_form.sort_order.value|default_if_none:0 }}"
-                                           min="0">
-                                </label>
-                            </div>
-
-                        </div>
-                    </div>
+                {{ form.description }}
+                {% if form.description.errors %}
+                    {% for error in form.description.errors %}
+                        <span class="field-error"><i class="fa-solid fa-triangle-exclamation"></i> {{ error }}</span>
                     {% endfor %}
-
-                    <!-- Yeni görsel ekle placeholder -->
-                    <label class="pu-add-image-card" for="addImageTrigger">
-                        <i class="fas fa-plus-circle"></i>
-                        <span>Yeni Görsel Ekle</span>
-                        <span style="font-size:0.75rem; color:var(--gray-500);">
-                            Max 5MB, JPEG veya PNG
-                        </span>
-                    </label>
-
-                </div>
-
-                {% if formset.non_form_errors %}
-                <div class="pu-error-box">
-                    {% for error in formset.non_form_errors %}
-                    <p><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
-                    {% endfor %}
-                </div>
                 {% endif %}
-
             </div>
-        </div>
-
-        <!-- Footer -->
-        <div class="pu-card">
-            <div class="pu-footer">
-                <a href="{% url 'products:store_product_list' store_slug=store.slug %}"
-                   class="btn btn-outline">
-                    <i class="fas fa-arrow-left"></i> Geri Dön
-                </a>
+            <div class="pu-card-footer">
                 <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-save"></i> Değişiklikleri Kaydet
+                    <i class="fa-solid fa-save"></i> Açıklamayı Kaydet
                 </button>
             </div>
         </div>
-
     </form>
+
+    <!-- 4. BARKOD YÖNETİMİ TABLOSU -->
+    <div class="pu-card">
+        <div class="pu-card-header">
+            <div class="pu-card-icon"><i class="fa-solid fa-barcode"></i></div>
+            <div>
+                <h2>Barkod Yönetimi</h2>
+                <p>Varyantların uluslararası barkodlarını (EAN/UPC) güncelleyin</p>
+            </div>
+        </div>
+        <div class="pu-card-body" style="padding: 0;">
+            <table class="pu-table">
+                <thead>
+                    <tr>
+                        <th style="width: 50%;">Varyant Kombinasyonu</th>
+                        <th style="width: 50%;">Barkod (EAN/UPC)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for variant in product.variants.all %}
+                    <tr>
+                        <td class="variant-name-td">
+                            {% for val in variant.attribute_values.all %}
+                                {{ val.value|title }}{% if not forloop.last %} / {% endif %}
+                            {% empty %}
+                                Standart Ürün
+                            {% endfor %}
+                        </td>
+                        <td>
+                            <input type="text" class="pw-barcode-input js-barcode-input" data-variant-id="{{ variant.id }}" value="{{ variant.barcode|default:'' }}" placeholder="Barkod Yok">
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="pu-card-footer">
+            <button type="button" id="btn-save-all-barcodes" class="btn btn-primary">
+                <i class="fa-solid fa-save"></i> Tüm Barkodları Kaydet
+            </button>
+        </div>
+    </div>
+
+    <!-- 5. GÖRSEL YÖNETİMİ (AJAX) -->
+    <div class="pu-card">
+        <div class="pu-card-header">
+            <div class="pu-card-icon"><i class="fa-solid fa-images"></i></div>
+            <div>
+                <h2>Görsel Yönetimi</h2>
+                <p>Varyant gruplarına ait fotoğrafları ekleyin veya sıralayın</p>
+            </div>
+        </div>
+        <div class="pu-card-body">
+            
+            {% for group in unique_image_groups %}
+            <div class="pw-image-group">
+                <div class="pw-image-group-header">
+                    <h3 class="pw-image-group-title">
+                        {% if group.visual_attribute_values.exists %}
+                            {% for val in group.visual_attribute_values.all %}
+                                <span class="pw-image-group-badge">
+                                    <strong>{{ val.attribute.name }}:</strong> {{ val.value|title }}
+                                </span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="pw-image-group-badge">
+                                <i class="fa-solid fa-globe"></i> Tüm Varyantlar İçin Ortak Görseller
+                            </span>
+                        {% endif %}
+                    </h3>
+                </div>
+
+                <div class="pw-image-group-body">
+
+                    <div class="pw-upload-zone js-upload-zone" data-group-id="{{ group.id }}">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <div class="pw-upload-zone-text">Görselleri sürükleyip bırakın veya tıklayarak seçin</div>
+                        <div class="pw-upload-zone-subtext">JPG, PNG veya WEBP. Her biri en fazla 10MB.</div>
+                        <input type="file" multiple accept="image/jpeg, image/png, image/webp" class="js-file-input" style="display: none;">
+                    </div>
+
+                    <!-- GÖRSEL LİSTESİ (GRID) -->
+                    <div class="js-image-list-container" data-group-id="{{ group.id }}">
+                        {% if group.images.all %}
+                        <div class="pw-image-grid js-sortable-grid" data-group-id="{{ group.id }}">
+                            {% for img in group.images.all %}
+                            <div class="pw-image-card js-image-item" data-id="{{ img.id }}">
+
+                                <div class="pw-image-preview">
+                                    {% if img.is_main %}
+                                        <span class="pw-image-main-badge"><i class="fa-solid fa-star"></i> Kapak</span>
+                                    {% endif %}
+                                    <img src="{{ img.image.url }}" alt="{{ img.alt_text|default:'' }}">
+                                </div>
+
+                                <div class="pw-image-actions">
+                                    <div class="pw-image-actions-group">
+                                        <button type="button" class="pw-btn-text js-make-main {% if img.is_main %}is-main{% endif %}" data-id="{{ img.id }}" title="Kapak Görseli Yap">
+                                            <i class="fa-solid fa-star"></i> {% if img.is_main %}Kapak{% else %}Kapak Yap{% endif %}
+                                        </button>
+                                        <button type="button" class="pw-btn-text js-edit-alt {% if img.alt_text %}has-alt{% endif %}" data-id="{{ img.id }}" data-current-alt="{{ img.alt_text }}" title="Alt Metin Düzenle">
+                                            <i class="fa-solid fa-pen"></i> {% if img.alt_text %}Metni Düzenle{% else %}Alt Metin Ekle{% endif %}
+                                        </button>
+                                    </div>
+                                    <button type="button" class="pw-image-delete js-delete-image" data-id="{{ img.id }}" title="Görseli Sil">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div style="text-align:center; padding: 0 0 30px 0; color: var(--gray-400);">
+                            <p>Bu gruba henüz görsel yüklenmemiş.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+        </div>
+    </div>
 </div>
 
+<!-- ONAY MODALI -->
+<div id="wizard-confirm-modal" class="pw-modal" hidden>
+    <div class="pw-modal-content">
+        <div class="pw-modal-header">
+            <div class="pw-modal-title-wrapper">
+                <div class="pw-modal-icon pw-modal-icon-primary">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <h3 data-modal-title>İşlemi Onaylıyor musunuz?</h3>
+            </div>
+        </div>
+        <div class="pw-modal-body">
+            <p data-modal-message>Bu işlem geri alınamaz.</p>
+        </div>
+        <div class="pw-modal-footer">
+            <button type="button" class="btn btn-outline" data-modal-cancel>Vazgeç</button>
+            <button type="button" class="btn btn-primary" data-modal-confirm>
+                <i class="fa-solid fa-check"></i> Onayla
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- JAVASCRIPT -->
+<script src="{% static 'products/js/wizard_ui.js' %}"></script>
 <script>
-// Mevcut görseli silmek için işaretle
-function markDelete(index) {
-    const card = document.getElementById('imageCard-' + index);
-    const deleteCheckbox = card.querySelector('input[type="checkbox"][name$="-DELETE"]');
-
-    if (!deleteCheckbox) return;
-
-    deleteCheckbox.checked = !deleteCheckbox.checked;
-    card.classList.toggle('marked-delete', deleteCheckbox.checked);
-}
-
-// Yeni eklenen görsel için önizleme
-function previewNewImage(input, index) {
-    if (!input.files || !input.files[0]) return;
-
-    const card = document.getElementById('imageCard-' + index);
-    const preview = card.querySelector('.pu-image-preview');
-    const placeholder = preview.querySelector('.pu-image-preview-placeholder');
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        // Placeholder'ı kaldır
-        if (placeholder) placeholder.style.display = 'none';
-
-        // Önizleme img ekle veya güncelle
-        let img = preview.querySelector('img');
-        if (!img) {
-            img = document.createElement('img');
-            preview.insertBefore(img, preview.firstChild);
+document.addEventListener("DOMContentLoaded", () => {
+    
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== "") {
+            const cookies = document.cookie.split(";");
+            for (let cookie of cookies) {
+                cookie = cookie.trim();
+                if (cookie.startsWith(name + "=")) { cookieValue = decodeURIComponent(cookie.substring(name.length + 1)); break; }
+            }
         }
-        img.src = e.target.result;
-    };
-    reader.readAsDataURL(input.files[0]);
-}
-</script>
+        return cookieValue;
+    }
+    const csrftoken = getCookie("csrftoken");
 
+    async function sendAjaxRequest(formData, successMessage, targetContainer = null) {
+        try {
+            const response = await fetch(window.location.href, {
+                method: "POST", body: formData,
+                headers: { "X-CSRFToken": csrftoken, "X-Requested-With": "XMLHttpRequest" }
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                WizardUI.showToast("success", successMessage);
+                
+                // Eğer backend'den HTML geldiyse ve hedef konteyner varsa, DOM'u güncelle!
+                if (data.html && targetContainer) {
+                    targetContainer.innerHTML = data.html; // Eski grid'i sil, yenisini koy
+                    initSortables(); // Yeni gelen HTML için Sortable'ı tekrar başlat
+                }
+            } else {
+                WizardUI.showToast("error", data.message || 'İşlem başarısız.');
+            }
+        } catch (err) {
+            WizardUI.showToast("error", "Sunucuya ulaşılamıyor.");
+        }
+    }
+
+    // RELOAD SONRASI BAŞARILI MESAJINI GÖSTER
+    const pendingToast = sessionStorage.getItem('toastMessage');
+    if (pendingToast) {
+        WizardUI.showToast('success', pendingToast);
+        sessionStorage.removeItem('toastMessage');
+    }
+
+    // AÇIKLAMA FORMU
+    const descForm = document.getElementById("descriptionForm");
+    descForm.addEventListener("submit", async function(e) {
+        e.preventDefault();
+        const confirmed = await WizardUI.showConfirm({
+            title: "Açıklamayı Kaydet",
+            message: "Açıklamayı değiştirdiğinizde, bu ürünü satan tüm mağazaların sayfalarındaki açıklama da değişecektir. Emin misiniz?",
+            confirmText: "Evet, Kaydet"
+        });
+        if (confirmed) {
+            descForm.submit();
+        }
+    });
+
+    // BARKOD GÜNCELLEME (TOPLU)
+    document.getElementById("btn-save-all-barcodes").addEventListener("click", async () => {
+        const barcodeInputs = document.querySelectorAll(".js-barcode-input");
+        const barcodesData = [];
+
+        barcodeInputs.forEach(input => {
+            barcodesData.push({
+                variant_id: input.dataset.variantId,
+                barcode: input.value.trim()
+            });
+        });
+
+        const confirmed = await WizardUI.showConfirm({
+            title: "Barkodları Kaydet",
+            message: "Tablodaki tüm barkodlar güncellenecektir. Emin misiniz?",
+            confirmText: "Kaydet"
+        });
+
+        if (confirmed) {
+            Swal.fire({ title: 'Kaydediliyor...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const formData = new FormData();
+            formData.append("action", "update_barcodes_bulk");
+            formData.append("barcodes_data", JSON.stringify(barcodesData));
+            
+            // Backend JSON döndüğünde sayfayı yenilemeden bildirim göster
+            sendAjaxRequest(formData, "Tüm barkodlar başarıyla güncellendi.", false).finally(() => Swal.close());
+        }
+    });
+
+
+    // SÜRÜKLE BIRAK YÜKLEME (UPLOAD)
+    document.querySelectorAll(".js-upload-zone").forEach(zone => {
+        const fileInput = zone.querySelector(".js-file-input");
+        const groupId = zone.dataset.groupId;
+
+        zone.addEventListener("click", () => fileInput.click());
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => zone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); }));
+        ['dragenter', 'dragover'].forEach(evt => zone.addEventListener(evt, () => zone.classList.add("dragover")));
+        ['dragleave', 'drop'].forEach(evt => zone.addEventListener(evt, () => zone.classList.remove("dragover")));
+
+        zone.addEventListener('drop', e => { if (e.dataTransfer.files.length > 0) handleUpload(e.dataTransfer.files, groupId); });
+        fileInput.addEventListener("change", e => { if (e.target.files.length > 0) handleUpload(e.target.files, groupId); });
+
+        async function handleUpload(files, groupId) {
+            let filesToUpload = [];
+            let currentSelection = new Set(); // Global hafıza yerine sadece "o anki yükleme işlemindeki" tekrar edenleri ayıklıyoruz
+            
+            // Aynı dosyayı tekrar eden yüklemeyi engelleme
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                // Grup ID'sini dahil ediyoruz:
+                // Aynı dosya farklı gruplara yüklenebilir.
+                const fileKey = `${file.name}_${file.size}`;
+
+                if (!currentSelection.has(fileKey)) {
+                    filesToUpload.push(files[i]);
+                    currentSelection.add(fileKey);
+                }
+            }
+
+            if (filesToUpload.length === 0) {
+                WizardUI.showToast("error", "Geçerli bir görsel bulunamadı.");
+                fileInput.value = ''; // Input'u sıfırla
+                return;
+            }
+
+            const confirmed = await WizardUI.showConfirm({
+                title: "Görselleri Yükle",
+                message: `${filesToUpload.length} adet görseli kataloğa eklemek üzeresiniz. Onaylıyor musunuz?`,
+                confirmText: "Yükle"
+            });
+
+            if (confirmed) {
+                Swal.fire({ title: 'Yükleniyor...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                const formData = new FormData();
+                formData.append("action", "upload");
+                formData.append("group_id", groupId);
+                for (let i = 0; i < filesToUpload.length; i++) formData.append("images", filesToUpload[i]);
+                
+                const targetContainer = document.querySelector(`.js-image-list-container[data-group-id="${groupId}"]`);
+                
+                sendAjaxRequest(formData, "Görseller eklendi.", targetContainer).finally(() => {
+                    Swal.close();
+                    fileInput.value = ''; // Yükleme bitince tekrar aynı dosyayı seçebilmek için input'u sıfırla
+                });
+            } else {
+                fileInput.value = ''; 
+            }
+        }
+    });
+
+    // GÖRSEL SİLME (DELETE)
+    document.addEventListener("click", async (e) => {
+        const btn = e.target.closest(".js-delete-image");
+        if (!btn) return;
+        const imgId = btn.dataset.id;
+        const confirmed = await WizardUI.showConfirm({
+            title: "Görsel Silinecek",
+            message: "Bu görsel katalogdan kalıcı olarak silinecek! Onaylıyor musunuz?",
+            confirmText: "Sil"
+        });
+        if (confirmed) {
+            Swal.fire({ title: 'Siliniyor...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const targetGrid = btn.closest(".js-image-list-container"); // Güncellenecek alanı bul
+            const formData = new FormData();
+            formData.append("action", "delete");
+            formData.append("image_id", imgId);
+            sendAjaxRequest(formData, "Görsel silindi.", targetGrid).finally(() => Swal.close());
+        }
+    });
+
+    // KAPAK YAPMA (MAKE MAIN)
+    document.addEventListener("click", async (e) => {
+        const btn = e.target.closest(".js-make-main");
+        if (!btn || btn.classList.contains("is-main")) return;
+        const imgId = btn.dataset.id;
+        const formData = new FormData();
+        formData.append("action", "make_main");
+        formData.append("image_id", imgId);
+        Swal.fire({ title: 'Güncelleniyor...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+        // targetContainer gönderilerek DOM'un refresh edilmesi sağla
+        const targetContainer = btn.closest(".js-image-list-container");
+
+        sendAjaxRequest(formData, "Kapak başarıyla değiştirildi.", targetContainer).finally(() => Swal.close());
+    });
+
+    // ALT METİN DÜZENLE (SEO)
+    document.addEventListener("click", async (e) => {
+        const btn = e.target.closest(".js-edit-alt");
+        if (!btn) return;
+        const imgId = btn.dataset.id;
+        const currentAlt = btn.dataset.currentAlt || "";
+        
+        const { value: text, isConfirmed } = await Swal.fire({
+            title: 'Alt Metin (SEO) Ekle',
+            input: 'text',
+            inputLabel: 'Görselin ne olduğunu açıklayın.',
+            inputValue: currentAlt,
+            showCancelButton: true,
+            confirmButtonText: 'Kaydet',
+            cancelButtonText: 'İptal',
+            confirmButtonColor: 'var(--teal-600)',
+        });
+
+        if (isConfirmed) {
+            Swal.fire({ title: 'Güncelleniyor...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const formData = new FormData();
+            formData.append("action", "edit_alt");
+            formData.append("image_id", imgId);
+            formData.append("alt_text", text);
+
+            // Düzenleme sonrası "Metni Düzenle" yazısının mavi (has-alt) olması için container'ı güncelle
+            const targetContainer = btn.closest(".js-image-list-container"); 
+            
+            sendAjaxRequest(formData, "Alt metin kaydedildi.", targetContainer).finally(() => Swal.close());
+        }
+    });
+
+    // SIRALAMA (REORDER via SORTABLE.JS)
+    function initSortables() {
+        document.querySelectorAll(".js-sortable-grid").forEach(grid => {
+            new Sortable(grid, {
+                animation: 150, ghostClass: 'sortable-ghost',
+                delay: 100, delayOnTouchOnly: true,
+                onEnd: function () {
+                    const imageIds = Array.from(grid.querySelectorAll(".js-image-item")).map(c => c.dataset.id);
+                    const formData = new FormData();
+                    formData.append("action", "reorder");
+                    formData.append("image_ids", JSON.stringify(imageIds));
+                    
+                    fetch(window.location.href, {
+                        method: "POST", body: formData, headers: { "X-CSRFToken": csrftoken, "X-Requested-With": "XMLHttpRequest" }
+                    }).then(res => res.json()).then(data => {
+                        if (data.success) WizardUI.showToast("success", "Sıralama kaydedildi.");
+                    });
+                }
+            });
+        });
+    }
+    initSortables(); 
+});
+</script>
 {% endblock %}

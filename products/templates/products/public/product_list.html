@@ -1,472 +1,930 @@
 {% extends "core/home.html" %}
+{% load static %}
 
-{% block title %}Tüm Ürünler ve Fiyatlar{% endblock %}
+{% block title %}Ürünler — E-Ticaret{% endblock %}
 
 {% block content %}
 <style>
     :root {
-        --primary: #f27a1a;
-        --primary-hover: #d96812;
-        --text-dark: #333333;
-        --text-muted: #666666;
-        --bg-light: #f5f5f5;
-        --border-color: #e2e8f0;
-        --card-radius: 8px;
+        --teal-50: #f0fdfa;
+        --teal-100: #ccfbf1;
+        --teal-500: #14b8a6;
+        --teal-600: #0d9488;
+        --teal-700: #0f766e;
+        --orange-400: #fb923c;
+        --orange-500: #f97316;
+        --red-500: #ef4444;
+        --red-600: #dc2626;
+        --red-700: #b91c1c;
+
+        --gray-50: #f8f9fa;
+        --gray-100: #f1f5f9;
+        --gray-200: #e2e8f0;
+        --gray-300: #cbd5e1;
+        --gray-400: #94a3b8;
+        --gray-500: #64748b;
+        --gray-600: #475569;
+        --gray-800: #1e293b;
+        --gray-900: #0f172a;
+
+        --radius-md: 8px;
+        --radius-sm: 6px;
+        --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+        --shadow-hover: 0 8px 20px rgba(0,0,0,0.06);
     }
 
-    body {
-        background-color: var(--bg-light);
-    }
+    body { background-color: var(--gray-50); }
 
-    .shop-container {
-        max-width: 1200px;
-        margin: 20px auto;
-        padding: 0 15px;
+    .storefront-wrapper {
+        max-width: 1600px;
+        margin: 24px auto;
+        padding: 0 24px;
         display: flex;
         gap: 20px;
         align-items: flex-start;
     }
 
-    /* --- Sol Sidebar (Filtreler) --- */
-    .sidebar {
-        width: 260px;
+    /* --- SIDEBAR & FILTER WRAPPER --- */
+    .sf-sidebar {
+        width: 220px;
         flex-shrink: 0;
-        background: #fff;
-        border-radius: var(--card-radius);
-        border: 1px solid var(--border-color);
-        padding: 20px;
         position: sticky;
-        top: 20px;
+        top: 24px;
+        height: calc(100vh - 48px); /* Ekrana tam otursun */
+        display: flex;
+        flex-direction: column;
     }
 
-    .filter-group {
-        margin-bottom: 25px;
-        padding-bottom: 20px;
-        border-bottom: 1px solid var(--border-color);
-    }
-    .filter-group:last-child {
-        border-bottom: none;
-        margin-bottom: 0;
-        padding-bottom: 0;
+
+    .sf-filters-wrapper { 
+        display: flex; 
+        flex-direction: column; 
+        background: #fff; 
+        border-radius: var(--radius-md); 
+        border: 1px solid var(--gray-200); 
+        box-shadow: var(--shadow-sm);
+        height: 100%;
+        overflow: hidden; 
     }
 
-    .filter-title {
-        font-size: 1rem;
-        font-weight: 700;
-        color: var(--text-dark);
-        margin-bottom: 15px;
-    }
-
-    /* Form Elemanları */
-    .form-group { margin-bottom: 12px; }
-    .form-label {
+    /* Ana Başlık (Filtrele) */
+    .sf-sidebar-title {
         font-size: 0.85rem;
-        color: var(--text-muted);
-        display: block;
-        margin-bottom: 5px;
-    }
-    .form-control, .sidebar select {
-        width: 100%;
-        padding: 8px 12px;
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        font-size: 0.9rem;
-        outline: none;
-        box-sizing: border-box;
-    }
-    .form-control:focus, .sidebar select:focus { border-color: var(--primary); }
-    
-    .price-inputs {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    .price-inputs span { color: var(--text-muted); }
-
-    .btn-filter {
-        width: 100%;
-        background: var(--primary);
-        color: white;
-        border: none;
-        padding: 10px;
-        border-radius: 6px;
-        font-weight: 600;
-        cursor: pointer;
-        margin-top: 10px;
-        transition: background 0.2s;
-    }
-    .btn-filter:hover { background: var(--primary-hover); }
-
-    /* --- Sağ İçerik Alanı --- */
-    .main-content {
-        flex: 1;
-        min-width: 0;
-    }
-
-    /* Üst Bar (Sıralama ve Chipler) */
-    .top-bar {
-        background: #fff;
-        border-radius: var(--card-radius);
-        border: 1px solid var(--border-color);
-        padding: 15px 20px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-    }
-
-    .active-filters {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-    .filter-chip {
-        background: #fff1e6;
-        color: var(--primary);
-        border: 1px solid #ffd8b8;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .filter-chip button {
-        background: none;
-        border: none;
-        color: var(--primary);
-        cursor: pointer;
-        padding: 0;
-        font-size: 1rem;
-        line-height: 1;
-    }
-
-    .sorting-select {
-        padding: 8px 12px;
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        font-size: 0.9rem;
-        color: var(--text-dark);
-        outline: none;
-        cursor: pointer;
-    }
-
-    /* Ürün Grid */
-    .product-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-        gap: 16px;
-    }
-
-    .product-card {
-        background: #fff;
-        border-radius: var(--card-radius);
-        border: 1px solid var(--border-color);
-        overflow: hidden;
-        transition: transform 0.2s, box-shadow 0.2s;
-        display: flex;
-        flex-direction: column;
-    }
-    .product-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-    }
-    .product-card a {
-        text-decoration: none;
-        color: inherit;
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-    }
-
-    .pc-image {
-        width: 100%;
-        aspect-ratio: 1 / 1;
-        background: #f9f9f9;
-        position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-    }
-    .pc-image img {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-        padding: 15px;
-        box-sizing: border-box;
-    }
-    .pc-no-image {
-        color: var(--text-muted);
-        font-size: 0.9rem;
-    }
-
-    .pc-body {
-        padding: 15px;
-        display: flex;
-        flex-direction: column;
-        flex: 1;
-    }
-    .pc-brand {
-        font-size: 0.8rem;
-        color: var(--text-muted);
-        font-weight: 600;
-        text-transform: uppercase;
-        margin-bottom: 4px;
-    }
-    .pc-name {
-        font-size: 0.95rem;
-        font-weight: 500;
-        color: var(--text-dark);
-        margin: 0 0 10px 0;
-        line-height: 1.4;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        flex: 1;
-    }
-    
-    .pc-price-row {
-        margin-top: auto;
-    }
-    .pc-price {
-        font-size: 1.25rem;
         font-weight: 700;
-        color: var(--primary);
-    }
-    .pc-free-shipping {
-        font-size: 0.75rem;
-        color: #2e7d32;
-        background: #e8f5e9;
-        padding: 2px 6px;
-        border-radius: 4px;
-        display: inline-block;
-        margin-top: 5px;
-        font-weight: 600;
-    }
-
-    /* Paginasyon */
-    .pagination {
-        display: flex;
-        justify-content: center;
-        gap: 8px;
-        margin-top: 40px;
-    }
-    .page-btn {
-        width: 36px;
-        height: 36px;
+        color: var(--gray-800);
+        margin: 0;
+        padding: 12px 16px;
         display: flex;
         align-items: center;
-        justify-content: center;
-        border: 1px solid var(--border-color);
-        background: #fff;
-        border-radius: 6px;
-        color: var(--text-dark);
-        text-decoration: none;
-        font-weight: 600;
-        transition: 0.2s;
-        cursor: pointer;
+        gap: 8px;
+        border-bottom: 1px solid var(--gray-200);
+        background: var(--gray-50);
+        position: sticky; /* Yukarıda sabit kalması için */
+        top: 0;
+        z-index: 10;
     }
-    .page-btn:hover { border-color: var(--primary); color: var(--primary); }
-    .page-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-    .page-btn.disabled { opacity: 0.5; pointer-events: none; }
+    .sf-sidebar-title i { color: var(--teal-600); }
 
-    /* Empty State */
-    .empty-state {
-        text-align: center;
-        padding: 60px 20px;
-        background: #fff;
-        border-radius: var(--card-radius);
-        border: 1px solid var(--border-color);
+    /* İÇERİK KISMI SCROLL OLACAK */
+    .sf-filters-content {
+        flex: 1;
+        overflow-y: auto;
     }
-    .empty-state i {
-        font-size: 3rem;
-        color: #cbd5e1;
-        margin-bottom: 15px;
-    }
-    .empty-state h3 { color: var(--text-dark); margin-bottom: 8px; }
-    .empty-state p { color: var(--text-muted); }
+    /* Scrollbar Tasarımı */
+    .sf-filters-content::-webkit-scrollbar { width: 5px; }
+    .sf-filters-content::-webkit-scrollbar-track { background: transparent; }
+    .sf-filters-content::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 10px; }
+    .sf-filters-content::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
 
-    /* Mobil Uyum */
+    /* Seçili Filtreler Alanı */
+    .sf-active-filters-area {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--gray-200);
+        background: #fff;
+    }
+    .sf-af-header {
+        display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+    }
+    .sf-af-title { font-size: 0.8rem; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.5px;}
+    
+    .sf-af-clear { 
+        color: var(--red-600); font-size: 0.75rem; font-weight: 600; 
+        text-decoration: none; transition: .2s;
+    }
+    .sf-af-clear:hover { color: var(--red-700); text-decoration: underline; }
+
+    .sf-af-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sf-af-chip {
+        display: inline-flex; align-items: center;
+        background: #fff; border: 1px solid var(--teal-500);
+        padding: 4px 8px; border-radius: 20px; /* Yuvarlak köşeler */
+        font-size: 0.75rem; color: var(--teal-700); font-weight: 600;
+        box-shadow: 0 1px 2px rgba(20, 184, 166, 0.1);
+        transition: .2s;
+    }
+    .sf-af-chip:hover { background: var(--teal-50); }
+    .sf-af-chip strong { color: var(--gray-900); font-weight: 600; margin-right: 4px; }
+    .sf-af-chip button { 
+        background: transparent; border: none; color: var(--teal-600); 
+        cursor: pointer; padding: 0; margin-left: 6px; display: flex; align-items: center; justify-content: center;
+        transition: .2s; font-size: 0.7rem;
+    }
+    .sf-af-chip button:hover { color: var(--red-600); }
+
+    /* Filtre Akordiyonları */
+    .sf-filter-group {
+        border-bottom: 1px solid var(--gray-100);
+        transition: .2s;
+    }
+    .sf-filter-group:last-child { border-bottom: none; }
+
+    .sf-filter-header {
+        padding: 12px 16px; font-size: 0.75rem; font-weight: 600; color: var(--gray-900);
+        display: flex; justify-content: space-between; align-items: center;
+        cursor: pointer; user-select: none; transition: .2s;
+        text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .sf-filter-header:hover { background: var(--gray-50); color: var(--teal-600); }
+    .sf-filter-header i { font-size: 0.75rem; color: var(--gray-400); transition: transform .3s; }
+    .sf-filter-header.open i { transform: rotate(180deg); color: var(--teal-600); }
+
+    .sf-filter-body { padding: 0 16px 14px 16px; }
+
+    /* Scrollable Alanlar ve Özel Scrollbar */
+    .sf-scrollable-area {
+        max-height: 220px;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+    .sf-scrollable-area::-webkit-scrollbar { width: 4px; }
+    .sf-scrollable-area::-webkit-scrollbar-track { background: var(--gray-50); border-radius: 4px; }
+    .sf-scrollable-area::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 4px; }
+    .sf-scrollable-area::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
+
+    /* Kategori Ağacı Tasarımı */
+    .sf-cat-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px;}
+    .sf-cat-item { display: flex; flex-direction: column; }
+    
+    .sf-cat-label-wrap { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; border-radius: 4px; transition: .2s; }
+    .sf-cat-label-wrap:hover { background: var(--gray-50); }
+    .sf-cat-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem; color: var(--gray-700); flex: 1;}
+    .sf-cat-label:hover { color: var(--teal-600); }
+    .sf-cat-label input[type="radio"] { display: none; }
+    .sf-cat-label input[type="radio"]:checked + span { font-weight: 700; color: var(--teal-600); }
+    
+    .sf-cat-toggle { padding: 2px 6px; cursor: pointer; color: var(--gray-400); border-radius: 4px; }
+    .sf-cat-toggle:hover { background: var(--gray-100); color: var(--gray-800); }
+    .sf-cat-toggle i { transition: .3s; font-size: 0.7rem;}
+    .sf-cat-toggle.open i { transform: rotate(180deg); }
+
+    .sf-subcat-list { list-style: none; margin: 2px 0 2px 12px; padding: 2px 0 2px 8px; border-left: 1px solid var(--gray-200); display: none; flex-direction: column; gap: 2px;}
+    .sf-subcat-list.open { display: flex; }
+    .sf-subcat-list li { padding: 4px 6px; border-radius: 4px; transition: .2s; }
+    .sf-subcat-list li:hover { background: var(--teal-50); }
+    .sf-subcat-list .sf-cat-label { font-size: 0.8rem; font-weight: 500; color: var(--gray-600); }
+    .sf-subcat-list input[type="radio"]:checked + span { font-weight: 700; color: var(--teal-600); }
+
+    /* Marka Arama ve Checkbox Listesi */
+    .sf-brand-search-wrap { position: relative; margin-bottom: 12px; }
+    .sf-brand-search-wrap i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--gray-400); font-size: 0.8rem; }
+    .sf-brand-search-input {
+        width: 100%; box-sizing: border-box; padding: 8px 10px 8px 28px;
+        border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+        font-size: 0.8rem; outline: none; transition: .2s; background: var(--gray-50);
+    }
+    .sf-brand-search-input:focus { border-color: var(--teal-500); background: #fff; }
+
+    .sf-checkbox-list { display: flex; flex-direction: column; gap: 6px; }
+    .sf-checkbox-item { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem; color: var(--gray-700); user-select: none; padding: 2px 0; }
+    .sf-checkbox-item:hover { color: var(--teal-600); }
+    .sf-checkbox-item input { display: none; }
+    
+    .sf-check-box { width: 16px; height: 16px; border: 1px solid var(--gray-300); border-radius: 4px; display: flex; align-items: center; justify-content: center; transition: .2s; flex-shrink: 0;}
+    .sf-check-box i { font-size: 0.6rem; color: #fff; opacity: 0; transform: scale(0.5); transition: .2s; }
+    
+    .sf-checkbox-item input:checked + .sf-check-box { background: var(--teal-600); border-color: var(--teal-600); }
+    .sf-checkbox-item input:checked + .sf-check-box i { opacity: 1; transform: scale(1); }
+    .sf-checkbox-item input:checked ~ span.sf-check-text { font-weight: 600; color: var(--teal-700); }
+
+    /* Fiyat Inputları */
+    .sf-price-inputs { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+    .sf-price-input { width: calc(50% - 20px); box-sizing: border-box; border: 1px solid var(--gray-300); border-radius: var(--radius-sm); padding: 8px 4px; font-size: 0.75rem; outline: none; transition: .2s; text-align: center; }
+    .sf-price-input::placeholder { font-size: 0.75rem; color: var(--gray-400); }
+    .sf-price-input:focus { border-color: var(--teal-500); }
+    .sf-price-btn { background: var(--gray-100); color: var(--gray-700); border: 1px solid var(--gray-200); border-radius: var(--radius-sm); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: .2s; flex-shrink: 0;}
+    .sf-price-btn:hover { background: var(--teal-600); color: #fff; border-color: var(--teal-600); }
+
+    /* Yıldız & Renk */
+    .sf-star-rating { color: var(--orange-400); font-size: 0.75rem; letter-spacing: -1px; }
+    .sf-star-text { font-size: 0.8rem; margin-left: 4px; color: var(--gray-600); }
+
+    .sf-color-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sf-color-item { display: flex; flex-direction: column; align-items: center; gap: 4px; 
+        cursor: pointer; position: relative; width: 45px; }
+    .sf-color-item input { display: none; }
+    .sf-color-circle { 
+        width: 22px; height: 22px; border-radius: 50%; 
+        border: 1px solid var(--gray-200); transition: .2s; 
+        display: block; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+    }
+    
+    .sf-color-item:hover .sf-color-circle { transform: scale(1.1); box-shadow: 0 2px 5px rgba(0,0,0,0.15); }
+    /* Seçildiğinde etrafında turkuaz çerçeve oluşur */
+    .sf-color-item input:checked + .sf-color-circle { 
+        outline: 2px solid var(--teal-600); 
+        outline-offset: 2px;
+    }
+    .sf-color-name { font-size: 0.65rem; color: var(--gray-600); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;}
+
+    /* --- MAIN CONTENT & TOPBAR --- */
+    .sf-main { flex: 1; min-width: 0; }
+
+    .sf-topbar {
+        background: transparent; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;
+    }
+
+    .sf-result-count { font-size: 0.95rem; color: var(--gray-600); }
+    .sf-result-count strong { color: var(--gray-900); font-weight: 700; }
+
+    .sf-sort-group { display: flex; align-items: center; gap: 10px; background: #fff; padding: 4px 12px; border-radius: var(--radius-sm); border: 1px solid var(--gray-200); box-shadow: var(--shadow-sm);}
+    .sf-sort-group label { font-size: 0.85rem; font-weight: 600; color: var(--gray-600); margin: 0;}
+    .sf-sort-group select { border: none; outline: none; background: transparent; font-size: 0.85rem; font-weight: 600; color: var(--gray-900); cursor: pointer; padding: 4px 0;}
+
+    /* --- PRODUCT GRID --- */
+    .sf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; align-items: stretch; }
+
+    .sf-card {
+        background: #fff; border-radius: var(--radius-md); border: 1px solid var(--gray-200);
+        padding: 16px; text-decoration: none; transition: .2s; display: flex; flex-direction: column; position: relative;
+    }
+    .sf-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); border-color: var(--teal-500); z-index: 2;}
+
+    .sf-card-img-wrap { width: 100%; aspect-ratio: 1 / 1; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: var(--radius-sm);}
+    .sf-card-img-wrap img { max-width: 100%; max-height: 100%; object-fit: contain; transition: transform .3s; }
+    .sf-card:hover .sf-card-img-wrap img { transform: scale(1.05); }
+
+    .sf-card-brand { font-size: 0.75rem; font-weight: 700; color: var(--gray-400); text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px; }
+    .sf-card-name { font-size: 0.9rem; font-weight: 600; color: var(--gray-800); line-height: 1.4; margin-bottom: 12px; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+    .sf-card-footer { margin-top: auto; display: flex; flex-direction: column; gap: 8px;}
+    
+    .sf-rating { display: flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--gray-500); font-weight: 600; }
+    .sf-rating .sf-star-rating { font-size: 0.75rem; }
+
+    .sf-card-price-group { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 4px;}
+    .sf-card-price { font-size: 1.25rem; font-weight: 800; color: var(--teal-700); display: flex; align-items: baseline; gap: 2px; }
+    .sf-card-price-currency { font-size: 0.8rem; font-weight: 700; }
+    
+    .sf-card-sales { font-size: 0.7rem; font-weight: 600; color: var(--gray-500); display: flex; align-items: center; gap: 4px; background: var(--gray-50); padding: 4px 6px; border-radius: 4px; border: 1px solid var(--gray-200);}
+    .sf-card-sales i { color: var(--orange-500); }
+
+    /* --- PAGINATION & EMPTY STATE --- */
+    .sf-pagination { display: flex; justify-content: center; gap: 8px; margin-top: 40px; margin-bottom: 20px;}
+    .sf-page-btn { padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--gray-300); background: #fff; color: var(--gray-700); font-weight: 600; transition: .2s; cursor:pointer; font-size: 0.9rem;}
+    .sf-page-btn:hover { border-color: var(--teal-600); color: var(--teal-700); background: var(--teal-50); }
+    .sf-page-btn.current { background: var(--teal-600); color: #fff; border-color: var(--teal-600); }
+
+    .sf-empty { text-align: center; padding: 60px 20px; background: #fff; border-radius: var(--radius-md); border: 1px solid var(--gray-200); margin-bottom: 20px;}
+    .sf-empty i { font-size: 3rem; color: var(--gray-300); margin-bottom: 16px; }
+    .sf-empty h3 { color: var(--gray-800); margin-bottom: 8px; font-size: 1.2rem;}
+    .sf-empty p { color: var(--gray-500); font-size: 0.9rem; margin-bottom: 20px; }
+    
+    .btn-return-all {
+        display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px;
+        border-radius: var(--radius-sm); font-size: 0.9rem; font-weight: 600; text-decoration: none; 
+        background: #fff; color: var(--teal-600); border: 1px solid var(--teal-600); transition: .2s;
+    }
+    .btn-return-all:hover { background: var(--teal-50); color: var(--teal-700); }
+
+    /* CUSTOM SORT DROPDOWN */
+    .sf-custom-select { position: relative; width: 200px; }
+    .sf-select-trigger {
+        display: flex; justify-content: space-between; align-items: center;
+        background: #fff; padding: 8px 12px; border-radius: var(--radius-sm);
+        border: 1px solid var(--gray-200); font-size: 0.85rem; font-weight: 600;
+        color: var(--gray-800); cursor: pointer; transition: .2s; box-shadow: var(--shadow-sm);
+    }
+    .sf-select-trigger:hover { border-color: var(--teal-500); }
+    .sf-select-trigger i { color: var(--gray-400); font-size: 0.75rem; transition: .3s; }
+    .sf-custom-select.open .sf-select-trigger { border-color: var(--teal-500); box-shadow: 0 0 0 3px rgba(20,184,166,0.1); }
+    .sf-custom-select.open .sf-select-trigger i { transform: rotate(180deg); color: var(--teal-600); }
+
+    .sf-select-dropdown {
+        position: absolute; top: calc(100% + 4px); right: 0; left: 0;
+        background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 50;
+        opacity: 0; visibility: hidden; transform: translateY(-10px); transition: .2s ease;
+        padding: 4px; display: flex; flex-direction: column; gap: 2px;
+    }
+    .sf-custom-select.open .sf-select-dropdown { opacity: 1; visibility: visible; transform: translateY(0); }
+
+    .sf-select-option {
+        padding: 8px 10px; font-size: 0.85rem; font-weight: 500; color: var(--gray-700);
+        border-radius: 4px; cursor: pointer; transition: .2s; display: flex; align-items: center; gap: 8px;
+    }
+    .sf-select-option:hover { background: var(--gray-50); color: var(--gray-900); }
+    .sf-select-option.selected { background: var(--teal-50); color: var(--teal-700); font-weight: 700; }
+    .sf-select-option.selected::before { content: '\f00c'; font-family: "Font Awesome 6 Free"; font-weight: 900; font-size: 0.75rem; }
+
     @media (max-width: 900px) {
-        .shop-container { flex-direction: column; }
-        .sidebar { width: 100%; position: static; }
-        .top-bar { flex-direction: column; gap: 15px; align-items: flex-start; }
-        .sorting-select { width: 100%; }
-        .product-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+        .storefront-wrapper { flex-direction: column; }
+        .sf-sidebar { width: 100%; position: static; height: auto; }
+        .sf-topbar { flex-direction: column; align-items: flex-start; }
     }
 </style>
 
-<div class="shop-container">
+<div class="storefront-wrapper">
 
-    <!-- SOL SİDEBAR -->
-    <aside class="sidebar">
-        <!-- Genel Arama sayfası olduğu için ana başlık -->
-        <h2 style="font-size: 1.2rem; margin: 0 0 20px 0; color: var(--text-dark);">Filtrele</h2>
+    <!-- SOL: FİLTRELER -->
+    <aside class="sf-sidebar">
+        
+        <!-- TEK BİR WRAPPER İÇİNDE BAŞLIK, SEÇİLİ FİLTRELER VE AKORDİYONLAR -->
+        <form method="GET" id="filter-form" class="sf-filters-wrapper">
+            <input type="hidden" name="ordering" id="hidden_ordering" value="{{ filter_form.cleaned_data.ordering|default:'' }}">
 
-        <form id="filterForm" method="get">
+            <!-- Sabit Başlık -->
+            <h2 class="sf-sidebar-title"><i class="fa-solid fa-filter"></i> Filtrele</h2>
             
-            {% if request.GET.q %}
-            <input type="hidden" name="q" value="{{ request.GET.q }}">
-            {% endif %}
-            
-            <!-- Sayfalama için hidden input -->
-            <input type="hidden" name="page" id="pageInput" value="1">
+            <!-- SCROLL OLACAK İÇERİK KISMI -->
+            <div class="sf-filters-content">
+                
+                <!-- Seçili Filtreler Alanı -->
+                {% if active_tags %}
+                <div class="sf-active-filters-area">
+                    <div class="sf-af-header">
+                        <span class="sf-af-title">Seçili Filtreler</span>
+                        <a href="{% url 'products:product_list' %}" class="sf-af-clear">Tümünü Sil</a>
+                    </div>
+                    <div class="sf-af-list">
+                        
+                        {% for tag in active_tags %}
+                        <div class="sf-af-chip">
+                            <span>{{ tag.label }}</span>
+                            <button type="button" class="js-remove-filter" data-field="{{ tag.field }}" data-val="{{ tag.val }}"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
 
-            <!-- Kategori Filtresi (Bu sayfaya özel - Kategori seçtirme dropdown'u) -->
-            <div class="filter-group">
-                <div class="filter-title">Kategori</div>
-                {{ filter_form.category }}
-            </div>
 
-            <!-- Marka Filtresi -->
-            <div class="filter-group">
-                <div class="filter-title">Marka</div>
-                {{ filter_form.brand }}
-            </div>
+                <!-- 1. KATEGORİ AĞACI -->
+                <div class="sf-filter-group">
+                    <div class="sf-filter-header open js-accordion-toggle">
+                        {% if category %}Alt Kategoriler{% else %}Kategoriler{% endif %} <i class="fa-solid fa-chevron-up"></i>
+                    </div>
+                    <div class="sf-filter-body">
+                        <div class="sf-scrollable-area">
+                            <ul class="sf-cat-list">
+                                {% if category %}
+                                    <li class="sf-cat-item" style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed var(--gray-200);">
+                                        {% if category.parent %}
+                                            <!-- Bir Üst Kategoriye Dön -->
+                                            <a href="{% url 'products:category_product_list' slug=category.parent.slug %}" class="sf-cat-label-wrap" style="text-decoration: none;">
+                                                <span class="sf-cat-label" style="color: var(--teal-600); font-weight: 700;">
+                                                    <i class="fa-solid fa-arrow-left" style="font-size: 0.8rem;"></i> {{ category.parent.name }}
+                                                </span>
+                                            </a>
+                                        {% else %}
+                                            <!-- Ana Kategoriye Döndük (Tüm Ürünler) -->
+                                            <a href="{% url 'products:product_list' %}" class="sf-cat-label-wrap" style="text-decoration: none;">
+                                                <span class="sf-cat-label" style="color: var(--teal-600); font-weight: 700;">
+                                                    <i class="fa-solid fa-arrow-left" style="font-size: 0.8rem;"></i> Tüm Kategoriler
+                                                </span>
+                                            </a>
+                                        {% endif %}
+                                    </li>
 
-            <!-- Fiyat Filtresi -->
-            <div class="filter-group">
-                <div class="filter-title">Fiyat Aralığı (₺)</div>
-                <div class="price-inputs">
-                    <input type="number" name="min_price" class="form-control" placeholder="En Az" value="{{ request.GET.min_price }}">
-                    <span>-</span>
-                    <input type="number" name="max_price" class="form-control" placeholder="En Çok" value="{{ request.GET.max_price }}">
+                                    <!-- ALT KATEGORİLER -->
+                                    <ul class="sf-subcat-list open" style="margin-left: 0; padding-left: 14px; border-left: 2px solid var(--teal-500); margin-top: 4px;">
+                                        {% for sub in subcategories %}
+                                            <li>
+                                                <a href="{% url 'products:category_product_list' slug=sub.slug %}" style="text-decoration: none; display: block;">
+                                                    <label class="sf-cat-label" style="cursor: pointer; display: flex; justify-content: space-between; width: 100%;">
+                                                        <span class="sf-check-text" style="color: var(--gray-700);">{{ sub.name }}</span>
+                                                        <span style="font-size: 0.7rem; color: var(--gray-400);">({{ sub.product_count }})</span>
+                                                    </label>
+                                                </a>
+                                            </li>
+                                        {% empty %}
+                                            <li style="padding: 4px 6px; font-size: 0.8rem; color: var(--gray-500);">En alt kategoridesiniz.</li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <!-- ANA LİSTELEME Radyo Butonlu Ağaç -->
+                                    {% for cat in filter_form.fields.category.queryset %}
+                                        {% if not cat.parent %}
+                                            <li class="sf-cat-item">
+                                                <div class="sf-cat-label-wrap">
+                                                    <label class="sf-cat-label">
+                                                        <input type="radio" name="category" value="{{ cat.id }}" class="js-auto-submit" {% if filter_form.cleaned_data.category.id == cat.id %}checked{% endif %}>
+                                                        <span class="sf-check-text">{{ cat.name }}</span>
+                                                    </label>
+                                                    
+                                                    {% if cat.children.exists %}
+                                                        <div class="sf-cat-toggle js-subcat-toggle {% if filter_form.cleaned_data.category.parent.id == cat.id or filter_form.cleaned_data.category.id == cat.id %}open{% endif %}">
+                                                            <i class="fa-solid fa-chevron-down"></i>
+                                                        </div>
+                                                    {% endif %}
+                                                </div>
+
+                                                {% if cat.children.exists %}
+                                                <ul class="sf-subcat-list {% if filter_form.cleaned_data.category.parent.id == cat.id or filter_form.cleaned_data.category.id == cat.id %}open{% endif %}">
+                                                    {% for sub in cat.children.all %}
+                                                        <li>
+                                                            <label class="sf-cat-label">
+                                                                <input type="radio" name="category" value="{{ sub.id }}" class="js-auto-submit" {% if filter_form.cleaned_data.category.id == sub.id %}checked{% endif %}>
+                                                                <span class="sf-check-text">{{ sub.name }}</span>
+                                                            </label>
+                                                        </li>
+                                                    {% endfor %}
+                                                </ul>
+                                                {% endif %}
+                                            </li>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. MARKALAR -->
+                <div class="sf-filter-group">
+                    <div class="sf-filter-header open js-accordion-toggle">
+                        Markalar <i class="fa-solid fa-chevron-up"></i>
+                    </div>
+                    <div class="sf-filter-body">
+                        <div class="sf-brand-search-wrap">
+                            <i class="fa-solid fa-search"></i>
+                            <input type="text" class="sf-brand-search-input js-brand-search" placeholder="Marka ara...">
+                        </div>
+                        <div class="sf-scrollable-area" id="brand-list-container">
+                            <div class="sf-checkbox-list">
+                                {% for brand in filter_form.fields.brand.queryset %}
+                                <label class="sf-checkbox-item js-brand-item">
+                                    <input type="checkbox" name="brand" value="{{ brand.id }}" class="js-auto-submit" 
+                                    {% if brand.id in selected_brands %}checked{% endif %}>
+                                    <span class="sf-check-box"><i class="fa-solid fa-check"></i></span>
+                                    <span class="sf-check-text">{{ brand.name }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. FİYAT ARALIĞI -->
+                <div class="sf-filter-group">
+                    <div class="sf-filter-header open js-accordion-toggle">
+                        Fiyat <i class="fa-solid fa-chevron-up"></i>
+                    </div>
+                    <div class="sf-filter-body">
+                        <div class="sf-price-inputs" id="custom-price-container" style="margin-bottom: 12px;">
+                            <input type="number" name="min_price" value="{{ filter_form.cleaned_data.min_price|default:'' }}" placeholder="En Az" class="sf-price-input" id="min-price-input">
+                            <span style="color: var(--gray-400);">-</span>
+                            <input type="number" name="max_price" value="{{ filter_form.cleaned_data.max_price|default:'' }}" placeholder="En Çok" class="sf-price-input" id="max-price-input">
+                            <button type="button" id="btn-custom-price-submit" class="sf-price-btn"><i class="fa-solid fa-chevron-right"></i></button>
+                        </div>
+
+                        <!-- Çoklu Seçilebilir Hazır Fiyat Aralıkları -->
+                        <div class="sf-checkbox-list">
+                            <label class="sf-checkbox-item">
+                                <input type="checkbox" name="price_range" value="0-100" class="js-price-range-checkbox" {% if '0-100' in selected_ranges %}checked{% endif %}>
+                                <span class="sf-check-box"><i class="fa-solid fa-check"></i></span>
+                                <span class="sf-check-text">0 TL - 100 TL</span>
+                            </label>
+                            <label class="sf-checkbox-item">
+                                <input type="checkbox" name="price_range" value="100-500" class="js-price-range-checkbox" {% if '100-500' in selected_ranges %}checked{% endif %}>
+                                <span class="sf-check-box"><i class="fa-solid fa-check"></i></span>
+                                <span class="sf-check-text">100 TL - 500 TL</span>
+                            </label>
+                            <label class="sf-checkbox-item">
+                                <input type="checkbox" name="price_range" value="500-1000" class="js-price-range-checkbox" {% if '500-1000' in selected_ranges %}checked{% endif %}>
+                                <span class="sf-check-box"><i class="fa-solid fa-check"></i></span>
+                                <span class="sf-check-text">500 TL - 1000 TL</span>
+                            </label>
+                            <label class="sf-checkbox-item">
+                                <input type="checkbox" name="price_range" value="1000+" class="js-price-range-checkbox" {% if '1000+' in selected_ranges %}checked{% endif %}>
+                                <span class="sf-check-box"><i class="fa-solid fa-check"></i></span>
+                                <span class="sf-check-text">1000 TL ve üzeri</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+            <!-- 4. DEĞERLENDİRME PUANI (UI Mockup) -->
+            <div class="sf-filter-group">
+                <div class="sf-filter-header open js-accordion-toggle">
+                    Değerlendirme Puanı <i class="fa-solid fa-chevron-down"></i>
+                </div>
+                <div class="sf-filter-body">
+                    <div class="sf-checkbox-list">
+                        <label class="sf-checkbox-item">
+                            <input type="radio" name="rating_mock" value="4">
+                            <span class="sf-check-box"><i class="fa-solid fa-check"></i></span>
+                            <div class="sf-star-rating">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-regular fa-star"></i>
+                                <span class="sf-star-text">ve üzeri</span>
+                            </div>
+                        </label>
+                        <label class="sf-checkbox-item">
+                            <input type="radio" name="rating_mock" value="3">
+                            <span class="sf-check-box"><i class="fa-solid fa-check"></i></span>
+                            <div class="sf-star-rating">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-regular fa-star"></i><i class="fa-regular fa-star"></i>
+                                <span class="sf-star-text">ve üzeri</span>
+                            </div>
+                        </label>
+                    </div>
                 </div>
             </div>
 
-            <button type="submit" class="btn-filter">
-                <i class="fas fa-search"></i> Sonuçları Getir
-            </button>
+            <!-- 5. RENK (UI Mockup) -->
+            <div class="sf-filter-group">
+                <div class="sf-filter-header open js-accordion-toggle">
+                    Renk <i class="fa-solid fa-chevron-down"></i>
+                </div>
+                <div class="sf-filter-body">
+                    <div class="sf-color-grid">
+                        <label class="sf-color-item" title="Siyah">
+                            <input type="checkbox" name="color" value="siyah" class="js-auto-submit" {% if 'siyah' in selected_colors %}checked{% endif %}>
+                            <span class="sf-color-circle" style="background:#000;"></span>
+                            <span class="sf-color-name">Siyah</span>
+                        </label>
+                        
+                        <label class="sf-color-item" title="Beyaz">
+                            <input type="checkbox" name="color" value="beyaz" class="js-auto-submit" {% if 'beyaz' in selected_colors %}checked{% endif %}>
+                            <span class="sf-color-circle" style="background:#fff;"></span>
+                            <span class="sf-color-name">Beyaz</span>
+                        </label>
+                        
+                        <label class="sf-color-item" title="Gri">
+                            <input type="checkbox" name="color" value="gri" class="js-auto-submit" {% if 'gri' in selected_colors %}checked{% endif %}>
+                            <span class="sf-color-circle" style="background:#9ca3af;"></span>
+                            <span class="sf-color-name">Gri</span>
+                        </label>
+                        
+                        <label class="sf-color-item" title="Gümüş">
+                            <input type="checkbox" name="color" value="gumus" class="js-auto-submit" {% if 'gumus' in selected_colors %}checked{% endif %}>
+                            <span class="sf-color-circle" style="background:#e5e7eb;"></span>
+                            <span class="sf-color-name">Gümüş</span>
+                        </label>
+                        
+                        <label class="sf-color-item" title="Altın">
+                            <input type="checkbox" name="color" value="altin" class="js-auto-submit" {% if 'altin' in selected_colors %}checked{% endif %}>
+                            <span class="sf-color-circle" style="background:#fbbf24;"></span>
+                            <span class="sf-color-name">Altın</span>
+                        </label>
+                        
+                        <label class="sf-color-item" title="Kırmızı">
+                            <input type="checkbox" name="color" value="kirmizi" class="js-auto-submit" {% if 'kirmizi' in selected_colors %}checked{% endif %}>
+                            <span class="sf-color-circle" style="background:#ef4444;"></span>
+                            <span class="sf-color-name">Kırmızı</span>
+                        </label>
+                        
+                        <label class="sf-color-item" title="Mavi">
+                            <input type="checkbox" name="color" value="mavi" class="js-auto-submit" {% if 'mavi' in selected_colors %}checked{% endif %}>
+                            <span class="sf-color-circle" style="background:#3b82f6;"></span>
+                            <span class="sf-color-name">Mavi</span>
+                        </label>
+                        
+                        <label class="sf-color-item" title="Lacivert">
+                            <input type="checkbox" name="color" value="lacivert" class="js-auto-submit" {% if 'lacivert' in selected_colors %}checked{% endif %}>
+                            <span class="sf-color-circle" style="background:#1e3a8a;"></span>
+                            <span class="sf-color-name">Lacivert</span>
+                        </label>
+                        
+                        <label class="sf-color-item" title="Yeşil">
+                            <input type="checkbox" name="color" value="yesil" class="js-auto-submit" {% if 'yesil' in selected_colors %}checked{% endif %}>
+                            <span class="sf-color-circle" style="background:#22c55e;"></span>
+                            <span class="sf-color-name">Yeşil</span>
+                        </label>
+                        
+                        <label class="sf-color-item" title="Sarı">
+                            <input type="checkbox" name="color" value="sari" class="js-auto-submit" {% if 'sari' in selected_colors %}checked{% endif %}>
+                            <span class="sf-color-circle" style="background:#eab308;"></span>
+                            <span class="sf-color-name">Sarı</span>
+                        </label>
+                        
+                        <label class="sf-color-item" title="Turuncu">
+                            <input type="checkbox" name="color" value="turuncu" class="js-auto-submit" {% if 'turuncu' in selected_colors %}checked{% endif %}>
+                            <span class="sf-color-circle" style="background:#f97316;"></span>
+                            <span class="sf-color-name">Turuncu</span>
+                        </label>
+                        
+                        <label class="sf-color-item" title="Mor">
+                            <input type="checkbox" name="color" value="mor" class="js-auto-submit" {% if 'mor' in selected_colors %}checked{% endif %}>
+                            <span class="sf-color-circle" style="background:#a855f7;"></span>
+                            <span class="sf-color-name">Mor</span>
+                        </label>
+                        
+                        <label class="sf-color-item" title="Pembe">
+                            <input type="checkbox" name="color" value="pembe" class="js-auto-submit" {% if 'pembe' in selected_colors %}checked{% endif %}>
+                            <span class="sf-color-circle" style="background:#ec4899;"></span>
+                            <span class="sf-color-name">Pembe</span>
+                        </label>
+                        
+                        <label class="sf-color-item" title="Kahverengi">
+                            <input type="checkbox" name="color" value="kahverengi" class="js-auto-submit" {% if 'kahverengi' in selected_colors %}checked{% endif %}>
+                            <span class="sf-color-circle" style="background:#78350f;"></span>
+                            <span class="sf-color-name">Kahverengi</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
         </form>
     </aside>
 
-    <!-- SAĞ İÇERİK -->
-    <main class="main-content">
+    <!-- SAĞ: VİTRİN -->
+    <main class="sf-main">
+
+        <!-- EĞER KATEGORİ SAYFASINDAYSAK BREADCRUMB ÇIKSIN -->
+        {% if category %}
+        <nav class="sf-breadcrumb" style="margin-bottom: 16px; font-size: 0.85rem; color: var(--gray-500); display: flex; align-items: center; gap: 8px;">
+            <a href="{% url 'products:product_list' %}" style="color: var(--teal-600); text-decoration: none; font-weight: 600;"><i class="fa-solid fa-house"></i> Anasayfa</a>
+            {% for crumb in breadcrumbs %}
+                <i class="fa-solid fa-chevron-right" style="font-size: 0.7rem;"></i>
+                {% if forloop.last %}
+                    <span style="color: var(--gray-800); font-weight: 600;">{{ crumb.name }}</span>
+                {% else %}
+                    <a href="{% url 'products:category_product_list' slug=crumb.slug %}" style="color: var(--teal-600); text-decoration: none; font-weight: 600;">{{ crumb.name }}</a>
+                {% endif %}
+            {% endfor %}
+        </nav>
+        {% endif %}
         
-        <!-- Üst Bar (Chipler ve Sıralama) -->
-        <div class="top-bar">
-            <div class="active-filters">
-                {% if active_filters %}
-                    <span style="font-size: 0.85rem; color: var(--text-muted); margin-right: 5px; align-self: center;">Seçili Filtreler:</span>
-                    {% for key, value in active_filters.items %}
-                        <div class="filter-chip">
-                            {{ value }}
-                            <button type="button" onclick="removeFilter('{{ key }}')">&times;</button>
+        <!-- ÜST BAR -->
+        <div class="sf-topbar">
+            <div class="sf-result-count">Arama sonucunda <strong>{{ page_obj.paginator.count|default:"0" }}</strong> ürün bulundu</div>
+            
+            <div class="sf-custom-select" id="custom-sort-select">
+                <div class="sf-select-trigger">
+                    <span id="sf-select-label">Önerilen Sıralama</span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                </div>
+                <div class="sf-select-dropdown">
+                    {% for value, label in filter_form.fields.ordering.choices %}
+                        <div class="sf-select-option {% if filter_form.cleaned_data.ordering == value %}selected{% endif %}" data-value="{{ value }}">
+                            {{ label }}
                         </div>
                     {% endfor %}
-                {% endif %}
-            </div>
-
-            <div class="sorting">
-                <select name="ordering" form="filterForm" class="sorting-select" onchange="document.getElementById('filterForm').submit();">
-                    <option value="-created"   {% if request.GET.ordering == '-created' or not request.GET.ordering %}selected{% endif %}>En Yeniler</option>
-                    <option value="min_price"  {% if request.GET.ordering == 'min_price' %}selected{% endif %}>En Düşük Fiyat</option>
-                    <option value="-min_price" {% if request.GET.ordering == '-min_price' %}selected{% endif %}>En Yüksek Fiyat</option>
-                    <option value="-sold"      {% if request.GET.ordering == '-sold' %}selected{% endif %}>En Çok Satanlar</option>
-                </select>
+                </div>
             </div>
         </div>
 
-        <!-- Ürünler -->
+        <!-- ÜRÜN GRID -->
         {% if products %}
-            <div class="product-grid">
+            <div class="sf-grid">
                 {% for product in products %}
-                <div class="product-card">
-                    <a href="{% url 'products:product_detail' slug=product.slug %}">
-                        
-                        <div class="pc-image">
-                            {% if product.main_images %}
-                                <img src="{{ product.main_images.0.image.url }}" alt="{{ product.name }}">
-                            {% else %}
-                                <div class="pc-no-image"><i class="fas fa-image fa-2x"></i></div>
-                            {% endif %}
-                        </div>
-
-                        <div class="pc-body">
-                            {% if product.brand %}
-                            <div class="pc-brand">{{ product.brand.name }}</div>
-                            {% endif %}
-                            
-                            <h3 class="pc-name">{{ product.name }}</h3>
-                            
-                            <div class="pc-price-row">
-                                <div class="pc-price">₺{{ product.min_price|floatformat:2 }}</div>
-                                <div class="pc-free-shipping">Kargo Bedava</div>
+                <a href="{% url 'products:product_detail' slug=product.slug %}" class="sf-card">
+                    <div class="sf-card-img-wrap">
+                        <img src="{% if product.thumbnail_url %}{{ product.thumbnail_url }}{% else %}{% static 'core/images/placeholder.png' %}{% endif %}" alt="{{ product.name }}">
+                    </div>
+                    
+                    <div class="sf-card-brand">{{ product.brand.name|default:"Genel Marka" }}</div>
+                    <div class="sf-card-name" title="{{ product.name }}">{{ product.name }}</div>
+                    
+                    <div class="sf-card-footer">
+                        <div class="sf-rating">
+                            <div class="sf-star-rating">
+                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star-half-stroke"></i>
                             </div>
+                            (21)
                         </div>
 
-                    </a>
-                </div>
+                        <div class="sf-card-price-group">
+                            <div class="sf-card-price">
+                                <span class="js-format-money">{{ product.buybox_price }}</span> <span class="sf-card-price-currency">TL</span>
+                            </div>
+                            
+                            {% if product.total_sales > 0 %}
+                            <div class="sf-card-sales" title="Toplam {{ product.total_sales }} adet satıldı">
+                                <i class="fa-solid fa-fire"></i> {{ product.total_sales }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </a>
                 {% endfor %}
             </div>
 
-            <!-- Sayfalama (Pagination) -->
-            {% if page_obj.has_other_pages %}
-            <div class="pagination">
+            <!-- SAYFALAMA -->
+            {% if is_paginated %}
+            <div class="sf-pagination">
                 {% if page_obj.has_previous %}
-                    <button type="button" class="page-btn" onclick="goToPage('{{ page_obj.previous_page_number }}')">
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                {% else %}
-                    <span class="page-btn disabled"><i class="fas fa-chevron-left"></i></span>
+                    <button class="sf-page-btn js-page-btn" data-page="{{ page_obj.previous_page_number }}"><i class="fa-solid fa-chevron-left"></i></button>
                 {% endif %}
 
                 {% for num in page_obj.paginator.page_range %}
                     {% if page_obj.number == num %}
-                        <span class="page-btn active">{{ num }}</span>
-                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                        <button type="button" class="page-btn" onclick="goToPage('{{ num }}')">{{ num }}</button>
+                        <span class="sf-page-btn current">{{ num }}</span>
+                    {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+                        <button class="sf-page-btn js-page-btn" data-page="{{ num }}">{{ num }}</button>
                     {% endif %}
                 {% endfor %}
 
                 {% if page_obj.has_next %}
-                    <button type="button" class="page-btn" onclick="goToPage('{{ page_obj.next_page_number }}')">
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-                {% else %}
-                    <span class="page-btn disabled"><i class="fas fa-chevron-right"></i></span>
+                    <button class="sf-page-btn js-page-btn" data-page="{{ page_obj.next_page_number }}"><i class="fa-solid fa-chevron-right"></i></button>
                 {% endif %}
             </div>
             {% endif %}
 
         {% else %}
-            <!-- Boş Durum -->
-            <div class="empty-state">
-                <i class="fas fa-search"></i>
-                <h3>Ürün Bulunamadı</h3>
-                <p>Arama kriterlerinize veya seçtiğiniz filtrelere uygun bir ürün bulunmuyor.</p>
-                <button type="button" onclick="window.location.href='?'" class="btn-filter" style="width: auto; padding: 10px 24px; margin-top: 15px;">Filtreleri Temizle</button>
+            <!-- BOŞ DURUM -->
+            <div class="sf-empty">
+                <i class="fa-solid fa-box-open"></i>
+                <h3>Aramanıza uygun ürün bulamadık.</h3>
+                <p>Seçtiğiniz filtreleri kaldırarak veya değiştirerek tekrar deneyebilirsiniz.</p>
+                <a href="{% url 'products:product_list' %}" class="btn-return-all"><i class="fa-solid fa-filter-circle-xmark"></i> Filtreleri Temizle</a>
             </div>
         {% endif %}
 
     </main>
-
 </div>
 
+<!-- JavaScript -->
 <script>
-    function removeFilter(inputName) {
-        let form = document.getElementById('filterForm');
-        let input = form.querySelector(`[name="${inputName}"]`);
-        
-        if (input) {
-            input.value = '';
-        } else {
-            let hiddenInput = document.createElement("input");
-            hiddenInput.setAttribute("type", "hidden");
-            hiddenInput.setAttribute("name", inputName);
-            hiddenInput.setAttribute("value", "");
-            form.appendChild(hiddenInput);
+document.addEventListener("DOMContentLoaded", () => {
+    
+    // Fiyat Formatlama
+    document.querySelectorAll('.js-format-money').forEach(el => {
+        const val = parseFloat(el.innerText.replace(',', '.'));
+        if(!isNaN(val)) {
+            el.innerText = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
         }
-        form.submit();
+    });
+
+    const filterForm = document.getElementById("filter-form");
+
+    // TEMİZ URL İLE GÖNDERİM FONKSİYONU (Boş olan inputları URL'e basmaz)
+    function cleanEmptyAndSubmit() {
+        const inputs = filterForm.querySelectorAll("input[name], select[name]");
+        inputs.forEach(input => {
+            // Eğer alan boşsa VEYA seçili olmayan bir checkbox/radio ise disable et ki URL'e girmesin
+            if (!input.value || (input.type === 'checkbox' && !input.checked) || (input.type === 'radio' && !input.checked)) {
+                input.disabled = true;
+            }
+        });
+        filterForm.submit();
     }
 
-    function goToPage(pageNumber) {
-        document.getElementById('pageInput').value = pageNumber;
-        document.getElementById('filterForm').submit();
+    // Normal Otomatik Submit (Marka, Kategori, Renk vb.)
+    document.querySelectorAll(".js-auto-submit").forEach(input => {
+        input.addEventListener("change", () => cleanEmptyAndSubmit());
+    });
+
+    // Custom Sort Dropdown
+    const customSelect = document.getElementById("custom-sort-select");
+    if(customSelect) {
+        const trigger = customSelect.querySelector(".sf-select-trigger");
+        const options = customSelect.querySelectorAll(".sf-select-option");
+        const hiddenOrdering = document.getElementById("hidden_ordering");
+        const selectLabel = document.getElementById("sf-select-label");
+
+        const selectedOpt = customSelect.querySelector(".sf-select-option.selected");
+        if(selectedOpt) selectLabel.textContent = selectedOpt.textContent.trim();
+
+        trigger.addEventListener("click", (e) => {
+            e.stopPropagation();
+            customSelect.classList.toggle("open");
+        });
+
+        options.forEach(opt => {
+            opt.addEventListener("click", () => {
+                hiddenOrdering.value = opt.dataset.value;
+                selectLabel.textContent = opt.textContent.trim();
+                customSelect.classList.remove("open");
+                cleanEmptyAndSubmit();
+            });
+        });
+
+        document.addEventListener("click", (e) => {
+            if(!customSelect.contains(e.target)) customSelect.classList.remove("open");
+        });
     }
+
+    // Filtre Akordiyon
+    document.querySelectorAll(".js-accordion-toggle").forEach(header => {
+        const body = header.nextElementSibling;
+        if (!header.classList.contains("open")) body.style.display = "none";
+    
+        header.addEventListener("click", () => {
+            const isOpen = header.classList.toggle("open");
+            body.style.display = isOpen ? "block" : "none";
+        });
+    });
+
+    // Alt Kategori Aç/Kapa
+    document.querySelectorAll(".js-subcat-toggle").forEach(toggleBtn => {
+        toggleBtn.addEventListener("click", (e) => {
+            e.stopPropagation(); 
+            toggleBtn.classList.toggle("open");
+            const subList = toggleBtn.closest(".sf-cat-item").querySelector(".sf-subcat-list");
+            if(subList) subList.classList.toggle("open");
+        });
+    });
+
+    // Marka Arama
+    const brandSearch = document.querySelector(".js-brand-search");
+    if(brandSearch) {
+        brandSearch.addEventListener("input", (e) => {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll(".js-brand-item").forEach(item => {
+                const text = item.querySelector(".sf-check-text").textContent.toLowerCase();
+                item.style.display = text.includes(term) ? "flex" : "none";
+            });
+        });
+    }
+
+    // Sayfalama
+    document.querySelectorAll(".js-page-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            const pageNum = btn.dataset.page;
+            let pageInput = document.getElementById("hidden-page-input");
+            if (!pageInput) {
+                pageInput = document.createElement("input");
+                pageInput.type = "hidden";
+                pageInput.name = "page";
+                pageInput.id = "hidden-page-input";
+                filterForm.appendChild(pageInput);
+            }
+            pageInput.value = pageNum;
+            cleanEmptyAndSubmit();
+        });
+    });
+
+    // Tekli Filtre Silme (X Butonu)
+    document.querySelectorAll(".js-remove-filter").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            const field = btn.dataset.field; 
+            const val = btn.dataset.val;
+            
+            if(field === "manual_price") {
+                document.getElementById("min-price-input").value = "";
+                document.getElementById("max-price-input").value = "";
+            } else if (field === "category") {
+                document.querySelectorAll(`input[name="category"]`).forEach(inp => inp.checked = false);
+            } else {
+                // Sadece spesifik value değerine sahip olanı unchecked yap
+                const input = document.querySelector(`input[name="${field}"][value="${val}"]`);
+                if(input) input.checked = false;
+            }
+            
+            let pageInput = document.getElementById("hidden-page-input");
+            if(pageInput) pageInput.remove();
+
+            cleanEmptyAndSubmit();
+        });
+    });
+
+    // --- FİYAT FİLTRESİ ÇAKIŞMA MANTIĞI ---
+    const minPriceInput = document.getElementById("min-price-input");
+    const maxPriceInput = document.getElementById("max-price-input");
+    const btnCustomPriceSubmit = document.getElementById("btn-custom-price-submit");
+    const priceRangeCheckboxes = document.querySelectorAll(".js-price-range-checkbox");
+
+    // KURAL 1: Kullanıcı hazır aralık seçerse custom fiyatları temizle
+    priceRangeCheckboxes.forEach(cb => {
+        cb.addEventListener("change", () => {
+            if (cb.checked) {
+                if (minPriceInput) minPriceInput.value = "";
+                if (maxPriceInput) maxPriceInput.value = "";
+            }
+            cleanEmptyAndSubmit();
+        });
+    });
+
+    // KURAL 2: Özel fiyat girip Ok'a basarsa hazır aralıkları temizle
+    function applyCustomPrice() {
+        const minVal = minPriceInput ? minPriceInput.value.trim() : "";
+        const maxVal = maxPriceInput ? maxPriceInput.value.trim() : "";
+        
+        if (minVal !== "" || maxVal !== "") {
+            priceRangeCheckboxes.forEach(cb => cb.checked = false);
+        }
+        cleanEmptyAndSubmit();
+    }
+
+    if (btnCustomPriceSubmit) {
+        btnCustomPriceSubmit.addEventListener("click", (e) => {
+            e.preventDefault();
+            applyCustomPrice();
+        });
+    }
+
+    const customPriceContainer = document.getElementById("custom-price-container");
+    if (customPriceContainer) {
+        customPriceContainer.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                applyCustomPrice();
+            }
+        });
+    }
+});
 </script>
 {% endblock %}
