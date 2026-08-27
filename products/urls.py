@@ -1,10 +1,5 @@
 from django.urls import path
-from .views_old import (
-    # Satıcı dashboard view'ları
-    
-    # Müşteri vitrini view'ları
-    ProductDetailView,
-)
+
 
 from products.views.wizard import(
     # Satıcı dashboard view'ları
@@ -41,7 +36,7 @@ from products.views.offer import OfferCreateView, OfferCustomVariantCreateView, 
 
 from products.views.inventory import StoreProductListView, StoreProductUpdateView, ProductUpdateView, StoreProductArchiveView
 
-from products.views.storefront import ProductListView, CategoryProductListView
+from products.views.storefront import ProductListView, CategoryProductListView, ProductDetailView
 
 app_name = 'products'
 
@@ -50,7 +45,7 @@ urlpatterns = [
     # Müşteri Vitrini
     path('', ProductListView.as_view(), name='product_list'),
     path('category/<slug:slug>/', CategoryProductListView.as_view(), name='category_product_list'),
-    path('<slug:slug>/', ProductDetailView.as_view(), name='product_detail'),
+    
 
     # Satıcı Dashboard
     # path('store/<slug:store_slug>/products/', StoreProductListView.as_view(), name='store_product_list'),
@@ -78,6 +73,8 @@ urlpatterns = [
     path('seller/<slug:store_slug>/inventory/<slug:product_slug>/edit/', ProductUpdateView.as_view(), name='product_update',),
 
     path('seller/<slug:store_slug>/inventory/offer/<int:pk>/archive/', StoreProductArchiveView.as_view(), name='offer_archive'),
+
+    path('<slug:slug>/', ProductDetailView.as_view(), name='product_detail'),
 
     #----------------------- yeni wizard
     # ==========================================================

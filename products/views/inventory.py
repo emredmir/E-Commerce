@@ -691,8 +691,8 @@ class ProductUpdateView(SellerRequiredMixin, StoreOwnerMixin, View):
                         return JsonResponse({"success": True})
                     
                     # 5. BARKOD GÜNCELLEME (Bunda da HTML dönmez)
-                    elif action == "update_barcodes_bulk":
-                        return self._handle_update_barcode(request, product)
+                    elif action == "update_variants_data":
+                        return self._handle_update_variants_data(request, product)
 
             except Exception:
                 logger.exception("Katalog görseli güncellenirken hata oluştu.")
@@ -731,9 +731,10 @@ class ProductUpdateView(SellerRequiredMixin, StoreOwnerMixin, View):
         
         return render_to_string("products/seller/image_grid.html", {"group": group})
 
-    def _handle_update_barcode(self, request, product):
+    def _handle_update_variants_data(self, request, product):
         try:
             barcodes_json = request.POST.get("barcodes_data", "[]")
+            default_variant_id = request.POST.get("default_variant_id")
             data = json.loads(barcodes_json)
             variants_to_update = []
 
@@ -741,29 +742,42 @@ class ProductUpdateView(SellerRequiredMixin, StoreOwnerMixin, View):
             variants_map = {str(v.id): v for v in product.variants.all()}
             
             with transaction.atomic():
+                # 2. Ana Varyant Güncellemesi (Product Modeli)
+                if default_variant_id and hasattr(product, 'default_variant_id'):
+                    product.default_variant_id = default_variant_id
+                    product.save(update_fields=['default_variant_id'])
+                
+                # 3. Barkod Güncellemesi
                 for item in data:
-                    variant_id = item.get("variant_id")
-                    # Boş string gelirse NULL (None) yap ki Unique Constraint patlamasın
+                    variant_id = str(item.get("variant_id"))
                     barcode_val = item.get("barcode", "").strip() or None
                     
-                    # 2. Döngü içinde DB'ye gitmek yerine RAM'den (dict) oku
                     variant = variants_map.get(variant_id)
                     if variant:
                         variant.barcode = barcode_val
+                        
+                        # ProductVariant modelinde is_default alanı varsa onu da senkronize edelim
+                        if hasattr(variant, 'is_default'):
+                            variant.is_default = (variant_id == str(default_variant_id))
+                            
                         variants_to_update.append(variant)
 
                 # Veritabanında toplu güncelleme
                 if variants_to_update:
-                    ProductVariant.objects.bulk_update(variants_to_update, ["barcode"])
-            return JsonResponse({"success": True, "message": "Barkodlar başarıyla güncellendi."})
+                    update_fields = ["barcode"]
+                    if hasattr(variants_to_update[0], 'is_default'):
+                        update_fields.append("is_default")
+                    ProductVariant.objects.bulk_update(variants_to_update, update_fields)
+                    
+            return JsonResponse({"success": True, "message": "Varyant ayarları başarıyla güncellendi."})
         except IntegrityError:
             return JsonResponse({
                 "success": False, 
                 "message": "Girdiğiniz barkodlardan biri sistemdeki başka bir üründe zaten kullanılıyor!"
             }, status=400)
         except Exception as e:
-            logger.exception("Barkod toplu güncelleme hatası")
-            return JsonResponse({"success": False, "message": "Barkodlar güncellenirken bir hata oluştu."})
+            logger.exception("Varyant toplu güncelleme hatası")
+            return JsonResponse({"success": False, "message": "Ayarlar güncellenirken bir hata oluştu."})
 
 
 class StoreProductArchiveView(SellerRequiredMixin, StoreOwnerMixin, View):

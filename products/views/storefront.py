@@ -1,8 +1,8 @@
 import logging
 from django.db.models import Min, Sum, Count, Q, Prefetch, OuterRef, Subquery, IntegerField
 from django.db.models.functions import Coalesce
-from django.views.generic import ListView
-from django.shortcuts import get_object_or_404
+from django.views.generic import ListView, View
+from django.shortcuts import get_object_or_404, render
 
 from products.models import (
     Product,
@@ -15,6 +15,8 @@ from products.models import (
     ProductImage,
 )
 from products.forms.storefront import ProductFilterForm
+from products.services.storefront import ProductDetailService
+from products.services.storefront_offers import StorefrontOfferService
 
 logger = logging.getLogger(__name__)
 
@@ -83,14 +85,17 @@ class ProductListView(ListView):
             total=Sum('sold_count')
         ).values('total')
 
-        # B. BuyBox (En Düşük Fiyat) Alt Sorgusu
-        buybox_sq = StoreProduct.objects.filter(
-            variant__product=OuterRef('pk'),
-            variant__is_active=True,
-            status=StoreProductStatus.ACTIVE,
-            stock__gt=0,
-            store__is_active=True,
-        ).order_by('price').values('price')[:1]
+
+        # Varsayılan Varyantın Fiyatı (Varsa)
+        default_variant_price_sq = StorefrontOfferService.get_product_buybox_subquery(use_default_variant=True)
+        # Herhangi Bir Varyantın En Düşük Fiyatı (Varsayılan yoksa veya tükendiyse Fallback olarak)
+        fallback_price_sq = StorefrontOfferService.get_product_buybox_subquery(use_default_variant=False)
+
+        default_variant_store_sq = StorefrontOfferService.get_product_buybox_store_subquery(use_default_variant=True)
+        fallback_store_sq = StorefrontOfferService.get_product_buybox_store_subquery(use_default_variant=False)
+
+        default_variant_id_sq = StorefrontOfferService.get_product_buybox_variant_subquery(use_default_variant=True)
+        fallback_variant_id_sq = StorefrontOfferService.get_product_buybox_variant_subquery(use_default_variant=False)
 
 
         # -------------------------------------------------------------
@@ -108,10 +113,11 @@ class ProductListView(ListView):
             .select_related("category", "brand")
             .prefetch_related(image_groups_prefetch)
             .annotate(
-                # Subquery ile çekildiği için satırlar çarpılmaz (%100 doğru sonuç)
-                buybox_price=Subquery(buybox_sq),
+                # Önce default varyantın fiyatını dene, null dönerse fallback (en ucuz) fiyatını al!
+                buybox_price=Coalesce(default_variant_price_sq, fallback_price_sq),
+                buybox_store_id=Coalesce(default_variant_store_sq, fallback_store_sq),
+                buybox_variant_id=Coalesce(default_variant_id_sq, fallback_variant_id_sq),
                 total_sales=Coalesce(Subquery(sales_sq, output_field=IntegerField()), 0),
-                
             )
         )
 
@@ -318,3 +324,172 @@ class CategoryProductListView(ProductListView):
             breadcrumbs.append(current)
             current = current.parent
         return list(reversed(breadcrumbs))
+
+class ProductDetailView(View):
+    """
+    Müşteri vitrini — Ürün Detay Sayfası.
+
+    View'ın görevi:
+
+    - Product'ı gerekli ilişkileriyle yüklemek
+    - Request'ten variant bilgisini almak
+    - ProductDetailService'e devretmek
+    - Template'i render etmek
+
+    Business logic burada bulunmaz.
+    """
+
+    template_name = "products/public/product_detail.html"
+
+    def get_product(self, slug):
+
+        # =====================================================
+        # PRODUCT IMAGES
+        # =====================================================
+
+        images_prefetch = Prefetch(
+            "images",
+            queryset=(
+                ProductImage.objects
+                .order_by(
+                    "sort_order",
+                    "id",
+                )
+            ),
+        )
+
+        # =====================================================
+        # IMAGE GROUPS
+        # =====================================================
+
+        image_groups_prefetch = Prefetch(
+            "image_groups",
+            queryset=(
+                ProductImageGroup.objects
+                .filter(is_active=True)
+                .prefetch_related(
+                    "visual_attribute_values",
+                    images_prefetch,
+                )
+            ),
+            to_attr="cached_image_groups",
+        )
+
+        # =====================================================
+        # VARIANTS
+        # =====================================================
+
+        variants_prefetch = Prefetch(
+            "variants",
+            queryset=(
+                ProductVariant.objects
+                .filter(is_active=True)
+                .prefetch_related(
+                    "attribute_values__attribute",
+                )
+            ),
+            to_attr="active_variants",
+        )
+
+        # =====================================================
+        # PRODUCT
+        # =====================================================
+
+        return get_object_or_404(
+            Product.objects
+            .select_related(
+                "category",
+                "brand",
+            )
+            .prefetch_related(
+                image_groups_prefetch,
+                variants_prefetch,
+            ),
+            slug=slug,
+            status=ProductStatus.ACTIVE,
+        )
+
+    def _get_breadcrumbs(self, category):
+        """Kategoriden köke doğru breadcrumb zinciri oluşturur."""
+        breadcrumbs = []
+        current = category
+        while current:
+            breadcrumbs.append(current)
+            current = current.parent
+        return list(reversed(breadcrumbs))
+        
+
+    def get(self, request, slug, *args, **kwargs):
+
+        product = self.get_product(slug)
+
+        context = ProductDetailService.get_page_data(
+            product=product,
+            variant_id=request.GET.get("variant"),
+            offer_id=request.GET.get("offer"),
+        )
+
+        # ----------------------------------------------------
+        # BENZER VE MARKA ÜRÜNLERİ
+        # (Sadece aktif ve BuyBox'ı olan ürünler getirilir)
+        # ----------------------------------------------------
+        base_qs = Product.objects.filter(
+            ProductListView.AVAILABLE_OFFER_Q,
+            status=ProductStatus.ACTIVE,
+            variants__is_active=True
+        ).distinct().exclude(id=product.id) # Kendisini hariç tut
+
+        # Aynı Kategorideki Benzer Ürünler (Maks 10 tane)
+        similar_products = base_qs.filter(category=product.category).select_related('brand').prefetch_related(
+            Prefetch("image_groups", queryset=ProductImageGroup.objects.filter(is_active=True).order_by("sort_order").prefetch_related("images"))
+        )[:10]
+
+        # Kapak fotoğraflarını Python'da çözümle
+        for sp in similar_products:
+            # Ufak bir metod ile ilk resmi alıyoruz
+            sp.thumbnail_url = None
+            for group in sp.image_groups.all():
+                images = list(group.images.all())
+
+                main_img = next(
+                    (img for img in images if img.is_main),
+                    images[0] if images else None,
+                )
+
+                if main_img:
+                    sp.thumbnail_url = main_img.image.url
+                    break
+
+        context["similar_products"] = similar_products
+
+        # Aynı Markanın Ürünleri (Maks 10 tane) - Sadece ürünün markası varsa çalışır
+        brand_products = []
+        if product.brand:
+            brand_products = base_qs.filter(brand=product.brand).select_related('brand').prefetch_related(
+                Prefetch("image_groups", queryset=ProductImageGroup.objects.filter(is_active=True).order_by("sort_order").prefetch_related("images"))
+            )[:10]
+            
+            for bp in brand_products:
+                bp.thumbnail_url = None
+                for group in bp.image_groups.all():
+                    images = list(group.images.all())
+
+                    main_img = next(
+                        (img for img in images if img.is_main),
+                        images[0] if images else None,
+                    )
+            
+                    if main_img:
+                        bp.thumbnail_url = main_img.image.url
+                        break
+                        
+        context["brand_products"] = brand_products
+
+        # BREADCRUMB İÇİN KATEGORİ AĞACINI CONTEXT'E EKLİYORUZ
+        context["breadcrumbs"] = self._get_breadcrumbs(product.category)
+
+        return render(
+            request,
+            self.template_name,
+            context,
+        )

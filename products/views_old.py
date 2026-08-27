@@ -1011,186 +1011,186 @@ logger = logging.getLogger(__name__)
 #         return list(reversed(breadcrumbs))
 
 
-class ProductDetailView(View):
-    """
-    Müşteri vitrini — ürün detay sayfası.
+# class ProductDetailView(View):
+#     """
+#     Müşteri vitrini — ürün detay sayfası.
 
-    Özellikler:
-        - URL üzerinden varyant seçimi desteklenir (?variant=<pk>).
-        - Seçilen varyanta ait görseller gösterilir.
-        - Varyanta özel görsel yoksa ürünün genel görselleri kullanılır.
-        - Buy Box (en uygun satın alınabilir teklif) gösterilir.
-        - Buy Box dışındaki teklifler "Diğer Satıcılar" bölümünde listelenir.
+#     Özellikler:
+#         - URL üzerinden varyant seçimi desteklenir (?variant=<pk>).
+#         - Seçilen varyanta ait görseller gösterilir.
+#         - Varyanta özel görsel yoksa ürünün genel görselleri kullanılır.
+#         - Buy Box (en uygun satın alınabilir teklif) gösterilir.
+#         - Buy Box dışındaki teklifler "Diğer Satıcılar" bölümünde listelenir.
 
-    URL:
-        /products/<slug:slug>/
-    """
+#     URL:
+#         /products/<slug:slug>/
+#     """
 
-    template_name = "products/public/product_detail.html"
+#     template_name = "products/public/product_detail.html"
 
-    def get_product(self):
-        """
-        Ürünü, görsellerini ve aktif varyantlarını tek seferde yükler.
-        """
-        if not hasattr(self, "_product"):
-            self._product = get_object_or_404(
-                Product.objects
-                .select_related("category", "brand")
-                .prefetch_related(
-                    Prefetch(
-                        "images",
-                        queryset=ProductImage.objects.order_by("sort_order"),
-                        to_attr="all_images",
-                    ),
-                    Prefetch(
-                        "variants",
-                        queryset=(
-                            ProductVariant.objects
-                            .filter(status=ProductStatus.ACTIVE)
-                            .prefetch_related("attribute_values__attribute")
-                        ),
-                        to_attr="active_variants",
-                    ),
-                ),
-                slug=self.kwargs["slug"],
-                is_active=True,
-            )
+#     def get_product(self):
+#         """
+#         Ürünü, görsellerini ve aktif varyantlarını tek seferde yükler.
+#         """
+#         if not hasattr(self, "_product"):
+#             self._product = get_object_or_404(
+#                 Product.objects
+#                 .select_related("category", "brand")
+#                 .prefetch_related(
+#                     Prefetch(
+#                         "images",
+#                         queryset=ProductImage.objects.order_by("sort_order"),
+#                         to_attr="all_images",
+#                     ),
+#                     Prefetch(
+#                         "variants",
+#                         queryset=(
+#                             ProductVariant.objects
+#                             .filter(status=ProductStatus.ACTIVE)
+#                             .prefetch_related("attribute_values__attribute")
+#                         ),
+#                         to_attr="active_variants",
+#                     ),
+#                 ),
+#                 slug=self.kwargs["slug"],
+#                 is_active=True,
+#             )
 
-        return self._product
+#         return self._product
 
-    def get_selected_variant(self, product):
-        """
-        URL'deki ?variant=<pk> parametresini okur.
+#     def get_selected_variant(self, product):
+#         """
+#         URL'deki ?variant=<pk> parametresini okur.
 
-        Parametre yoksa veya ürünün aktif varyantlarından biri değilse
-        None döner.
-        """
-        variant_pk = self.request.GET.get("variant")
+#         Parametre yoksa veya ürünün aktif varyantlarından biri değilse
+#         None döner.
+#         """
+#         variant_pk = self.request.GET.get("variant")
 
-        if not variant_pk:
-            return None
+#         if not variant_pk:
+#             return None
 
-        return next(
-            (
-                variant
-                for variant in product.active_variants
-                if str(variant.pk) == variant_pk
-            ),
-            None,
-        )
+#         return next(
+#             (
+#                 variant
+#                 for variant in product.active_variants
+#                 if str(variant.pk) == variant_pk
+#             ),
+#             None,
+#         )
 
-    def get_offers(self, product, selected_variant=None):
-        """
-        Satın alınabilir teklifleri getirir.
+#     def get_offers(self, product, selected_variant=None):
+#         """
+#         Satın alınabilir teklifleri getirir.
 
-        StoreProductQuerySet.purchasable() sayesinde yalnızca:
-            - aktif teklifler
-            - stokta olan teklifler
-            - aktif mağazalara ait teklifler
+#         StoreProductQuerySet.purchasable() sayesinde yalnızca:
+#             - aktif teklifler
+#             - stokta olan teklifler
+#             - aktif mağazalara ait teklifler
 
-        döndürülür.
-        """
+#         döndürülür.
+#         """
 
-        queryset = (
-            StoreProduct.objects
-            .purchasable()
-            .filter(variant__product=product)
-            .select_related(
-                "store",
-                "variant",
-                "variant__product",
-            )
-            .prefetch_related("variant__attribute_values")
-            .order_by("price")
-        )
+#         queryset = (
+#             StoreProduct.objects
+#             .purchasable()
+#             .filter(variant__product=product)
+#             .select_related(
+#                 "store",
+#                 "variant",
+#                 "variant__product",
+#             )
+#             .prefetch_related("variant__attribute_values")
+#             .order_by("price")
+#         )
 
-        if selected_variant:
-            queryset = queryset.filter(variant=selected_variant)
+#         if selected_variant:
+#             queryset = queryset.filter(variant=selected_variant)
 
-        return list(queryset)
+#         return list(queryset)
 
-    def _get_display_images(self, product, selected_variant):
-        """
-        Gösterilecek görselleri belirler.
+#     def _get_display_images(self, product, selected_variant):
+#         """
+#         Gösterilecek görselleri belirler.
 
-        Öncelik sırası:
+#         Öncelik sırası:
 
-            1. Seçili varyanta ait görseller
-            2. Ürünün genel görselleri
-            3. Üründeki tüm görseller
-        """
+#             1. Seçili varyanta ait görseller
+#             2. Ürünün genel görselleri
+#             3. Üründeki tüm görseller
+#         """
 
-        if selected_variant:
-            variant_images = [
-                image
-                for image in product.all_images
-                if image.variant_id == selected_variant.pk
-            ]
+#         if selected_variant:
+#             variant_images = [
+#                 image
+#                 for image in product.all_images
+#                 if image.variant_id == selected_variant.pk
+#             ]
 
-            if variant_images:
-                return variant_images
+#             if variant_images:
+#                 return variant_images
 
-        general_images = [
-            image
-            for image in product.all_images
-            if image.variant_id is None
-        ]
+#         general_images = [
+#             image
+#             for image in product.all_images
+#             if image.variant_id is None
+#         ]
 
-        return general_images or product.all_images
+#         return general_images or product.all_images
 
-    def _get_variant_attributes(self, product):
-        """
-        Template'deki varyant seçici için attribute -> value yapısını oluşturur.
+#     def _get_variant_attributes(self, product):
+#         """
+#         Template'deki varyant seçici için attribute -> value yapısını oluşturur.
 
-        Örnek:
+#         Örnek:
 
-        {
-            "Renk": [Kırmızı, Mavi],
-            "Beden": [S, M, L],
-        }
-        """
+#         {
+#             "Renk": [Kırmızı, Mavi],
+#             "Beden": [S, M, L],
+#         }
+#         """
 
-        attributes = defaultdict(dict)
+#         attributes = defaultdict(dict)
 
-        for variant in product.active_variants:
-            for attribute_value in variant.attribute_values.all():
-                attributes[
-                    attribute_value.attribute.name
-                ][attribute_value.pk] = attribute_value
+#         for variant in product.active_variants:
+#             for attribute_value in variant.attribute_values.all():
+#                 attributes[
+#                     attribute_value.attribute.name
+#                 ][attribute_value.pk] = attribute_value
 
-        return {
-            name: list(values.values())
-            for name, values in attributes.items()
-        }
+#         return {
+#             name: list(values.values())
+#             for name, values in attributes.items()
+#         }
 
-    def get(self, request, *args, **kwargs):
-        product = self.get_product()
+#     def get(self, request, *args, **kwargs):
+#         product = self.get_product()
 
-        selected_variant = self.get_selected_variant(product)
+#         selected_variant = self.get_selected_variant(product)
 
-        offers = self.get_offers(
-            product,
-            selected_variant,
-        )
+#         offers = self.get_offers(
+#             product,
+#             selected_variant,
+#         )
 
-        buy_box_offer = offers[0] if offers else None
-        other_offers = offers[1:] if offers else []
+#         buy_box_offer = offers[0] if offers else None
+#         other_offers = offers[1:] if offers else []
 
-        context = {
-            "product": product,
-            "selected_variant": selected_variant,
-            "buy_box_offer": buy_box_offer,
-            "other_offers": other_offers,
-            "display_images": self._get_display_images(
-                product,
-                selected_variant,
-            ),
-            "variant_attributes": self._get_variant_attributes(product),
-            "has_offers": bool(offers),
-        }
+#         context = {
+#             "product": product,
+#             "selected_variant": selected_variant,
+#             "buy_box_offer": buy_box_offer,
+#             "other_offers": other_offers,
+#             "display_images": self._get_display_images(
+#                 product,
+#                 selected_variant,
+#             ),
+#             "variant_attributes": self._get_variant_attributes(product),
+#             "has_offers": bool(offers),
+#         }
 
-        return render(
-            request,
-            self.template_name,
-            context,
-        )
+#         return render(
+#             request,
+#             self.template_name,
+#             context,
+#         )

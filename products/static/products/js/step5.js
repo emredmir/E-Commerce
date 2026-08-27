@@ -13,6 +13,11 @@ let parsedVariants = [];
 let availableAttributes = {}; // Örn: { "Renk": Set("Siyah", "Beyaz"), "Beden": Set("M", "L") }
 let selectedAttributes = {};  // Örn: { "Renk": "Siyah", "Beden": "M" }
 
+let galleryState = {
+    currentIndex: 0,
+    totalImages: 0
+};
+
 /* ----------------------------------------------------------
  * CSRF Token
  * ---------------------------------------------------------- */
@@ -32,75 +37,240 @@ function getCookie(name) {
 }
 const csrftoken = getCookie("csrftoken");
 
+
 /* ----------------------------------------------------------
- * Currency Formatter
+ * 1. ORTAK GALERİ YÖNETİMİ
  * ---------------------------------------------------------- */
-function formatMoneyTR(val) {
-    if (!val) return val;
-    let normalized = String(val).trim();
+function goToImage(visibleIndex, isHover = false) {
+    // DOM'da display: none olmayan resimleri bul
+    const visibleThumbs = Array.from(document.querySelectorAll(".js-thumb-item")).filter(t => t.style.display !== "none");
+    galleryState.totalImages = visibleThumbs.length;
+
+    if (galleryState.totalImages === 0) return;
     
-    // Eğer sunucudan sadece virgüllü gelirse (155000,50), parseFloat için noktaya çevirir.
-    if (normalized.includes(',') && !normalized.includes('.')) {
-        normalized = normalized.replace(',', '.');
+    // Sonsuz döngü (Başa/Sona sarma)
+    if (visibleIndex < 0) visibleIndex = galleryState.totalImages - 1;
+    if (visibleIndex >= galleryState.totalImages) visibleIndex = 0;
+
+    galleryState.currentIndex = visibleIndex;
+
+    // Hedef DOM elementini "data-index" üzerinden buluyoruz çünkü filtrelemede indexleri yeniliyoruz
+    const targetThumb = visibleThumbs.find(t => parseInt(t.dataset.index) === visibleIndex) || visibleThumbs[0];
+
+    // 1. Ana Slider
+    const track = document.querySelector(".js-image-track");
+    if (track) {
+        track.dataset.currentIndex = visibleIndex;
+        // Gizli olanlar genişlik kaplamadığı için direkt visibleIndex'i baz alabiliriz
+        track.style.transform = `translateX(-${visibleIndex * 100}%)`;
     }
 
-    const num = parseFloat(normalized);
-    if (isNaN(num)) return val;
+    // 2. Ana Küçük Resimler
+    document.querySelectorAll(".js-thumb-item").forEach(thumb => thumb.classList.remove("active"));
+    if (targetThumb) {
+        targetThumb.classList.add("active");
+        if (!isHover) targetThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
 
-    // JavaScript'in yerleşik bölgesel formatlayıcısı 155000.00 sayısını 155.000,00 yapar
-    return new Intl.NumberFormat('tr-TR', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(num);
+    // 3. Lightbox Slider
+    const lbTrack = document.querySelector(".js-lightbox-track");
+    if (lbTrack) {
+        Array.from(lbTrack.children).forEach(img => {
+            img.style.transition = 'transform 0.2s ease';
+            img.style.transform = 'scale(1)'
+        });
+        lbTrack.dataset.currentIndex = visibleIndex;
+        lbTrack.style.transform = `translateX(-${visibleIndex * 100}%)`;
+    }
+
+    // 4. Lightbox Küçük Resimler
+    const lbThumbs = document.querySelectorAll(".js-lb-thumb");
+    const visibleLbThumbs = Array.from(lbThumbs).filter(t => t.style.display !== "none");
+    lbThumbs.forEach(thumb => thumb.classList.remove("active"));
+    
+    const targetLbThumb = visibleLbThumbs.find(t => parseInt(t.dataset.index) === visibleIndex) || visibleLbThumbs[0];
+    if(targetLbThumb) {
+        targetLbThumb.classList.add("active");
+        if (!isHover) targetLbThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
 }
 
-// Ekranda js-price-format olan yerleri sayfa yüklenir yüklenmez estetik hale getirir
-function initPriceFormatting() {
-    document.querySelectorAll('.js-price-format').forEach(el => {
-        const raw = el.getAttribute('data-raw') || el.innerText.trim();
-        el.innerText = formatMoneyTR(raw);
+function initImageGallery() {
+    // Tıklama & Hover Olayları
+    document.querySelectorAll(".js-thumb-item").forEach((thumb) => {
+        thumb.addEventListener("click", () => goToImage(parseInt(thumb.dataset.index), false));
+        thumb.addEventListener("mouseenter", () => goToImage(parseInt(thumb.dataset.index), true));
+    });
+
+    // Ana sayfa okları
+    const prevBtn = document.querySelector(".js-gallery-prev");
+    const nextBtn = document.querySelector(".js-gallery-next");
+    if (prevBtn) prevBtn.addEventListener("click", (e) => { e.stopPropagation(); goToImage(galleryState.currentIndex - 1, false); });
+    if (nextBtn) nextBtn.addEventListener("click", (e) => { e.stopPropagation(); goToImage(galleryState.currentIndex + 1, false); });
+}
+
+/* ----------------------------------------------------------
+ * 2. KÜÇÜK RESİM OKLARI VE MAUSE TEKERLEĞİ
+ * ---------------------------------------------------------- */
+function initThumbNavigation() {
+    document.querySelectorAll(".js-thumb-prev").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const row = btn.parentElement.querySelector(".js-thumb-scroll");
+            if (row) row.scrollBy({ left: -200, behavior: 'smooth' });
+        });
+    });
+
+    document.querySelectorAll(".js-thumb-next").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const row = btn.parentElement.querySelector(".js-thumb-scroll");
+            if (row) row.scrollBy({ left: 200, behavior: 'smooth' });
+        });
+    });
+
+    document.querySelectorAll(".js-thumb-scroll").forEach(container => {
+        container.addEventListener("wheel", (e) => {
+            if (container.scrollWidth > container.clientWidth) {
+                e.preventDefault(); 
+                container.scrollBy({ left: e.deltaY > 0 ? 150 : -150, behavior: 'auto' });
+            }
+        }, { passive: false });
     });
 }
 
 /* ----------------------------------------------------------
- * 1. Image Gallery Interaction
- * (HTML'deki onclick="changeMainImage(...)" fonksiyonunu global tanımlıyoruz)
+ * 3. IMAGE ZOOM (Hover Zoom)
  * ---------------------------------------------------------- */
-window.changeMainImage = function(url, thumbnailElement) {
-    const track = document.querySelector(".js-image-track");
-    if (!track || !thumbnailElement) return;
+function initImageZoom() {
+    const container = document.querySelector('.js-zoom-container');
+    const lens = document.querySelector('.js-zoom-lens');
+    const result = document.querySelector('.js-zoom-result');
+    const track = document.querySelector('.js-image-track');
 
-    // Hedeflenen ve şu anki resmin indekslerini al
-    const targetIndex = parseInt(thumbnailElement.dataset.index || 0);
-    const currentIndex = parseInt(track.dataset.currentIndex || 0);
+    if (!container || !lens || !result || !track) return;
 
-    // Zaten bu resimdeysek hiçbir şey yapma
-    if (targetIndex === currentIndex) return;
+    container.addEventListener('mouseenter', () => {
+        const visibleImgs = Array.from(track.children).filter(img => img.style.display !== "none");
+        const activeImg = visibleImgs[galleryState.currentIndex];
+        
+        if (!activeImg || activeImg.src.includes('placeholder')) return; 
 
-    // Uzaklık Hesaplama (Aradaki resim sayısı)
-    const diff = Math.abs(targetIndex - currentIndex);
-    
-    // Geçiş süresini hesapla: Yan resme geçerken 0.4s, aradan çok resim geçecekse hızlanarak akar
-    let duration = 0.55; 
-    if (diff > 1) {
-        duration = Math.min(0.9, 0.55 + (diff * 0.07)); // Max  saniyede tamamlar
-    }
-    track.style.transitionDuration = `${duration}s`;
+        result.style.backgroundImage = `url('${activeImg.src}')`;
+        lens.style.display = 'block';
+        result.style.display = 'block';
+    });
 
-    // Track'i X ekseninde yeni resme doğru kaydır (Örn: 2. index için -200% kaydır)
-    track.style.transform = `translateX(-${targetIndex * 100}%)`;
-    
-    // Geçerli index'i güncelle
-    track.dataset.currentIndex = targetIndex;
+    container.addEventListener('mousemove', (e) => {
+        const visibleImgs = Array.from(track.children).filter(img => img.style.display !== "none");
+        const activeImg = visibleImgs[galleryState.currentIndex];
+        if (!activeImg || activeImg.src.includes('placeholder')) return;
 
-    // Küçük resim (Thumbnail) aktiflik durumunu güncelle
-    document.querySelectorAll(".pw-thumbnail-item").forEach(el => el.classList.remove("active"));
-    thumbnailElement.classList.add("active");
-};
+        const rect = container.getBoundingClientRect();
+        
+        let x = e.clientX - rect.left - (lens.offsetWidth / 2);
+        let y = e.clientY - rect.top - (lens.offsetHeight / 2);
+
+        if (x < 0) x = 0;
+        if (y < 0) y = 0;
+        if (x > container.offsetWidth - lens.offsetWidth) x = container.offsetWidth - lens.offsetWidth;
+        if (y > container.offsetHeight - lens.offsetHeight) y = container.offsetHeight - lens.offsetHeight;
+
+        lens.style.left = x + 'px';
+        lens.style.top = y + 'px';
+
+        const zoomLevel = 2; 
+        result.style.backgroundSize = `${container.offsetWidth * zoomLevel}px ${container.offsetHeight * zoomLevel}px`;
+        
+        const cx = (container.offsetWidth * zoomLevel) / container.offsetWidth;
+        const cy = (container.offsetHeight * zoomLevel) / container.offsetHeight;
+        
+        result.style.backgroundPosition = `-${x * cx}px -${y * cy}px`;
+    });
+
+    container.addEventListener('mouseleave', () => {
+        lens.style.display = 'none';
+        result.style.display = 'none';
+    });
+}
 
 /* ----------------------------------------------------------
- * 2. Dynamic Variant Selector Builder
- * (Aşağıdaki Salt Okunur tablodan veriyi parse edip butonları üretir)
+ * 4. LIGHTBOX (Tam Ekran ve İçine Zoom)
+ * ---------------------------------------------------------- */
+function initLightbox() {
+    const container = document.querySelector('.js-zoom-container');
+    const lightbox = document.querySelector('.js-lightbox');
+    const closeBtn = document.querySelector('.js-lightbox-close');
+    const nextBtn = document.querySelector('.js-lightbox-next');
+    const prevBtn = document.querySelector('.js-lightbox-prev');
+    const lbThumbs = document.querySelectorAll(".js-lb-thumb");
+    const lbZoomContainer = document.querySelector(".js-lb-zoom-container");
+    const lbTrack = document.querySelector(".js-lightbox-track");
+
+    if (!container || !lightbox) return;
+
+    container.addEventListener('click', (e) => {
+        if(e.target.closest('.pw-main-img-nav')) return; 
+        goToImage(galleryState.currentIndex, false); 
+        lightbox.classList.add('active');
+        document.body.style.overflow = 'hidden'; 
+    });
+
+    const closeLightbox = () => {
+        lightbox.classList.remove('active');
+        document.body.style.overflow = '';
+        if(lbTrack) {
+            Array.from(lbTrack.children).forEach(img => img.style.transform = 'scale(1)');
+        }
+    };
+
+    if (closeBtn) closeBtn.addEventListener('click', closeLightbox);
+    
+    lightbox.addEventListener('click', (e) => {
+        if (e.target === lightbox) closeLightbox(); 
+    });
+
+    if(nextBtn) nextBtn.addEventListener('click', () => goToImage(galleryState.currentIndex + 1, false));
+    if(prevBtn) prevBtn.addEventListener('click', () => goToImage(galleryState.currentIndex - 1, false));
+
+    lbThumbs.forEach((thumb, i) => {
+        thumb.addEventListener("click", () => goToImage(parseInt(thumb.dataset.index), false));
+    });
+
+    // LIGHTBOX İÇİ ZOOM
+    if (lbZoomContainer && lbTrack) {
+        lbZoomContainer.addEventListener('mousemove', (e) => {
+            const visibleImgs = Array.from(lbTrack.children).filter(img => img.style.display !== "none");
+            const activeImg = visibleImgs[galleryState.currentIndex];
+            if(!activeImg || activeImg.src.includes('placeholder')) return;
+            
+            const rect = lbZoomContainer.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            activeImg.style.transition = 'none';
+            activeImg.style.transformOrigin = `${x}% ${y}%`;
+            activeImg.style.transform = `scale(2)`;
+        });
+        
+        lbZoomContainer.addEventListener('mouseleave', () => {
+            const visibleImgs = Array.from(lbTrack.children).filter(img => img.style.display !== "none");
+            const activeImg = visibleImgs[galleryState.currentIndex];
+            if(!activeImg) return;
+            activeImg.style.transition = 'transform 0.3s ease-out';
+            activeImg.style.transformOrigin = `center center`;
+            activeImg.style.transform = `scale(1)`;
+        });
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (!lightbox.classList.contains('active')) return;
+        if (e.key === 'Escape') closeLightbox();
+        if (e.key === 'ArrowRight' && nextBtn) nextBtn.click();
+        if (e.key === 'ArrowLeft' && prevBtn) prevBtn.click();
+    });
+}
+
+/* ----------------------------------------------------------
+ * 5. Dinamik Varyant ve Filter Mantığı (Step 5 Core)
  * ---------------------------------------------------------- */
 function buildVariantPreview() {
     const rows = document.querySelectorAll(".js-preview-row");
@@ -265,40 +435,41 @@ function updatePreviewPricing() {
 }
 // Seçili özelliklere uyan resmi bulur
 function updateMainImageByAttributes() {
-    const thumbnails = document.querySelectorAll(".pw-thumbnail-item");
-    const track = document.querySelector(".js-image-track");
+    const thumbnails = document.querySelectorAll(".js-thumb-item");
+    const trackItems = document.querySelector(".js-image-track")?.children || [];
+    const lbThumbnails = document.querySelectorAll(".js-lb-thumb");
+    const lbTrackItems = document.querySelector(".js-lightbox-track")?.children || [];
 
-    // Slayt alanındaki büyük resimleri alıyoruz
-    const trackItems = track ? track.children : [];
-
-    let matchedThumb = null; // Varyanta özel resim
-    let commonThumb = null;  // Ortak (genel) resim
-    let visibleIndex = 0;    // Ekranda görünecek resimlerin yeni sırası
+    let matchedThumb = null; 
+    let commonThumb = null;  
+    let visibleIndex = 0;    
     
     thumbnails.forEach((thumb, originalIndex) => {
         const attrs = thumb.dataset.attrs || "";
         let isMatch = true;
-        let isCommon = !attrs; // Verisi yoksa ortak gruptur
+        let isCommon = !attrs;
         
         if (!isCommon) {
             const thumbAttrPairs = attrs.split(',');
             for (let pair of thumbAttrPairs) {
                 let [key, val] = pair.split(':');
                 if (key && val && selectedAttributes[key] !== val) {
-                    isMatch = false;
-                    break;
+                    isMatch = false; break;
                 }
             }
         }
         
         const trackItem = trackItems[originalIndex];
+        const lbThumb = lbThumbnails[originalIndex];
+        const lbTrackItem = lbTrackItems[originalIndex];
 
-        // 1. Farklı varyant resimlerini gizle, uyanları göster ve index'i güncelle
         if (isMatch || isCommon) {
-            thumb.style.display = ""; // Küçük resmi göster
-            if (trackItem) trackItem.style.display = ""; // Slayttaki büyük resmi göster
+            thumb.style.display = ""; 
+            if (trackItem) trackItem.style.display = ""; 
             
-            // Kaydırma (translateX) matematiğinin gizlenen resimlerden etkilenmemesi için index'i yeniden veriyoruz
+            if (lbThumb) { lbThumb.style.display = ""; lbThumb.dataset.index = visibleIndex; }
+            if (lbTrackItem) lbTrackItem.style.display = "";
+
             thumb.dataset.index = visibleIndex;
             
             if (isMatch && !isCommon && !matchedThumb) matchedThumb = thumb;
@@ -306,27 +477,87 @@ function updateMainImageByAttributes() {
             
             visibleIndex++;
         } else {
-            thumb.style.display = "none"; // İlgisiz varyantı gizle
-            thumb.classList.remove("active"); // GİZLENENLERİN AKTİFLİĞİNİ KESİNLİKLE AL
-            if (trackItem) trackItem.style.display = "none"; // Slayttakini de gizle
+            thumb.style.display = "none"; 
+            thumb.classList.remove("active"); 
+            if (trackItem) trackItem.style.display = "none"; 
+            
+            if (lbThumb) { lbThumb.style.display = "none"; lbThumb.classList.remove("active"); }
+            if (lbTrackItem) lbTrackItem.style.display = "none";
         }
     });
 
-    // 2. Gösterilecek ilk resme (hedefe) git
-    let targetThumb = matchedThumb || commonThumb;
+    galleryState.totalImages = visibleIndex;
 
+    let targetThumb = matchedThumb || commonThumb;
     if (targetThumb) {
-        const targetUrl = targetThumb.querySelector("img").src;
-        
-        // Varyant değiştiğinde 'aynı sıradaki' resme denk gelirse early-return (erken çıkış) 
-        // yapmasını engellemek için mevcut index'i anlık sıfırlıyoruz.
-        if (track) track.dataset.currentIndex = "-1";
-        
-        changeMainImage(targetUrl, targetThumb);
-        
-        // Mobilde vs. küçük resim alanını seçili olana kaydır
-        targetThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        const targetIndex = parseInt(targetThumb.dataset.index);
+        goToImage(targetIndex, false);
+    } else if (visibleIndex > 0) {
+        goToImage(0, false);
     }
+}
+
+/* ----------------------------------------------------------
+ * 6. FORMATLAMA, SAYAÇ VE YAYINLAMA İŞLEMLERİ
+ * ---------------------------------------------------------- */
+function formatMoneyTR(val) {
+    if (!val) return val;
+    let normalized = String(val).trim();
+    
+    // Eğer sunucudan sadece virgüllü gelirse (155000,50), parseFloat için noktaya çevirir.
+    if (normalized.includes(',') && !normalized.includes('.')) {
+        normalized = normalized.replace(',', '.');
+    }
+
+    const num = parseFloat(normalized);
+    if (isNaN(num)) return val;
+
+    // JavaScript'in yerleşik bölgesel formatlayıcısı 155000.00 sayısını 155.000,00 yapar
+    return new Intl.NumberFormat('tr-TR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(num);
+}
+
+
+function initPriceFormatting() {
+    document.querySelectorAll('.js-price-format').forEach(el => {
+        const raw = el.getAttribute('data-raw') || el.innerText.trim();
+        el.setAttribute('data-raw', raw); 
+        el.innerText = formatMoneyTR(raw);
+    });
+}
+/* ----------------------------------------------------------
+ * Kargo Geri Sayım Sayaç Mantığı (Saat 21.00 Bazlı)
+ * ---------------------------------------------------------- */
+function initShippingCountdown() {
+    const timerEl = document.getElementById("js-shipping-timer");
+    if (!timerEl) return;
+
+    function updateTimer() {
+        // Türkiye saatine göre (UTC+3) anlık zamanı al
+        const now = new Date();
+        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+        const trTime = new Date(utc + (3600000 * 3)); // TR Saati
+
+        // Bugün saat 21.00
+        let target = new Date(trTime);
+        target.setHours(21, 0, 0, 0);
+
+        // Eğer saat 21.00 geçtiyse hedef yarın saat 21.00 olur
+        if (trTime >= target) {
+            target.setDate(target.getDate() + 1);
+        }
+
+        const diffMs = target - trTime;
+        const diffHours = Math.floor((diffMs % 86400000) / 3600000);
+        const diffMins = Math.floor((diffMs % 3600000) / 60000);
+
+        timerEl.textContent = `${diffHours} saat ${diffMins} dk içinde sipariş verirsen yarın kargoda!`;
+    }
+
+    updateTimer();
+    setInterval(updateTimer, 60000); // Her 1 dakikada bir güncelle
 }
 
 /* ----------------------------------------------------------
@@ -438,38 +669,7 @@ publishForm?.addEventListener("submit", async (e) => {
     }
 });
 
-/* ----------------------------------------------------------
- * Kargo Geri Sayım Sayaç Mantığı (Saat 21.00 Bazlı)
- * ---------------------------------------------------------- */
-function initShippingCountdown() {
-    const timerEl = document.getElementById("js-shipping-timer");
-    if (!timerEl) return;
 
-    function updateTimer() {
-        // Türkiye saatine göre (UTC+3) anlık zamanı al
-        const now = new Date();
-        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-        const trTime = new Date(utc + (3600000 * 3)); // TR Saati
-
-        // Bugün saat 21.00
-        let target = new Date(trTime);
-        target.setHours(21, 0, 0, 0);
-
-        // Eğer saat 21.00 geçtiyse hedef yarın saat 21.00 olur
-        if (trTime >= target) {
-            target.setDate(target.getDate() + 1);
-        }
-
-        const diffMs = target - trTime;
-        const diffHours = Math.floor((diffMs % 86400000) / 3600000);
-        const diffMins = Math.floor((diffMs % 3600000) / 60000);
-
-        timerEl.textContent = `${diffHours} saat ${diffMins} dk içinde sipariş verirsen yarın kargoda!`;
-    }
-
-    updateTimer();
-    setInterval(updateTimer, 60000); // Her 1 dakikada bir güncelle
-}
 
 async function handleDuplicateProduct(data) {
 
@@ -647,13 +847,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // Sayfa yüklendiğinde varyant butonlarını (pills) oluştur
     buildVariantPreview();
 
-    // TIKLAMA YERİNE ÜZERİNE GELİNCE (HOVER) ÇALIŞMASI İÇİN:
-    document.querySelectorAll(".pw-thumbnail-item").forEach(thumb => {
-        const imgUrl = thumb.querySelector("img").src;
-        thumb.addEventListener("mouseenter", () => {
-            changeMainImage(imgUrl, thumb);
-        });
-    });
+    initImageGallery();
+    initThumbNavigation();
+    initImageZoom();
+    initLightbox();
+
 
     initShippingCountdown();
 

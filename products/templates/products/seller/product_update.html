@@ -74,12 +74,21 @@
     .pu-table { width: 100%; border-collapse: collapse; text-align: left; table-layout: fixed;}
     .pu-table th { padding: 12px 24px; font-size: 0.8rem; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.5px; background: var(--gray-50); border-bottom: 1px solid var(--gray-200); }
     .pu-table td { padding: 16px 24px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+
+    /* ana varyant radio butonu */
+    .pw-default-radio {
+        width: 20px;
+        height: 20px;
+        accent-color: var(--teal-600);
+        cursor: pointer;
+    }
     
     .variant-name-td { font-weight: 600; color: var(--gray-900); font-size: 0.95rem; }
     
     .pw-barcode-input { width: 100%; border: 1px solid var(--gray-300); border-radius: 8px; padding: 12px 16px; font-size: 0.95rem; font-family: 'Courier New', Courier, monospace; letter-spacing: 1px; font-weight: 600; color: var(--teal-900); background: var(--gray-50); outline: none; transition: .2s; box-sizing: border-box; }
     .pw-barcode-input:focus { background: #fff; border-color: var(--teal-500); box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.1); }
     .pw-barcode-input::placeholder { font-family: inherit; font-weight: 400; letter-spacing: normal; color: var(--gray-400); }
+
 
     /* GÖRSEL YÖNETİMİ */
     .pw-image-group { border: 1px solid var(--gray-200); border-radius: var(--radius); overflow: hidden; margin-bottom: 24px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.03);}
@@ -418,26 +427,31 @@
         </div>
     </form>
 
-    <!-- 4. BARKOD YÖNETİMİ TABLOSU -->
+    <!-- 4. BARKOD VE ANA VARYANT YÖNETİMİ TABLOSU -->
     <div class="pu-card">
         <div class="pu-card-header">
             <div class="pu-card-icon"><i class="fa-solid fa-barcode"></i></div>
             <div>
-                <h2>Barkod Yönetimi</h2>
-                <p>Varyantların uluslararası barkodlarını (EAN/UPC) güncelleyin</p>
+                <h2>Varyant Ayarları</h2>
+                <p>Ana varyantı seçin ve uluslararası barkodları (EAN/UPC) güncelleyin</p>
             </div>
         </div>
         <div class="pu-card-body" style="padding: 0;">
             <table class="pu-table">
                 <thead>
                     <tr>
-                        <th style="width: 50%;">Varyant Kombinasyonu</th>
-                        <th style="width: 50%;">Barkod (EAN/UPC)</th>
+                        <th style="width: 15%; text-align: center;">Ana Varyant</th>
+                        <th style="width: 45%;">Varyant Kombinasyonu</th>
+                        <th style="width: 40%;">Barkod (EAN/UPC)</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for variant in product.variants.all %}
                     <tr>
+                        <td style="text-align: center;">
+                            <input type="radio" name="default_variant" value="{{ variant.id }}" class="pw-default-radio js-default-radio" 
+                            {% if product.default_variant_id == variant.id or variant.is_default %}checked{% endif %}>
+                        </td>
                         <td class="variant-name-td">
                             {% for val in variant.attribute_values.all %}
                                 {{ val.value|title }}{% if not forloop.last %} / {% endif %}
@@ -454,8 +468,8 @@
             </table>
         </div>
         <div class="pu-card-footer">
-            <button type="button" id="btn-save-all-barcodes" class="btn btn-primary">
-                <i class="fa-solid fa-save"></i> Tüm Barkodları Kaydet
+            <button type="button" id="btn-save-variants-data" class="btn btn-primary">
+                <i class="fa-solid fa-save"></i> Değişiklikleri Kaydet
             </button>
         </div>
     </div>
@@ -628,9 +642,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // BARKOD GÜNCELLEME (TOPLU)
-    document.getElementById("btn-save-all-barcodes").addEventListener("click", async () => {
+    // BARKOD VE ANA VARYANT GÜNCELLEME (TOPLU)
+    document.getElementById("btn-save-variants-data").addEventListener("click", async () => {
         const barcodeInputs = document.querySelectorAll(".js-barcode-input");
+        const defaultRadio = document.querySelector(".js-default-radio:checked");
+        const defaultVariantId = defaultRadio ? defaultRadio.value : "";
         const barcodesData = [];
 
         barcodeInputs.forEach(input => {
@@ -641,19 +657,20 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         const confirmed = await WizardUI.showConfirm({
-            title: "Barkodları Kaydet",
-            message: "Tablodaki tüm barkodlar güncellenecektir. Emin misiniz?",
+            title: "Değişiklikleri Kaydet",
+            message: "Tablodaki barkodlar ve ana varyant seçimi güncellenecektir. Emin misiniz?",
             confirmText: "Kaydet"
         });
 
         if (confirmed) {
             Swal.fire({ title: 'Kaydediliyor...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
             const formData = new FormData();
-            formData.append("action", "update_barcodes_bulk");
+            formData.append("action", "update_variants_data");
             formData.append("barcodes_data", JSON.stringify(barcodesData));
+            formData.append("default_variant_id", defaultVariantId);
             
             // Backend JSON döndüğünde sayfayı yenilemeden bildirim göster
-            sendAjaxRequest(formData, "Tüm barkodlar başarıyla güncellendi.", false).finally(() => Swal.close());
+            sendAjaxRequest(formData, "Varyant ayarları başarıyla güncellendi.", false).finally(() => Swal.close());
         }
     });
 
