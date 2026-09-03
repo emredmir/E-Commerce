@@ -398,6 +398,102 @@ class ProductVariant(models.Model):
             for value in self.attribute_values.all()
         )
     )
+
+    @property
+    def get_thumbnail_url(self):
+        """
+        Varyant için kullanılacak thumbnail URL'sini döndürür.
+
+        Öncelik sırası:
+
+        1. Varyanta ait görsel özelliklerle TAM eşleşen
+           variant image group
+        2. Eşleşen grubun is_main=True resmi
+        3. Eşleşen grubun ilk resmi
+        4. Ortak image group'un is_main=True resmi
+        5. Ortak image group'un ilk resmi
+        6. None
+
+        Not:
+        Bu property başka yerlerde de kullanıldığı için dış API
+        değiştirilmemiştir.
+        """
+
+        # Varyantın görsel attribute değerleri
+        visual_value_ids = set(
+            self.attribute_values
+            .filter(
+                attribute__category_attributes__category=self.product.category,
+                attribute__category_attributes__is_visual=True,
+            )
+            .values_list("pk", flat=True)
+        )
+
+        # Sadece aktif image groupları dikkate al
+        image_groups = self.product.image_groups.filter(
+            is_active=True,
+        )
+
+        # ---------------------------------------------------------
+        # 1. VARYANTA ÖZEL IMAGE GROUP
+        # ---------------------------------------------------------
+
+        if visual_value_ids:
+
+            for group in image_groups:
+                group_value_ids = set(
+                    group.visual_attribute_values.values_list(
+                        "pk",
+                        flat=True,
+                    )
+                )
+
+                # Sadece TAM eşleşen grup kabul edilir.
+                #
+                # Örneğin:
+                # Variant: Kırmızı + 128 GB
+                # Group:   Kırmızı + 256 GB
+                #
+                # artık yanlışlıkla eşleşmez.
+                if group_value_ids != visual_value_ids:
+                    continue
+
+                main_image = (
+                    group.images.filter(is_main=True).first()
+                    or group.images.first()
+                )
+
+                if main_image and main_image.image:
+                    return main_image.image.url
+
+        # ---------------------------------------------------------
+        # 2. ORTAK IMAGE GROUP
+        # ---------------------------------------------------------
+
+        common_group = (
+            self.product.image_groups
+            .filter(
+                visual_attribute_values__isnull=True
+            )
+            .first()
+        )
+
+        if common_group:
+            main_image = (
+                common_group.images.filter(is_main=True).first()
+                or common_group.images.first()
+            )
+
+            if main_image and main_image.image:
+                return main_image.image.url
+
+        # ---------------------------------------------------------
+        # 3. HİÇBİR GÖRSEL YOK
+        # ---------------------------------------------------------
+
+        return None
+
+    
     
     class Meta:
         verbose_name = "Ürün Varyantı"
@@ -1328,3 +1424,416 @@ class ProductDraftImage(models.Model):
             f"(Resim {self.pk})"
         )
 
+class ProductCollection(models.Model):
+    """
+    Kullanıcının oluşturduğu favori/istek listeleri (Koleksiyonlar).
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE, 
+        related_name="collections",
+        verbose_name="Kullanıcı"
+    )
+    name = models.CharField(
+        max_length=100, 
+        verbose_name="Liste Adı"
+    )
+    is_default = models.BooleanField(
+        default=False, 
+        verbose_name="Varsayılan Favori Listesi mi?",
+        help_text="Kullanıcı düz kalbe tıkladığında ürün bu listeye düşer."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Ürün Koleksiyonu"
+        verbose_name_plural = "Ürün Koleksiyonları"
+        # Bir kullanıcı aynı isimde iki liste oluşturamasın
+        unique_together = ("user", "name")
+        # Varsayılan liste her zaman en üstte gelsin
+        ordering = ["-is_default", "-created_at"]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.name}"
+
+
+class ProductCollectionItem(models.Model):
+    """
+    Listelerin içine eklenen ürünler.
+    (Satıcı teklifine değil, doğrudan Global Katalog Ürününe bağlanır)
+    """
+    collection = models.ForeignKey(
+        ProductCollection, 
+        on_delete=models.CASCADE, 
+        related_name="items"
+    )
+    variant = models.ForeignKey(
+        ProductVariant, 
+        on_delete=models.CASCADE, 
+        related_name="collection_items",
+        verbose_name="Varyant",
+    )
+
+    offer = models.ForeignKey(
+        'StoreProduct',
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name="favorited_by",
+        verbose_name="Eklenen Teklif"
+    )
+
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Koleksiyon Ürünü"
+        verbose_name_plural = "Koleksiyon Ürünleri"
+        # Bir listeye aynı ürün iki kez eklenemesin
+        unique_together = ("collection", "variant")
+        ordering = ["-added_at"]
+
+    def __str__(self):
+        return f"{self.variant.product.name} (ID: {self.variant.id}) -> {self.collection.name}"
+
+class QuestionTopic(models.TextChoices):
+    # Genel / Satın Alma
+    GENERAL = "general", "Genel"
+    PRICE = "price", "Fiyat / İndirim"
+    PAYMENT = "payment", "Ödeme"
+    AVAILABILITY = "availability", "Stok / Bulunabilirlik"
+    SHIPPING = "shipping", "Kargo / Teslimat"
+    WARRANTY = "warranty", "Garanti / İade"
+    GIFT = "gift", "Hediye Gönderimi"
+
+    # Ürün Bilgileri
+    MODEL_VARIANT = "model_variant", "Model / Versiyon Farklılıkları"
+    FEATURES = "features", "Fonksiyon / Özellikler"
+    CONTENT = "content", "Ürün İçeriği"
+    MATERIAL = "material", "Malzeme"
+    COLOR = "color", "Renk Seçenekleri"
+    SIZE = "size", "Boyut / Ölçü"
+    WEIGHT = "weight", "Ağırlık"
+    QUANTITY = "quantity", "Adet / Miktar"
+    ORIGIN = "origin", "Menşei / Üretim Yeri"
+
+    # Kullanım
+    USAGE_AREA = "usage_area", "Kullanım Alanları"
+    USAGE_INSTRUCTIONS = "usage_instructions", "Kullanım Talimatları"
+    INSTALLATION = "installation", "Kurulum / Montaj"
+    CARE = "care", "Bakım / Temizlik"
+    STORAGE = "storage", "Saklama Koşulları"
+
+    # Uygunluk / Güvenlik
+    COMPATIBILITY = "compatibility", "Uyumluluk"
+    SUITABILITY = "suitability", "Uygunluk"
+    AGE = "age", "Yaş Uygunluğu"
+    SAFETY = "safety", "Güvenlik"
+    ALLERGY = "allergy", "Alerji / Hassasiyet"
+
+    # Performans / Teknik
+    PERFORMANCE = "performance", "Performans"
+    EXPIRY = "expiry", "Son Kullanma Tarihi"
+    CERTIFICATION = "certification", "Sertifika / Standartlar"
+
+
+
+
+class ProductQuestion(models.Model):
+    """
+    Kullanıcının ürün hakkında sorduğu soru.
+
+    target_store:
+        NULL -> Genel soru.
+        Store -> Belirli bir mağazaya yöneltilmiş soru.
+
+    is_visible:
+        Sorunun vitrinde gösterilip gösterilmeyeceğini belirtir.
+
+    Cevaplanma durumu DB'de ayrıca tutulmaz.
+
+    Product Detail'da gösterilebilmesi için:
+        - is_visible=True
+        - en az bir ProductAnswer.is_visible=True
+    olması gerekir.
+
+    Böylece cevap görünürlüğü değiştiğinde ayrıca
+    is_answered senkronizasyonu yapmak gerekmez.
+    """
+
+    product = models.ForeignKey(
+        "products.Product",
+        on_delete=models.CASCADE,
+        related_name="questions",
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="product_questions",
+    )
+    
+    # Sorunun direkt sorulduğu (O anki Buybox sahibi) mağaza. Null ise herkese sorulmuş demektir.
+    target_store = models.ForeignKey(Store, on_delete=models.SET_NULL, null=True, blank=True, related_name='received_questions')
+
+    variant_context = models.ForeignKey(
+        'products.ProductVariant', 
+        on_delete=models.SET_NULL, 
+        null=True, blank=True, 
+        related_name='asked_questions',
+        verbose_name="Sorunun Sorulduğu Varyant" # Bu varyant için zorunlu kılınmaz, sadece bilgi amaçlıdır
+    )
+    
+    topic = models.CharField(max_length=30, choices=QuestionTopic.choices, default=QuestionTopic.GENERAL, verbose_name="Konu")
+    text = models.TextField(verbose_name="Soru Metni", max_length=1000)
+    
+    # Yönetim ve UX
+    is_visible = models.BooleanField(default=True, verbose_name="Vitrinde Görünsün mü?")
+    is_anonymous = models.BooleanField(default=False, verbose_name="İsmimi Gizle") 
+    
+    
+    # Faydalı bulan kişi sayısı (Sorting için)
+    # Gerçek oy kayıtları ProductQuestionUpvote'da tutulur.
+    # Bu alan hızlı sıralama için denormalize edilmiş sayaçtır.
+    upvotes = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Faydalı Bulma Sayısı",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def get_thumbnail_url(self):
+        """
+        Soruya ait ürün görselini döndürür.
+        Eğer soru bir varyant üzerindeyken sorulduysa o varyantın resmini,
+        genel sorulduysa ana ürünün resmini verir.
+        """
+        if self.variant_context:
+            url = self.variant_context.get_thumbnail_url
+            if url:
+                return url
+        
+        # Eğer varyant yoksa veya varyant resmi bulunamadıysa ana ürünün resmini dön
+        common_group = self.product.image_groups.filter(visual_attribute_values__isnull=True).first()
+        if common_group:
+            main_image = common_group.images.filter(is_main=True).first() or common_group.images.first()
+            if main_image and main_image.image:
+                return main_image.image.url
+                
+        return None
+
+    @property
+    def masked_username(self):
+        """
+        Kullanıcının adını ve soyadını anonim şekilde gösterir.
+        Örn:
+            Ahmet Yılmaz -> A**** Y****
+            Ahmet        -> A****
+            İsimsiz      -> Müşteri
+            Silinmiş kullanıcı -> S**** K****
+        """
+        if not self.user:
+            return "S**** K****"
+    
+        first_name = (self.user.first_name or "").strip()
+        last_name = (self.user.last_name or "").strip()
+    
+        if not first_name:
+            return "Müşteri"
+    
+        masked_first = f"{first_name[0].upper()}****"
+    
+        if last_name:
+            masked_last = f"{last_name[0].upper()}****"
+            return f"{masked_first} {masked_last}"
+    
+        return masked_first
+    
+    class Meta:
+        verbose_name = "Ürün Sorusu"
+        verbose_name_plural = "Ürün Soruları"
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "product",
+                    "is_visible",
+                    "-upvotes",
+                    "-created_at",
+                ],
+                name="question_product_list",
+            ),
+            models.Index(
+                fields=[
+                    "product",
+                    "target_store",
+                    "is_visible",
+                ],
+                name="question_product_store",
+            ),
+            models.Index(
+                fields=[
+                    "product",
+                    "topic",
+                    "is_visible",
+                ],
+                name="question_product_topic",
+            ),
+        ]
+
+    def __str__(self):
+        if self.is_anonymous:
+            user_display = "Anonim Kullanıcı"
+        elif self.user:
+            user_display = str(self.user)
+        else:
+            user_display = "Silinmiş Kullanıcı"
+
+        return (
+            f"{user_display} - "
+            f"{self.product.name} "
+            f"({self.get_topic_display()})"
+        )
+
+class ProductQuestionUpvote(models.Model):
+    """
+    Bir kullanıcının bir soruya verdiği faydalı oy.
+
+    Aynı kullanıcı aynı soruya yalnızca bir kez oy verebilir.
+    """
+
+    question = models.ForeignKey(
+        ProductQuestion,
+        on_delete=models.CASCADE,
+        related_name="upvote_records",
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="product_question_upvotes",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        verbose_name = "Soru Faydalı Oyu"
+        verbose_name_plural = "Soru Faydalı Oyları"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["question", "user"],
+                name="unique_question_user_upvote",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=["user", "question"],
+                name="upvote_user_question",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.user} -> "
+            f"Question #{self.question_id}"
+        )
+
+
+class ProductAnswer(models.Model):
+    """
+    Satıcının soruya verdiği cevap.
+
+    is_visible=False:
+        Cevap vitrinde gösterilmez.
+
+    Soru Product Detail'da yalnızca en az bir görünür
+    cevabı varsa gösterilir.
+
+    ProductAnswer.save() içerisinde Question state'i
+    değiştirilmez. Cevap görünürlüğü tamamen kendi
+    alanı üzerinden değerlendirilir.
+    """
+
+    question = models.ForeignKey(
+        ProductQuestion,
+        on_delete=models.CASCADE,
+        related_name="answers",
+    )
+
+    store = models.ForeignKey(
+        Store,
+        on_delete=models.CASCADE,
+        related_name="given_answers",
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="product_answers",
+    )
+
+    text = models.TextField(
+        max_length=2000,
+        verbose_name="Cevap Metni",
+    )
+
+    is_visible = models.BooleanField(
+        default=True,
+        verbose_name="Vitrinde Görünsün mü?",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    is_read_by_user = models.BooleanField(
+        default=False,
+        verbose_name="Müşteri Okudu mu?"
+    )
+
+    class Meta:
+        verbose_name = "Soru Cevabı"
+        verbose_name_plural = "Soru Cevapları"
+
+        ordering = ["created_at"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["question", "store"],
+                name="answer_per_question",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "question",
+                    "is_visible",
+                    "created_at",
+                ],
+                name="answer_question_visible",
+            ),
+            models.Index(
+                fields=[
+                    "store",
+                    "is_visible",
+                    "created_at",
+                ],
+                name="answer_store_visible",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.store.store_name} cevabı"

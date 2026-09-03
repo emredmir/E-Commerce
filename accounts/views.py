@@ -8,10 +8,21 @@ from django.contrib.auth.views import PasswordChangeView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.urls import reverse_lazy
-from django.views.generic import UpdateView, FormView
+from django.views.generic import UpdateView, FormView, DetailView, ListView
 from django.views import View
 from django.http import JsonResponse
 from django.template.loader import render_to_string
+import json
+
+from products.services.storefront_offers import StorefrontOfferService
+from products.services.storefront import ProductQAService
+from django.db.models.functions import Coalesce
+
+
+from django.db.models import Count, F, Prefetch, Window, Subquery, DecimalField, IntegerField, OuterRef, Exists, Q, Max
+from django.db.models.functions import RowNumber
+
+from products.models import ProductCollection, ProductCollectionItem, ProductQuestion, ProductAnswer
 
 def register_view(request):
     if request.method == 'POST':
@@ -95,20 +106,6 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
         messages.error(self.request, "Formda hatalar var. Lütfen kontrol edin.")
         return super().form_invalid(form)
 
-# @login_required
-# def profile_update_view(request):
-#     if request.method == 'POST':
-#         form = UserProfileUpdateForm(request.POST, instance=request.user)
-#         if form.is_valid():
-#             form.save()
-#             messages.success(request, "Profil bilgileriniz başarıyla güncellendi.")
-#             return redirect('accounts:profile') # Profil sayfasına geri yönlendirin
-#         else:
-#            messages.error(request, "Lütfen formu doğru şekilde doldurun.")
-#     else:
-#         form = UserProfileUpdateForm(instance=request.user)
-    
-#     return render(request, 'accounts/profile_update.html', {'form': form})
 
 
 class AddressListView(LoginRequiredMixin, View):
@@ -271,52 +268,393 @@ class BecomeASellerView(LoginRequiredMixin, SellerApplicationMixin, FormView):
             return super().form_valid(form)
 
 
-# @login_required
-# def become_a_seller_view(request):
-#     # Kullanıcının hali hazırda başvurusu var mı?
-#     try:
-#         seller_profile = request.user.seller_profile
-#     except SellerProfile.DoesNotExist:
-#         seller_profile = None
 
-#     if request.method == 'POST':
-#         # Eğer başvuru varsa, instance olarak veriyoruz (update için)
-#         form = BecomeASellerForm(request.POST, instance=seller_profile)
-#         if form.is_valid():
-#             seller_profile = form.save(commit=False)
-#             seller_profile.user = request.user
-#             # Başvuru yapıldığı anda onay false kalacak, admin onayı bekleyecek
-#             seller_profile.is_approved = False
-#             seller_profile.save()
-#             messages.success(request, "Satıcı başvurunuz başarıyla alındı. Onay süreci tamamlandığında bilgilendirileceksiniz.")
-#             return redirect('accounts:become_seller')  # Aynı sayfaya yönlendirip durum gösterebiliriz
-#         else:
-#             messages.error(request, "Formda hatalar var, lütfen düzeltin.")
-#     else:
-#         form = BecomeASellerForm(instance=seller_profile)
+class CollectionListView(LoginRequiredMixin, ListView):
+    """
+    Kullanıcının koleksiyonlarını listeler.
 
-#     context = {
-#         'form': form,
-#         'seller_profile': seller_profile,
-#     }
+    Her koleksiyon için:
+    - Toplam item sayısını verir.
+    - Son eklenen 4 item'ı preview olarak getirir.
+    - Ürün aktif olmasa / stokta olmasa bile favoride göstermeye devam eder.
+    """
 
-#     return render(request, 'accounts/become_seller.html', context)
+    model = ProductCollection
+    template_name = "accounts/collections/collection_list.html"
+    context_object_name = "collections"
+
+    def get_queryset(self):
+        # Sıralama Parametresini Al
+        sort_by = self.request.GET.get('sort', 'newest')
+        valid_sorts = {
+            'newest': '-created_at',
+            'oldest': 'created_at',
+            'name_asc': 'name',
+            'name_desc': '-name'
+        }
+        order_field = valid_sorts.get(sort_by, '-created_at')
+
+        preview_items = (
+            ProductCollectionItem.objects
+            .select_related(
+                "variant__product",
+            )
+            .prefetch_related(
+                "variant__attribute_values__attribute__category_attributes",
+                "variant__product__image_groups__images",
+                "variant__product__image_groups__visual_attribute_values"
+            )
+            .annotate(
+                row_number=Window(
+                    expression=RowNumber(),
+                    partition_by=[F("collection_id")],
+                    order_by=[
+                        F("added_at").desc(),
+                        F("id").desc(),
+                    ],
+                )
+            )
+            .filter(
+                row_number__lte=4,
+            )
+        )
+
+        return (
+            ProductCollection.objects
+            .filter(
+                user=self.request.user,
+            )
+            .annotate(
+                item_count=Count("items"),
+            )
+            .prefetch_related(
+                Prefetch(
+                    "items",
+                    queryset=preview_items,
+                    to_attr="preview_items",
+                )
+            )
+            .order_by(
+                "-is_default",
+                order_field,
+            )
+        )
 
 
-# @login_required
-# def address_view(request):
-#     addresses = request.user.addresses.all()
-#     form = AddressForm()
-#     if request.method == 'POST':
-#         form = AddressForm(request.POST)
-#         if form.is_valid():
-#             address = form.save(commit=False)
-#             address.user = request.user
-#             address.save()
-#             messages.success(request, "Adres başarıyla eklendi.")
-#             return redirect('accounts:profile')
-    
-#     return render(request, 'accounts/profile.html', {
-#         'addresses': addresses,
-#         'form': form
-#     })
+class CollectionDetailView(LoginRequiredMixin, DetailView):
+    """
+    Kullanıcının belirli bir koleksiyonundaki ürünleri listeler.
+
+    Sadece kullanıcının kendi koleksiyonlarına erişmesine izin verilir.
+    Pasif veya stokta olmayan ürünler de gösterilmeye devam eder.
+    """
+
+    model = ProductCollection
+    template_name = "accounts/collections/collection_detail.html"
+    context_object_name = "collection"
+
+    def get_queryset(self):
+        return (
+            ProductCollection.objects
+            .filter(
+                user=self.request.user,
+            )
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+
+        items = (
+            ProductCollectionItem.objects
+            .filter(collection=self.object)
+            .select_related(
+                "variant__product__brand", 
+                "variant__product__category",
+                "offer", # YENİ: Teklifi ve mağazayı peşin çekiyoruz
+                "offer__store"
+            )
+            .prefetch_related(
+                "variant__attribute_values__attribute",
+                "variant__product__image_groups__images",
+                "variant__product__image_groups__visual_attribute_values"
+            )
+            .order_by("-added_at", "-id")
+        )
+
+        context["items"] = items
+        return context
+
+class CollectionDeleteAPIView(View):
+    """
+    Kullanıcının seçtiği listeyi tamamen siler.
+    """
+    def post(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({'success': False, 'error': 'Giriş yapmanız gerekiyor.'}, status=403)
+        try:
+            data = json.loads(request.body)
+            collection_id = data.get('collection_id')
+            
+            # Yalnızca giriş yapan kullanıcının kendi koleksiyonu silinebilir ve varsayılan liste silinemez
+            collection = get_object_or_404(ProductCollection, id=collection_id, user=request.user)
+            
+            if collection.is_default:
+                return JsonResponse({'success': False, 'error': 'Varsayılan favori listesi silinemez.'}, status=400)
+            
+            collection.delete()
+            return JsonResponse({'success': True})
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+
+
+class UserQuestionsListView(LoginRequiredMixin, ListView):
+    """
+    Hesabım > Soru ve Taleplerim
+
+    Kullanıcının yalnızca kendi ürün sorularını listeler.
+
+    Her soru için:
+    - Ürün
+    - Marka
+    - Kategori
+    - Hedef mağaza
+    - Varyant
+    - Görünür cevaplar
+    bilgileri optimize şekilde hazırlanır.
+    """
+
+    model = ProductQuestion
+    template_name = "accounts/questions/user_questions.html"
+    context_object_name = "questions"
+    paginate_by = 10
+
+    def get_queryset(self):
+        # ---------------------------------------------------------
+        # CEVAPLAR
+        # ---------------------------------------------------------
+        #
+        # Müşteriye yalnızca görünür cevapları gösteriyoruz.
+        #
+        # Store bilgisi template'te kullanılacaksa:
+        # select_related("store")
+        # sayesinde ekstra sorgu oluşmaz.
+
+        answers_prefetch = Prefetch(
+            "answers",
+            queryset=(
+                ProductAnswer.objects
+                .filter(
+                    is_visible=True,
+                )
+                .select_related(
+                    "store",
+                )
+                .order_by(
+                    "created_at",
+                )
+            ),
+            to_attr="visible_answers",
+        )
+
+        # ---------------------------------------------------------
+        # SORULAR
+        # ---------------------------------------------------------
+
+        queryset = (
+            ProductQuestion.objects
+            .filter(
+                user=self.request.user,
+            )
+            .select_related(
+                # Soru → Product
+                "product",
+
+                # Product → Brand
+                "product__brand",
+
+                # Product → Category
+                "product__category",
+
+                # Soru → Store
+                "target_store",
+
+                # Soru → Variant
+                "variant_context",
+            )
+            .prefetch_related(
+                # -------------------------------------------------
+                # ANSWERS
+                # -------------------------------------------------
+                answers_prefetch,
+
+                # -------------------------------------------------
+                # VARIANT ATTRIBUTE'LARI
+                # -------------------------------------------------
+                #
+                # get_thumbnail_url içerisinde:
+                
+
+                "variant_context__attribute_values__attribute",
+
+                # -------------------------------------------------
+                # IMAGE GROUPS
+                # -------------------------------------------------
+                #
+                # Variant thumbnail'ı:
+                #
+                # Product
+                #   └── image_groups
+                #         ├── visual_attribute_values
+                #         └── images
+                #
+                # üzerinden çözülüyor.
+
+                "product__image_groups__visual_attribute_values",
+                "product__image_groups__images",
+            )
+            .annotate(
+                has_unread_answer=Exists(
+                    ProductAnswer.objects.filter(
+                        question_id=OuterRef("pk"),
+                        is_visible=True,
+                        is_read_by_user=False
+                    )
+                ),
+                # Sıralama için en son cevabın tarihini al
+                last_answer_date=Max('answers__created_at', filter=Q(answers__is_visible=True))
+            )
+            .order_by(
+                "-has_unread_answer", # Okunmamış olanlar EN ÜSTTE
+                "-last_answer_date",  # Sonra en son cevap verilenler
+                "-created_at",        # En son sorulanlar
+            )
+        )
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Hesabım sayfasındaki aktif sekme
+        context["active_tab"] = "product_questions"
+
+        # ---------------------------------------------------------
+        # OKUNMAMIŞ CEVAP SAYISI
+        # ---------------------------------------------------------
+        #
+        # Sadece:
+        # - bu kullanıcıya ait sorular
+        # - görünür cevaplar
+        # - okunmamış cevaplar
+        # sayılır.
+
+        context["unread_count"] = (
+            ProductAnswer.objects
+            .filter(
+                question__user=self.request.user,
+                is_visible=True,
+                is_read_by_user=False,
+            )
+            .count()
+        )
+
+        return context
+
+
+class MarkAnswerAsReadAPIView(LoginRequiredMixin, View):
+    """
+    Kullanıcının kendi sorusuna gelen görünür cevapları
+    okundu olarak işaretler.
+
+    POST:
+        /accounts/questions/<question_id>/read/
+    """
+
+    def post(self, request, question_id):
+        if not request.user.is_authenticated:
+            return JsonResponse({"success": False, "error": "Giriş yapmalısınız."}, status=403)
+
+        updated_count = (
+            ProductAnswer.objects
+            .filter(
+                question_id=question_id,
+                question__user=request.user,
+                is_visible=True,
+                is_read_by_user=False,
+            )
+            .update(
+                is_read_by_user=True,
+            )
+        )
+
+        return JsonResponse({
+            "success": True,
+            "updated_count": updated_count,
+        })
+
+
+class ProductQADeleteAPIView(View):
+    """
+    Kullanıcının kendi sorusunu silmesini sağlar.
+
+    DELETE
+    """
+
+    def delete(
+        self,
+        request,
+        question_id,
+        *args,
+        **kwargs,
+    ):
+        # -------------------------------------------------
+        # AUTH
+        # -------------------------------------------------
+
+        if not request.user.is_authenticated:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "Giriş yapmanız gerekiyor.",
+                },
+                status=401,
+            )
+
+        # -------------------------------------------------
+        # QUESTION
+        # -------------------------------------------------
+
+        question = get_object_or_404(
+            ProductQuestion,
+            pk=question_id,
+        )
+
+        # -------------------------------------------------
+        # DELETE
+        # -------------------------------------------------
+
+        try:
+            ProductQAService.delete_question(
+                question=question,
+                user=request.user,
+            )
+
+        except PermissionError as exc:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": str(exc),
+                },
+                status=403,
+            )
+
+        return JsonResponse(
+            {
+                "success": True,
+                "message": "Sorunuz silindi.",
+            },
+            status=200,
+        )

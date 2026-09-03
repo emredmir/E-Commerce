@@ -1,0 +1,348 @@
+{% load tz %}
+
+{% for q in questions %}
+    <div
+        style="
+            border: 1px solid var(--gray-200);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            background: #fff;
+        "
+    >
+
+        <!-- Soru Başlığı -->
+        <div
+            style="
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 16px;
+                margin-bottom: 12px;
+                border-bottom: 1px solid var(--gray-100);
+                padding-bottom: 12px;
+            "
+        >
+            <div style="min-width: 0; flex: 1;">
+
+                <div
+                    style="
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        margin-bottom: 4px;
+                        flex-wrap: wrap;
+                    "
+                >
+                    <span
+                        style="
+                            background: var(--gray-100);
+                            color: var(--gray-700);
+                            padding: 2px 8px;
+                            border-radius: 4px;
+                            font-size: 0.75rem;
+                            font-weight: 700;
+                        "
+                    >
+                        Soru
+                    </span>
+
+                    <span
+                        style="
+                            font-size: 0.85rem;
+                            color: var(--gray-500);
+                        "
+                    >
+                        <i class="fa-regular fa-clock"></i>
+                        {{ q.created_at|localtime|date:"d M Y" }}
+                    </span>
+
+                    {% if q.target_store %}
+                        <span
+                            style="
+                                background: var(--teal-50);
+                                color: var(--teal-700);
+                                padding: 2px 8px;
+                                border-radius: 4px;
+                                font-size: 0.75rem;
+                                font-weight: 600;
+                                border: 1px solid var(--teal-100);
+                            "
+                        >
+                            Satıcıya Soruldu:
+                            {{ q.target_store.store_name }}
+                        </span>
+                    {% endif %}
+                </div>
+
+                <div
+                    style="
+                        font-weight: 600;
+                        color: var(--gray-800);
+                        font-size: 1.05rem;
+                    "
+                >
+                    {{ q.text|linebreaksbr }}
+                </div>
+
+            </div>
+
+            <!-- Müşteri -->
+            <div
+                style="
+                    text-align: right;
+                    min-width: 100px;
+                    flex-shrink: 0;
+                "
+            >
+                <div
+                    style="
+                        font-size: 0.85rem;
+                        font-weight: 600;
+                        color: var(--gray-700);
+                    "
+                >
+                    <i
+                        class="fa-solid fa-circle-user"
+                        style="color: var(--gray-400);"
+                    ></i>
+
+                    {% if q.is_anonymous %}
+                        {{ q.masked_username }}
+                    {% else %}
+                        {{ q.user.first_name|default:"Müşteri" }}{% if q.user.last_name %} {{ q.user.last_name|first }}.{% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Satıcı Cevapları -->
+        {% if q.answers.exists %}
+
+            <div class="qa-answers-container">
+
+                {% for ans in q.answers.all %}
+
+                    <div class="qa-answer-card">
+
+                        <div class="qa-answer-header">
+
+                            <span class="qa-answer-badge">
+                                Cevap
+                            </span>
+
+                            <span
+                                class="qa-answer-store"
+                                title="{{ ans.store.store_name }}"
+                            >
+                                {{ ans.store.store_name }}
+                            </span>
+
+                            <i
+                                class="fa-solid fa-circle-check qa-answer-check"
+                            ></i>
+
+                            <span class="qa-answer-date">
+                                {{ ans.created_at|localtime|date:"d M Y" }}
+                            </span>
+
+                        </div>
+
+                        <div class="qa-answer-text">
+                            {{ ans.text|linebreaksbr }}
+                        </div>
+
+                    </div>
+
+                {% endfor %}
+
+            </div>
+
+        {% else %}
+
+            <div
+                style="
+                    font-size: 0.9rem;
+                    color: var(--orange-600);
+                    background: #fff7ed;
+                    padding: 10px 16px;
+                    border-radius: 6px;
+                    display: inline-block;
+                    margin-top: 8px;
+                    border: 1px solid #fed7aa;
+                "
+            >
+                <i class="fa-regular fa-hourglass-half"></i>
+                Satıcı henüz cevaplamadı.
+            </div>
+
+        {% endif %}
+
+
+        <!-- Upvote -->
+        <div
+            style="
+                margin-top: 16px;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                border-top: 1px dashed var(--gray-200);
+                padding-top: 12px;
+            "
+        >
+            <span
+                style="
+                    font-size: 0.85rem;
+                    color: var(--gray-500);
+                "
+            >
+                Bu soru faydalı oldu mu?
+            </span>
+
+            <button
+                type="button"
+                class="js-upvote-btn"
+                data-qid="{{ q.id }}"
+                data-upvote-url="{% url 'products:api_qa_upvote' %}"
+                style="
+                    background: transparent;
+                    border: 1px solid var(--gray-300);
+                    color: var(--gray-600);
+                    padding: 4px 12px;
+                    border-radius: 20px;
+                    font-size: 0.85rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: .2s;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                "
+            >
+                <i class="fa-regular fa-thumbs-up"></i>
+
+                Evet
+                (
+                <span class="js-upvote-count">
+                    {{ q.upvotes }}
+                </span>
+                )
+            </button>
+        </div>
+
+    </div>
+
+{% empty %}
+
+    <div
+        style="
+            text-align: center;
+            padding: 40px;
+            background: var(--gray-50);
+            border-radius: 8px;
+            border: 1px dashed var(--gray-300);
+        "
+    >
+        <i
+            class="fa-regular fa-comments"
+            style="
+                font-size: 3rem;
+                color: var(--gray-400);
+                margin-bottom: 16px;
+            "
+        ></i>
+
+        <h4
+            style="
+                margin: 0 0 8px;
+                color: var(--gray-700);
+            "
+        >
+            Henüz Soru Sorulmamış
+        </h4>
+
+        <p
+            style="
+                margin: 0;
+                color: var(--gray-500);
+                font-size: 0.95rem;
+            "
+        >
+            Bu filtreye uygun soru bulunamadı.
+        </p>
+    </div>
+
+{% endfor %}
+
+
+<!-- Pagination -->
+{% if questions.has_other_pages %}
+
+    <div
+        style="
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 32px;
+        "
+    >
+
+        {% if questions.has_previous %}
+
+            <button
+                type="button"
+                class="js-qa-page-btn"
+                data-page="{{ questions.previous_page_number }}"
+                style="
+                    padding: 8px 16px;
+                    border: 1px solid var(--gray-300);
+                    background: #fff;
+                    cursor: pointer;
+                    border-radius: 6px;
+                "
+            >
+                Önceki
+            </button>
+
+        {% endif %}
+
+
+        <span
+            style="
+                padding: 8px 16px;
+                background: var(--teal-50);
+                color: var(--teal-700);
+                font-weight: bold;
+                border-radius: 6px;
+            "
+        >
+            Sayfa
+            {{ questions.number }}
+            /
+            {{ questions.paginator.num_pages }}
+        </span>
+
+
+        {% if questions.has_next %}
+
+            <button
+                type="button"
+                class="js-qa-page-btn"
+                data-page="{{ questions.next_page_number }}"
+                style="
+                    padding: 8px 16px;
+                    border: 1px solid var(--gray-300);
+                    background: #fff;
+                    cursor: pointer;
+                    border-radius: 6px;
+                "
+            >
+                Sonraki
+            </button>
+
+        {% endif %}
+
+    </div>
+
+{% endif %}

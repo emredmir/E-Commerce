@@ -1,0 +1,596 @@
+{% extends "accounts/profile.html" %}
+{% load static %}
+{% load tz %}
+
+{% block title %}Soru ve Taleplerim - Hesabım{% endblock %}
+
+{% block main_content %}
+<style>
+    :root {
+        --c-primary: #0284c7;
+        --c-primary-hover: #0369a1;
+        --teal-500: #00b4d8;
+        --c-gray-50: #f8f9fa;
+        --c-gray-100: #f1f5f9;
+        --c-gray-200: #e2e8f0;
+        --c-gray-300: #cbd5e1;
+        --c-gray-400: #94a3b8;
+        --c-gray-500: #64748b;
+        --c-gray-600: #475569;
+        --c-gray-800: #1e293b;
+        --c-gray-900: #0f172a;
+
+        --teal-50: #caf0f8;
+        --teal-100: #ade8f4;
+        --teal-500: #00b4d8;
+        --teal-600: #0096c7;
+        --teal-700: #0077b6;
+        --teal-900: #03045e;
+
+        --gray-50: #fafafa;
+        --gray-100: #f4f4f5;
+        --gray-200: #e4e4e7;
+        --gray-300: #d4d4d8;
+        --gray-400: #a1a1aa;
+        --gray-500: #71717a;
+        --gray-600: #52525b;
+        --gray-700: #3f3f46;
+        --gray-800: #27272a;
+        --gray-900: #18181b;
+    }
+
+    /* --- TABS & TEXT --- */
+    .qa-tabs-container { margin-bottom: 20px; }
+    .qa-tabs { display: flex; gap: 24px; border-bottom: 2px solid var(--c-gray-200); }
+    
+    .qa-tab-wrapper { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding-bottom: 12px; position: relative; }
+    .qa-tab-btn {
+        background: transparent; border: none; font-size: 1.1rem; font-weight: 700;
+        color: var(--c-gray-500); cursor: pointer; padding: 0; transition: 0.3s;
+    }
+    
+    .qa-tab-wrapper.active .qa-tab-btn { color: var(--c-gray-800); }
+    .qa-tab-wrapper.active::after {
+        content: ''; position: absolute; bottom: -2px; left: 0; width: 100%; height: 3px; background: var(--c-primary); border-radius: 3px 3px 0 0;
+    }
+    
+    /* Okunmamış mesaj alt yazısı */
+    .qa-tab-subtitle { font-size: 0.8rem; font-weight: 600; transition: 0.3s; }
+    .qa-tab-subtitle.has-unread { color: #0077b6; } 
+    .qa-tab-subtitle.no-unread { color: #a1a1aa; } 
+
+    /* Container hiçbir şekilde genişlemesin diye max-width ve width eklendi */
+    .chat-container {
+        display: flex;
+        flex-direction: row;
+
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+
+        height: 600px;
+        min-height: 600px;
+        max-height: 600px;
+
+        background: #fff;
+        border: 1px solid var(--c-gray-200);
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+        box-sizing: border-box;
+    }
+
+    /* SOL: MESAJLAR (SOHBET) LİSTESİ */
+    .chat-sidebar {
+        width: 320px;
+        min-width: 320px;
+        max-width: 320px;
+        flex-shrink: 0;
+        border-right: 1px solid var(--c-gray-200);
+        background: var(--c-gray-50);
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+    }
+    .chat-sidebar::-webkit-scrollbar { width: 4px; }
+    .chat-sidebar::-webkit-scrollbar-thumb { background: var(--c-gray-300); border-radius: 4px; }
+
+    .chat-list-item {
+        display: flex; align-items: center; gap: 12px; padding: 16px;
+        border-bottom: 1px solid var(--c-gray-200); cursor: pointer; transition: 0.2s;
+        position: relative;
+    }
+    .chat-list-item:hover { background: #fff; }
+    .chat-list-item.active { background: #fff; border-left: 4px solid var(--c-primary); padding-left: 12px; }
+    
+    .chat-list-img {
+        width: 50px; height: 50px; border-radius: 6px; background: #fff;
+        border: 1px solid var(--c-gray-200); flex-shrink: 0; object-fit: contain; padding: 2px;
+    }
+    .chat-list-info { flex: 1; min-width: 0; /* Overflow ellipsis çalışması için */ }
+    .chat-list-title { font-size: 0.85rem; font-weight: 700; color: var(--c-gray-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;}
+    .chat-list-desc { font-size: 0.8rem; color: var(--c-gray-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    
+    .unread-dot { width: 10px; height: 10px; background: var(--teal-500); border-radius: 50%; position: absolute; right: 16px; top: 50%; transform: translateY(-50%); box-shadow: 0 0 0 2px #fff; }
+    .pending-dot { width: 10px; height: 10px; background: #94a3b8; border-radius: 50%; position: absolute; right: 16px; top: 50%; transform: translateY(-50%); box-shadow: 0 0 0 2px #fff; }
+
+
+    /* SAĞ: MESAJ DETAYI (CHAT WINDOW) */
+    .chat-window {
+        position: relative;
+
+        flex: 1 1 auto;
+        width: 0;
+        min-width: 0;
+        max-width: none;
+
+        height: 100%;
+        min-height: 0;
+
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+        box-sizing: border-box;
+    }
+    
+    /* Empty state */
+    .chat-empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 100% !important;
+        height: 100%;
+        min-width: 0 !important;
+        max-width: none !important;
+        box-sizing: border-box;
+        color: var(--c-gray-400);
+        text-align: center;
+    }
+    
+    /* Ürünleri Keşfet Butonu */
+    .chat-explore-btn {
+        margin-top: 20px; padding: 10px 24px; background: #fff; border: 1px solid var(--c-primary);
+        color: var(--c-primary); font-weight: 600; border-radius: 6px; text-decoration: none;
+        transition: 0.2s; font-size: 0.9rem;
+    }
+    .chat-explore-btn:hover { background: var(--teal-50); box-shadow: 0 4px 10px rgba(2, 132, 199, 0.1); }
+    
+    /* Sağ Üst Header */
+    .chat-header {
+        padding: 16px 24px; border-bottom: 1px solid var(--c-gray-200);
+        display: flex; justify-content: space-between; align-items: center; background: #fff;
+    }
+    .chat-header-store { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .chat-header-icon { width: 40px; height: 40px; border-radius: 50%; background: var(--teal-50); color: var(--teal-600); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;}
+    .chat-header-title { margin: 0; font-size: 1rem; font-weight: 700; color: var(--c-gray-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-header-rating { background: #10b981; color: #fff; font-size: 0.75rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-left: 6px;}
+
+    /* Sağ Orta Mesaj Alanı */
+    .chat-body {
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 0;
+        
+        padding: 24px;
+        overflow-x: hidden;
+        overflow-y: auto;
+        
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        
+        background: #fafafa;
+        box-sizing: border-box;
+    }
+    .chat-body::-webkit-scrollbar { width: 6px; }
+    .chat-body::-webkit-scrollbar-thumb { background: var(--c-gray-300); border-radius: 10px; }
+    
+    .bubble { max-width: 85%; padding: 12px 16px; border-radius: 16px; font-size: 0.95rem; line-height: 1.5; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.05); word-wrap: break-word; overflow-wrap: break-word; word-break: break-word;}
+    .bubble-time { font-size: 0.7rem; color: var(--c-gray-500); margin-top: 6px; display: block; text-align: right; font-weight: 500;}
+    
+    .bubble-me { background: #fff; border: 1px solid var(--c-gray-200); color: var(--c-gray-800); align-self: flex-end; border-bottom-right-radius: 4px;}
+    .bubble-store { background: #e0f2fe; border: 1px solid #bae6fd; color: var(--gray-800); align-self: flex-start; border-bottom-left-radius: 4px;}
+    .bubble-store-wrap .bubble-time { text-align: left; }
+
+    /* Soru Silme Butonu CSS */
+    .btn-delete-q {
+        background: transparent; border: none; color: var(--c-gray-400); cursor: pointer; 
+        font-size: 0.8rem; margin-top: 4px; display: flex; align-items: center; gap: 4px; transition: 0.2s;
+        flex-shrink: 0;
+    }
+    .btn-delete-q:hover { color: #ef4444; }
+
+    .qa-waiting { align-self: center; background: #fff7ed; border: 1px solid #fed7aa; color: #c2410c; padding: 10px 16px; border-radius: 20px; font-size: 0.85rem; display: flex; align-items: center; gap: 8px; font-weight: 500;}
+
+    /* Sağ Alt Footer (Aksiyonlar) */
+    .chat-footer {
+        padding: 16px 24px; border-top: 1px solid var(--c-gray-200); background: #fff;
+        display: flex; gap: 12px; justify-content: space-between; align-items: center; min-width: 0;
+    }
+    .chat-footer-prod { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;}
+    .chat-footer-prod-name { font-size: 0.85rem; font-weight: 600; color: var(--c-gray-600); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+    
+    .qa-btn {
+        padding: 8px 16px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; text-decoration: none;
+        cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid transparent; white-space: nowrap; flex-shrink: 0;
+    }
+    .qa-btn-outline { background: #fff; border-color: var(--c-primary); color: var(--c-primary); }
+    .qa-btn-outline:hover { background: var(--teal-50); }
+    .qa-btn-solid { background: var(--c-primary); color: #fff; }
+    .qa-btn-solid:hover { background: var(--c-primary-hover); }
+
+    /* Mobilde alt alta gelsin */
+    @media (max-width: 900px) {
+        .chat-container { flex-direction: column; height: auto; }
+        .chat-sidebar { width: 100%; min-width: 100%; max-width: 100%; max-height: 300px; border-right: none; border-bottom: 1px solid var(--c-gray-200); }
+        .chat-window { height: 500px; }
+        .bubble { max-width: 90%; }
+        .chat-footer { flex-direction: column; align-items: stretch; }
+        .chat-footer-prod { display: none; }
+        .qa-btn { width: 100%; text-align: center;}
+    }
+
+    /* Gizli Chat Bölümleri (JS İçin) */
+    .chat-detail-content {
+        display: none;
+        flex-direction: column;
+
+        flex: 1 1 auto;
+        width: 100%;
+        min-width: 0;
+        min-height: 0;
+
+        height: 100%;
+        box-sizing: border-box;
+    }
+
+    .chat-detail-content.active {
+        display: flex;
+    }
+</style>
+
+<div style="width: 100%;">
+    <h2 style="margin-top: 0; color: var(--c-gray-800); margin-bottom: 24px;">Soru ve Taleplerim</h2>
+
+    <!-- TABS -->
+    <div class="qa-tabs-container">
+        <div class="qa-tabs">
+            
+            <!-- Ürün Sorularım Tab -->
+            <div class="qa-tab-wrapper active">
+                <button class="qa-tab-btn">Ürün Sorularım</button>
+                <div class="qa-tab-subtitle js-main-subtitle {% if unread_count > 0 %}has-unread{% else %}no-unread{% endif %}" id="unread-text">
+                    {% if unread_count > 0 %}{{ unread_count }} okunmamış mesaj{% else %}0 okunmamış mesaj{% endif %}
+                </div>
+            </div>
+
+            <!-- Sipariş Sorularım Tab -->
+            <div class="qa-tab-wrapper" style="opacity: 0.5; cursor: not-allowed;" title="Çok Yakında">
+                <button class="qa-tab-btn" disabled>Sipariş Sorularım</button>
+                <div class="qa-tab-subtitle no-unread">0 okunmamış mesaj</div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- CHAT CONTAINER -->
+    <div class="chat-container">
+        
+        <!-- 1. SOL SÜTUN (Sohbet Listesi) -->
+        <div class="chat-sidebar">
+            {% for q in questions %}
+                <!-- Soru Kartı -->
+                <div class="chat-list-item js-chat-item" data-qid="{{ q.id }}" data-unread="{% if q.has_unread_answer %}true{% else %}false{% endif %}">
+                    
+                    <!-- Resim -->
+                    <img src="{% if q.get_thumbnail_url %}{{ q.get_thumbnail_url }}{% else %}{% static 'core/images/placeholder.png' %}{% endif %}" alt="Görsel" class="chat-list-img">
+                    
+                    <!-- Özet Bilgi -->
+                    <div class="chat-list-info">
+                        <div class="chat-list-title">{{ q.target_store.store_name|default:"Tüm Satıcılar" }}</div>
+                        <div class="chat-list-desc">{{ q.product.name }}</div>
+                    </div>
+                    
+                    <!-- Eğer satıcı cevapladıysa ama Müşteri Okumadıysa KIRMIZI NOKTA -->
+                    {% if q.has_unread_answer %}
+                        <div class="unread-dot js-new-badge"></div>
+                    {% endif %}
+
+                    <!-- Eğer satıcı HENÜZ CEVAPLAMADIYSA MAVİ NOKTA -->
+                    {% if not q.visible_answers %}
+                        <div class="pending-dot" title="Cevap Bekleniyor"></div>
+                    {% endif %}
+                </div>
+            {% empty %}
+                <div style="text-align: center; padding: 40px 20px; color: var(--c-gray-400);">
+                    <i class="fa-regular fa-comments" style="font-size: 2rem; margin-bottom: 12px;"></i>
+                    <p style="margin:0; font-size: 0.9rem;">Henüz bir sorunuz yok.</p>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- 2. SAĞ SÜTUN (Sohbet Detayı) -->
+        <div class="chat-window">
+            
+            <!-- Hiçbir şeye tıklanmadığında görünen ekran -->
+            <div class="chat-empty-state js-empty-state">
+                <i class="fa-regular fa-paper-plane" style="font-size: 3rem; margin-bottom: 16px; color: var(--c-gray-300);"></i>
+                <h3>Sorularınız Burada</h3>
+                <p style="font-size: 0.95rem; margin: 0; color: var(--c-gray-500); max-width: 80%;">
+                    Detaylarını görmek için sol taraftan bir soruya tıklayın. Satıcılara ürün detay sayfalarından doğrudan ulaşabilirsiniz.
+                </p>
+                <!-- Ürünlere Yönlendiren Buton -->
+                <a href="{% url 'products:product_list' %}" class="chat-explore-btn">
+                    Tüm Ürünleri Keşfet
+                </a>
+            </div>
+
+            <!-- Tıklanan soruların içerikleri (JS ile active edilecek) -->
+            {% for q in questions %}
+                <div class="chat-detail-content js-chat-content" id="chat-content-{{ q.id }}">
+                    
+                    <!-- HEADER -->
+                    <div class="chat-header">
+                        <div class="chat-header-store">
+                            <div class="chat-header-icon">
+                                <i class="fa-solid {% if q.target_store %}fa-store{% else %}fa-globe{% endif %}"></i>
+                            </div>
+                            <div>
+                                <h4 class="chat-header-title">
+                                    {{ q.target_store.store_name|default:"Tüm Satıcılara Soruldu" }}
+                                    {% if q.target_store %}<span class="chat-header-rating">9.8 Puan</span>{% endif %}
+                                </h4>
+                                <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                                    <span style="font-size: 0.8rem; color: var(--c-gray-500); font-weight: 600;">Konu: {{ q.get_topic_display }}</span>
+                                    
+                                    {% if q.variant_context %}
+                                        <span style="background: var(--teal-50); color: var(--teal-700); font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--teal-100);">
+                                            Varyant: {% for val in q.variant_context.attribute_values.all %}{{ val.value }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BODY (Mesajlar) -->
+                    <div class="chat-body">
+                        <!-- Müşteri Sorusu -->
+                        <div class="bubble bubble-me">
+                            {{ q.text|linebreaksbr }}
+                            <div style="display: flex; gap: 12px; align-items: center; margin-top: 6px;">
+                                <button type="button" class="btn-delete-q js-btn-delete-q" data-delete-url="{% url 'accounts:api_qa_question_delete' question_id=q.id %}">
+                                    <i class="fa-solid fa-trash-can"></i> Sil
+                                </button>
+                                <span class="bubble-time">Siz • {{ q.created_at|timezone:"Europe/Istanbul"|date:"d M Y, H:i" }}</span>
+                            </div>
+                        </div>
+
+                        <!-- Satıcı Cevapları -->
+                        {% if q.visible_answers %}
+                            {% for ans in q.visible_answers %}
+                                <div class="bubble bubble-store">
+                                    {{ ans.text|linebreaksbr }}
+                                    <span class="bubble-time">{{ ans.store.store_name }} • {{ ans.created_at|timezone:"Europe/Istanbul"|date:"d M Y, H:i" }}</span>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="qa-waiting">
+                                <i class="fa-regular fa-clock"></i> Satıcının sorunuzu yanıtlaması bekleniyor.
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- FOOTER (Aksiyonlar) -->
+                    <div class="chat-footer">
+                        <!-- Ürün Adı (Masaüstünde görünür) -->
+                        <div class="chat-footer-prod">
+                            <i class="fa-solid fa-box-open" style="color: var(--c-gray-400);"></i>
+                            <span class="chat-footer-prod-name">{{ q.product.name }}</span>
+                        </div>
+                        
+                        <!-- Butonlar -->
+                        <div style="display: flex; gap: 8px; flex-wrap: nowrap;">
+                            <a href="{% url 'products:product_detail' slug=q.product.slug %}{% if q.variant_context %}?variant={{ q.variant_context.id }}{% endif %}" class="qa-btn qa-btn-outline">
+                                Ürüne Git
+                            </a>
+                            <a href="{% url 'products:product_detail' slug=q.product.slug %}{% if q.variant_context %}?variant={{ q.variant_context.id }}{% endif %}#focus-qa" class="qa-btn qa-btn-solid">
+                                Yeni Soru Sor
+                            </a>
+                        </div>
+                    </div>
+
+                </div>
+            {% endfor %}
+        </div>
+        
+    </div>
+
+    <!-- PAGINATION -->
+    {% if is_paginated %}
+        <div style="display: flex; justify-content: center; gap: 8px; margin-top: 24px;">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}" style="padding: 8px 16px; border: 1px solid var(--c-gray-300); background: #fff; color: var(--c-gray-800); text-decoration: none; border-radius: 6px;">Önceki</a>
+            {% endif %}
+            
+            <span style="padding: 8px 16px; background: var(--c-gray-100); color: var(--c-gray-800); font-weight: bold; border-radius: 6px;">Sayfa {{ page_obj.number }} / {{ paginator.num_pages }}</span>
+            
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}" style="padding: 8px 16px; border: 1px solid var(--c-gray-300); background: #fff; color: var(--c-gray-800); text-decoration: none; border-radius: 6px;">Sonraki</a>
+            {% endif %}
+        </div>
+    {% endif %}
+
+</div>
+
+<script src="{% static 'products/js/wizard_ui.js' %}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    
+    const chatItems = document.querySelectorAll('.js-chat-item');
+    const chatContents = document.querySelectorAll('.js-chat-content');
+    const emptyState = document.querySelector('.js-empty-state');
+    const unreadText = document.getElementById('unread-text');
+    
+    // Tab'daki sayacı (X okunmamış mesaj) sayfa yüklenince bulalım
+    let currentUnreadCount = parseInt("{{ unread_count|default:'0' }}", 10);
+
+    // Dinamik Metin Güncelleyici
+    function updateUnreadText(count) {
+        // Okunmamış mesaj 0'ın altına düşmesin diye güvenlik önlemi
+        if (count < 0) count = 0;
+
+        if (count <= 0) {
+            unreadText.innerText = "0 okunmamış mesaj";
+            unreadText.classList.remove('has-unread');
+            unreadText.classList.add('no-unread');
+        } else {
+            unreadText.innerText = count + " okunmamış mesaj";
+            unreadText.classList.remove('no-unread');
+            unreadText.classList.add('has-unread');
+        }
+    }
+
+    // CSRF Cookie Fonksiyonu
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Sol taraftaki bir chat özetine tıklandığında
+    chatItems.forEach(item => {
+        item.addEventListener('click', async () => {
+            
+            // 1. Seçili olanın arka planını değiştir (Active class)
+            chatItems.forEach(c => c.classList.remove('active'));
+            item.classList.add('active');
+
+            // 2. Sağ tarafta doğru içeriği aç, diğerlerini gizle
+            const qid = item.dataset.qid;
+            if (emptyState) emptyState.style.display = 'none';
+            
+            chatContents.forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`chat-content-${qid}`).classList.add('active');
+
+            // 3. Okunmamış (Unread) mesaj kontrolü ve AJAX isteği
+            if (item.dataset.unread === "true") {
+                item.dataset.unread = "false"; // Bir daha tetiklenmesin
+                
+                // Kırmızı noktayı gizle
+                const badge = item.querySelector('.js-new-badge');
+                if (badge) badge.style.display = 'none';
+
+                // Sunucuya "Okundu" bilgisini gönder
+                try {
+                    // Dinamik Django URL reverse'ü kullanabiliriz ama bu basit yapı zaten hesaba ait.
+                    const res = await fetch(`/accounts/questions/${qid}/read/`, {
+                        method: 'POST',
+                        headers: {
+                            "X-CSRFToken": getCookie('csrftoken'),
+                            "Content-Type": "application/json"
+                        }
+                    });
+                    
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.success) {
+                            // Tab'daki metni AJAX sonucuna göre dinamik düşür
+                            currentUnreadCount -= data.updated_count;
+                            updateUnreadText(currentUnreadCount);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Okundu işaretleme hatası", e);
+                }
+            }
+        });
+    });
+
+    // SORUYU SİLME (AJAX) İŞLEMİ
+    const deleteBtns = document.querySelectorAll('.js-btn-delete-q');
+    deleteBtns.forEach(btn => {
+        btn.addEventListener('click', async () => {
+            
+            // Django Template'ten gelen dinamik URL'yi alıyoruz (404 hatasını çözer)
+            const deleteUrl = btn.dataset.deleteUrl;
+            
+            // Eğer WizardUI varsa onu kullan, yoksa standart JS Confirm kullan
+            let isConfirmed = false;
+            if (typeof WizardUI !== 'undefined') {
+                isConfirmed = await WizardUI.showConfirm({
+                    title: "Soruyu Sil",
+                    message: "Bu soruyu silmek istediğinize emin misiniz? Eğer satıcı cevapladıysa, satıcının cevabı da silinecektir.",
+                    confirmText: "Evet, Sil",
+                    cancelText: "Vazgeç"
+                });
+            } else {
+                isConfirmed = confirm("Soruyu silmek istediğinize emin misiniz?");
+            }
+
+            if (!isConfirmed) return;
+
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            btn.disabled = true;
+
+            try {
+                // DELETE methodu ile gönderiyoruz (Dinamik URL ile)
+                const res = await fetch(deleteUrl, {
+                    method: 'DELETE',
+                    headers: {
+                        "X-CSRFToken": getCookie('csrftoken'),
+                        "Content-Type": "application/json"
+                    }
+                });
+
+                // Eğer sunucu yetki hatası dönerse
+                if (res.status === 401 || res.status === 403) {
+                    if (typeof WizardUI !== 'undefined') WizardUI.showToast("error", "Oturum süreniz dolmuş veya yetkiniz yok.");
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                    return;
+                }
+
+                // Sunucudan gelen cevabı oku
+                const data = await res.json();
+                
+                if (data.success) {
+                    if (typeof WizardUI !== 'undefined') WizardUI.showToast("success", "Sorunuz başarıyla silindi.");
+                    // Kısa bir süre sonra sayfayı yenile ki silinen soru listeden uçsun
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 600);
+                } else {
+                    if (typeof WizardUI !== 'undefined') WizardUI.showToast("error", data.error || "Soru silinemedi.");
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                }
+
+            } catch (error) {
+                if (typeof WizardUI !== 'undefined') WizardUI.showToast("error", "Bağlantı hatası.");
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }
+        });
+    });
+
+    // İstersen sayfa açıldığında otomatik olarak ilk soruyu seçili hale getirebilirsin
+    // if (chatItems.length > 0) {
+    //     chatItems[0].click(); 
+    // }
+});
+</script>
+{% endblock %}

@@ -8,6 +8,14 @@ from django.urls import reverse_lazy
 
 from .forms import StoreForm
 
+import json
+from django.db.models import Exists, OuterRef, Prefetch, Q
+from django.http import JsonResponse
+
+
+from products.models import ProductQuestion, ProductAnswer
+from products.services.storefront import ProductQAService
+
 
 class SellerRequiredMixin(AccessMixin):
     """
@@ -206,4 +214,257 @@ class StorePublicDetailView(DetailView):
         # İleride mağazaya ait ürünleri de burada context'e ekleyeceğiz
         # context['products'] = Product.objects.filter(store=self.object, is_active=True)
         return context
-    
+
+
+class StoreQuestionsListView(SellerRequiredMixin, ListView):
+    """
+    Mağaza Paneli -> Müşteri Soruları
+
+    Satıcının:
+    - doğrudan kendi mağazasına yöneltilen,
+    - tüm satıcılara yöneltilen
+
+    görünür sorularını listeler.
+
+    Cevaplanma durumu bu mağaza açısından,
+    görünür ProductAnswer kayıtlarından türetilir.
+    """
+
+    model = ProductQuestion
+    template_name = "store/store_questions.html"
+    context_object_name = "questions"
+    paginate_by = 10
+
+    def get_store(self):
+        if not hasattr(self, "_store"):
+            self._store = get_object_or_404(
+                Store,
+                slug=self.kwargs["slug"],
+                seller=self.request.user.seller_profile,
+            )
+
+        return self._store
+
+    def get_queryset(self):
+        store = self.get_store()
+
+        visible_answer_exists = ProductAnswer.objects.filter(
+            question_id=OuterRef("pk"),
+            store=store,
+            is_visible=True,
+        )
+
+        answers_prefetch = Prefetch(
+            "answers",
+            queryset=(
+                ProductAnswer.objects
+                .filter(
+                    store=store,
+                    is_visible=True,
+                )
+                .select_related("user")
+                .order_by("created_at")
+            ),
+        )
+
+        return (
+            ProductQuestion.objects
+            .filter(
+                Q(target_store=store) |
+                Q(target_store__isnull=True),
+                is_visible=True,
+            )
+            .annotate(
+                has_visible_answer=Exists(
+                    visible_answer_exists
+                ),
+            )
+            .select_related(
+                "product",
+                "product__brand",
+                "product__category",
+                "variant_context",
+                "user",
+                "target_store",
+            )
+            .prefetch_related(
+                answers_prefetch,
+                "variant_context__attribute_values__attribute",
+                "product__image_groups__images",
+                "product__image_groups__visual_attribute_values",
+            )
+            .order_by(
+                "has_visible_answer",
+                "-created_at",
+            )
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        store = self.get_store()
+
+        context["store"] = store
+
+        context["pending_count"] = (
+            ProductQuestion.objects
+            .filter(
+                Q(target_store=store) |
+                Q(target_store__isnull=True),
+                is_visible=True,
+            )
+            .annotate(
+                has_visible_answer=Exists(
+                    ProductAnswer.objects.filter(
+                        question_id=OuterRef("pk"),
+                        store=store,
+                        is_visible=True,
+                    )
+                ),
+            )
+            .filter(
+                has_visible_answer=False,
+            )
+            .count()
+        )
+
+        return context
+
+
+class StoreAnswerQuestionAPIView(SellerRequiredMixin, View):
+    """
+    Satıcının müşteri sorusuna cevap vermesini sağlayan API.
+
+    target_store:
+        Store A -> yalnızca Store A cevaplayabilir.
+        NULL     -> tüm mağazalar cevaplayabilir.
+    """
+
+    def post(self, request, slug, question_id, *args, **kwargs):
+
+        # =====================================================
+        # STORE
+        # =====================================================
+
+        store = get_object_or_404(
+            Store,
+            slug=slug,
+            seller=request.user.seller_profile,
+        )
+
+        # =====================================================
+        # QUESTION
+        # =====================================================
+
+        # DİKKAT:
+        # Burada target_store=store kullanmıyoruz.
+        #
+        # Çünkü target_store=NULL olan global sorular da
+        # bu mağaza tarafından cevaplanabilir.
+
+        # question = get_object_or_404(
+        #     ProductQuestion,
+        #     pk=question_id,
+        #     is_visible=True,
+        # )
+
+        # =====================================================
+        # JSON
+        # =====================================================
+
+        try:
+            data = json.loads(request.body)
+
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "Geçersiz JSON.",
+                },
+                status=400,
+            )
+
+        if not isinstance(data, dict):
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "Geçersiz istek gövdesi.",
+                },
+                status=400,
+            )
+
+        # =====================================================
+        # INPUT
+        # =====================================================
+
+        text = data.get("text")
+
+        if not isinstance(text, str):
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "Cevap metni geçersiz.",
+                },
+                status=400,
+            )
+
+        text = text.strip()
+
+        if not text:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "Cevap metni boş olamaz.",
+                },
+                status=400,
+            )
+
+        # =====================================================
+        # SERVICE
+        # =====================================================
+
+        try:
+            answer = ProductQAService.create_answer(
+                question_id=question_id,
+                store=store,
+                user=request.user,
+                text=text,
+            )
+
+        except PermissionError as exc:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": str(exc),
+                },
+                status=403,
+            )
+
+        except ValueError as exc:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": str(exc),
+                },
+                status=400,
+            )
+
+        # =====================================================
+        # RESPONSE
+        # =====================================================
+
+        return JsonResponse(
+            {
+                "success": True,
+                "message": "Cevabınız başarıyla yayınlandı.",
+                "answer": {
+                    "id": answer.pk,
+                    "text": answer.text,
+                    "created_at": answer.created_at.strftime(
+                        "%d %b %Y, %H:%M"
+                    ),
+                },
+            },
+            status=201,
+        )
+

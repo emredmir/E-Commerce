@@ -1,0 +1,297 @@
+{% extends "accounts/profile.html" %}
+{% load static %}
+
+{% block title %}{{ collection.name }} - Koleksiyonlarım{% endblock %}
+
+{% block main_content %}
+<style>
+    :root {
+        --c-primary: #0284c7; /* Teal 600 - Senin ana rengin */
+        --c-primary-hover: #0369a1;
+        --c-gray-100: #f1f5f9;
+        --c-gray-200: #e2e8f0;
+        --c-gray-400: #94a3b8;
+        --c-gray-600: #475569;
+        --c-gray-800: #1e293b;
+        --c-bg: #f8f9fa;
+        --c-danger: #ef4444;
+        --c-danger-bg: #fee2e2;
+    }
+
+    .cd-header { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid var(--c-gray-400); padding-bottom: 16px; }
+    .cd-breadcrumb { font-size: 0.85rem; color: #6c757d; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 8px;}
+    .cd-breadcrumb:hover { color: var(--c-primary); }
+    
+    .cd-title-row { display: flex; justify-content: space-between; align-items: center; }
+    .cd-title { margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--gray-800); display: flex; align-items: center; gap: 10px; }
+    .cd-badge { background: #fee2e2; color: #ef4444; font-size: 0.75rem; padding: 4px 8px; border-radius: 6px; font-weight: 700; }
+    
+    .cd-btn-danger { background: transparent; border: 1px solid #ef4444; color: #ef4444; padding: 6px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: .2s; }
+    .cd-btn-danger:hover { background: #fef2f2; }
+
+    /* Ürün Listesi (Satır Bazlı Tasarım) */
+    .cd-list { display: flex; flex-direction: column; gap: 16px; }
+    /* Ürün Listesi (Grid Bazlı Tasarım) */
+    .cd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; align-items: stretch;}
+    
+    .cd-card {
+        background: #fff; border-radius: 8px; border: 1px solid var(--c-gray-200);
+        padding: 14px; text-decoration: none; transition: .2s; display: flex; flex-direction: column; position: relative;
+    }
+    .cd-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.06); border-color: var(--c-primary); }
+
+    /* Kaldır Butonu Sağ Üstte Çarpı Gibi */
+    .cd-btn-remove { 
+        position: absolute; top: 10px; right: 10px; z-index: 10;
+        width: 32px; height: 32px; background: #fff; border: 1px solid var(--c-gray-200); 
+        border-radius: 50%; color: var(--c-gray-400); font-size: 0.9rem; 
+        cursor: pointer; transition: .2s; display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .cd-btn-remove:hover { color: var(--c-danger); border-color: var(--c-danger); }
+
+    .cd-img-wrap { width: 100%; aspect-ratio: 1 / 1; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 4px; background: #fff;}
+    .cd-img-wrap img { max-width: 100%; max-height: 100%; object-fit: contain; transition: transform .3s; }
+    .cd-card:hover .cd-img-wrap img { transform: scale(1.05); }
+
+    .cd-brand { font-size: 0.75rem; font-weight: 700; color: var(--c-gray-400); text-transform: uppercase; margin-bottom: 2px; }
+    .cd-name { font-size: 0.9rem; font-weight: 600; color: var(--c-gray-800); line-height: 1.4; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+    .cd-variant-pills { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px;}
+    .cd-pill { background: var(--c-bg); font-size: 0.7rem; color: var(--c-gray-600); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--c-gray-200); font-weight: 600;}
+    
+    .cd-footer { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+    .cd-price { font-size: 1.15rem; font-weight: 800; color: var(--c-primary); display: flex; align-items: baseline; gap: 2px; }
+    .cd-price-currency { font-size: 0.75rem; font-weight: 700; }
+    
+    .cd-btn-cart { background: var(--c-primary); color: #fff; border: none; padding: 8px 12px; border-radius: 6px; font-weight: 600; width: 100%; cursor: pointer; transition: .2s; font-size: 0.85rem;}
+    .cd-btn-cart:hover { background: var(--c-primary-hover); }
+
+</style>
+
+<div style="width: 100%;">
+    <div class="cd-header">
+        <a href="{% url 'accounts:collection_list' %}" class="cd-breadcrumb">
+            <i class="fa-solid fa-arrow-left"></i> Tüm Koleksiyonlar
+        </a>
+        <div class="cd-title-row">
+            <h1 class="cd-title">
+                {{ collection.name }}
+                {% if collection.is_default %}
+                    <span class="cd-badge" title="Varsayılan Liste"><i class="fa-solid fa-heart"></i></span>
+                {% endif %}
+            </h1>
+            
+            {% if not collection.is_default %}
+                <button class="cd-btn-danger" id="btn-delete-list">Listeyi Sil</button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="cd-grid">
+        {% for item in items %}
+        <div class="cd-card" id="item-{{ item.id }}">
+            
+            <button class="cd-btn-remove js-remove-item" data-variant-id="{{ item.variant.id }}" data-col-id="{{ collection.id }}" title="Listeden Çıkar">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <a href="{% url 'products:product_detail' slug=item.variant.product.slug %}?variant={{ item.variant.id }}" class="cd-img-wrap">
+                <img src="{% if item.variant.get_thumbnail_url %}{{ item.variant.get_thumbnail_url }}{% else %}{% static 'core/images/placeholder.png' %}{% endif %}" alt="Görsel">
+            </a>
+            
+            <div class="cd-brand">{{ item.variant.product.brand.name|default:"Genel" }}</div>
+            <a href="{% url 'products:product_detail' slug=item.variant.product.slug %}?variant={{ item.variant.id }}" class="cd-name" style="text-decoration: none;">
+                {{ item.variant.product.name }}
+            </a>
+            
+            <div class="cd-variant-pills">
+                {% for val in item.variant.attribute_values.all %}
+                    <span class="cd-pill">{{ val.value }}</span>
+                {% endfor %}
+            </div>
+
+            <div class="cd-footer">
+                <!-- item.offer: Müşterinin eklediği satıcı teklifi -->
+                {% if item.offer and item.offer.is_active and item.offer.stock > 0 and item.variant.is_active %}
+                    <div class="cd-price">
+                        <!-- item.offer.price her zaman canlı fiyattır (Veritabanından o an çekilir) -->
+                        <span class="js-format-money">{{ item.offer.price }}</span> <span class="cd-price-currency">TL</span>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--gray-500); margin-bottom: 8px;">
+                        Satıcı: <strong>{{ item.offer.store.store_name }}</strong>
+                    </div>
+
+                    <!-- Doğrudan ilgili offer_id'ye yönlendiriyoruz -->
+                    <button class="cd-btn-cart" 
+                    data-url="{% url 'products:product_detail' slug=item.variant.product.slug %}?variant={{ item.variant.id }}&offer={{ item.offer.id }}">
+                        <i class="fa-solid fa-cart-shopping"></i> İncele / Sepete Ekle
+                    </button>
+
+                {% else %}
+                    <!-- Eğer satıcı yayından kaldırdıysa, stok bittiyse veya varyant kapandıysa: -->
+                    <div class="cd-price" style="color: var(--gray-500); font-size: 1rem; margin-bottom: 4px;">
+                        Tükendi
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--gray-500); margin-bottom: 8px;">
+                        Satıcı: <strong>{{ item.offer.store.store_name|default:"Satıcı Bulunamadı" }}</strong>
+                    </div>
+
+                    <button class="cd-btn-cart" style="background: var(--gray-200); color: var(--gray-500); cursor: not-allowed;" disabled>
+                        Şu An Temin Edilemiyor
+                    </button>
+                    <!-- İSTEĞE BAĞLI: Kullanıcıya diğer satıcılara bakma şansı ver -->
+                    <a href="{% url 'products:product_detail' slug=item.variant.product.slug %}?variant={{ item.variant.id }}" style="font-size: 0.75rem; color: var(--primary-color); display: block; margin-top: 8px; text-align: center; text-decoration: none;">
+                        Farklı Satıcılarda Ara
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        {% empty %}
+        <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #6c757d; background: #fff; border-radius: 8px; border: 1px solid var(--c-gray-200);">
+            <i class="fa-regular fa-heart" style="font-size: 3rem; margin-bottom: 16px; color: var(--c-gray-200);"></i>
+            <h3>Bu listenizde henüz ürün yok.</h3>
+            <a href="{% url 'products:product_list' %}" style="color: var(--c-primary); font-weight: 600; text-decoration: none;">Alışverişe Başla <i class="fa-solid fa-arrow-right"></i></a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+
+<script src="{% static 'products/js/wizard_ui.js' %}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    
+    // Fiyatları TL Formatına çevirme
+    document.querySelectorAll('.js-format-money').forEach(el => {
+        const val = parseFloat(el.innerText.replace(',', '.'));
+        if(!isNaN(val)) {
+            el.innerText = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+        }
+    });
+
+    document.querySelectorAll(".cd-btn-cart").forEach(button => {
+        button.addEventListener("click", function () {
+            window.location.href = this.dataset.url;
+        });
+    });
+
+    // 1. Listeden Ürün Silme AJAX (WIZARD UI ILE CONFIRM)
+    document.querySelectorAll('.js-remove-item').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault(); // A linkine basılmasını engelle
+            
+            const variantId = btn.dataset.variantId;
+            const colId = btn.dataset.colId;
+            const itemElement = btn.closest('.cd-card');
+            
+            const isConfirmed = await WizardUI.showConfirm({
+                title: "Ürünü Çıkar",
+                message: "Bu ürünü koleksiyondan çıkarmak istediğinize emin misiniz?",
+                confirmText: "Çıkar",
+                cancelText: "Vazgeç"
+            });
+
+            if(!isConfirmed) return; 
+            
+            try {
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                btn.disabled = true;
+
+                const res = await fetch("{% url 'products:api_collections_toggle' %}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": "{{ csrf_token }}"
+                    },
+                    body: JSON.stringify({ variant_id: variantId, collection_id: colId })
+                });
+                // Eğer sunucu 403 (Giriş Yetkisi Yok) dönerse veya JSON gelmezse
+                if (!res.ok) {
+                     WizardUI.showToast("error", "İşlem yetkiniz yok veya oturum kapandı.");
+                     btn.innerHTML = originalHtml;
+                     btn.disabled = false;
+                     return;
+                }
+                const data = await res.json();
+                
+                if(data.success && data.status === "removed") {
+                    itemElement.style.transition = "0.3s";
+                    itemElement.style.transform = "scale(0.9)";
+                    itemElement.style.opacity = "0";
+                                    
+                    requestAnimationFrame(() => {
+                        WizardUI.showToast("success", "Ürün listeden çıkarıldı.");
+                    });
+                    setTimeout(() => itemElement.remove(), 300);
+                } else {
+                    WizardUI.showToast("error", "Bir sorun oluştu.");
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                }
+            } catch(err) { 
+                WizardUI.showToast("error", "Bağlantı hatası.");
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }
+        });
+    });
+
+    // 2. Listeyi Komple Silme AJAX (WIZARD UI ILE CONFIRM)
+    const btnDelete = document.getElementById('btn-delete-list');
+    if(btnDelete) {
+        btnDelete.addEventListener('click', async () => {
+            const isConfirmed = await WizardUI.showConfirm({
+                title: "Listeyi Sil",
+                message: "Bu listeyi tamamen silmek istediğinize emin misiniz? İçindeki ürün bağlantıları da kopacaktır. Bu işlem geri alınamaz.",
+                confirmText: "Evet, Sil",
+                cancelText: "Vazgeç"
+            });
+
+            if(!isConfirmed) return;
+
+            try {
+                btnDelete.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Siliniyor...';
+                btnDelete.disabled = true;
+
+                const res = await fetch("{% url 'accounts:api_collections_delete' %}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": "{{ csrf_token }}"
+                    },
+                    body: JSON.stringify({ collection_id: "{{ collection.id }}" })
+                });
+                if (!res.ok) {
+                    WizardUI.showToast("error", "Silme yetkiniz yok.");
+                    btnDelete.innerHTML = 'Listeyi Sil';
+                    btnDelete.disabled = false;
+                    return;
+                }
+                const data = await res.json();
+                
+                if(data.success) {
+                    requestAnimationFrame(() => {
+                        WizardUI.showToast("success", "Liste başarıyla silindi.");
+
+                        // Toast'ın görünmesi için yeterli süre bırak
+                        setTimeout(() => {
+                            window.location.href = "{% url 'accounts:collection_list' %}";
+                        }, 400);
+                    });
+                } else {
+                    WizardUI.showToast("error", data.error || "Silinemedi.");
+                    btnDelete.innerHTML = 'Listeyi Sil';
+                    btnDelete.disabled = false;
+                }
+            } catch (error) {
+                WizardUI.showToast("error", "Bağlantı kurulamadı.");
+                btnDelete.innerHTML = 'Listeyi Sil';
+                btnDelete.disabled = false;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

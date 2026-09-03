@@ -178,6 +178,11 @@ body {
         </a>
       </li>
       <li class="menu-list-item">
+        <a href="{% url 'accounts:collection_list' %}" data-page-name="koleksiyonlarim">
+          <i class="fas fa-heart left-icon"></i> Favorilerim & Koleksiyonlarım
+        </a>
+      </li>
+      <li class="menu-list-item">
         <a href="#" data-page-name="degerlendirmelerim">
           <i class="fas fa-star left-icon"></i> Değerlendirmelerim
         </a>
@@ -216,7 +221,7 @@ body {
 
     <ul class="menu-list">
       <li class="menu-list-item">
-        <a href="#" data-page-name="soru-taleplerim">
+        <a href="{% url 'accounts:user_questions' %}" data-page-name="soru-taleplerim">
           <i class="fas fa-question-circle left-icon"></i> Soru ve Taleplerim
         </a>
       </li>
@@ -319,5 +324,45 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 
+<!-- WIZARD UI TOAST CONTAINER -->
+<div id="wizard-toast-container"></div>
+
+<!-- WIZARD UI CONFIRM MODAL -->
+<div id="wizard-confirm-modal" class="wizard-modal-overlay" hidden>
+    <div class="wizard-modal-box">
+        <h3 data-modal-title class="wizard-modal-title">Emin misiniz?</h3>
+        <p data-modal-message class="wizard-modal-text">Bu işlem geri alınamaz.</p>
+        <div class="wizard-modal-actions">
+            <button data-modal-cancel class="wizard-btn-cancel">Vazgeç</button>
+            <button data-modal-confirm class="wizard-btn-confirm">Onayla</button>
+        </div>
+    </div>
+</div>
+
+<style>
+  /* DOM içindeki modal için css */
+  .wizard-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100000; display: flex; align-items: center; justify-content: center; }
+  .wizard-modal-overlay[hidden] { display: none !important; }
+  .wizard-modal-box { background: #fff; padding: 24px; border-radius: 8px; width: 100%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+  .wizard-modal-title { margin-top: 0; color: #1e293b; font-size: 1.25rem; }
+  .wizard-modal-text { color: #475569; margin-bottom: 24px; font-size: 1rem;}
+  .wizard-modal-actions { display: flex; justify-content: flex-end; gap: 12px; }
+  .wizard-btn-cancel { background: transparent; border: 1px solid #cbd5e1; padding: 8px 16px; border-radius: 6px; cursor: pointer; color: #475569; font-weight: 600; font-size: 0.95rem; }
+  .wizard-btn-cancel:hover { background: #f8f9fa; }
+  .wizard-btn-confirm { background: #ef4444; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; color: #fff; font-weight: 600; font-size: 0.95rem; }
+  .wizard-btn-confirm:hover { background: #dc2626; }
+  body.modal-open { overflow: hidden; }
+  #wizard-toast-container { position: fixed; top: 80px; right: 20px; z-index: 100000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+  .wizard-toast { background: #fff; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); padding: 16px 20px; display: flex; align-items: center; gap: 12px; transform: translateX(120%); opacity: 0; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); pointer-events: auto; min-width: 250px; border-left: 4px solid #cbd5e1; }
+  .wizard-toast.show { transform: translateX(0); opacity: 1; }
+  .wizard-toast-success { border-left-color: #10b981; }
+  .wizard-toast-success i { color: #10b981; font-size: 1.2rem; }
+  .wizard-toast-error { border-left-color: #ef4444; }
+  .wizard-toast-error i { color: #ef4444; font-size: 1.2rem; }
+  .wizard-toast-warning { border-left-color: #f59e0b; }
+  .wizard-toast-warning i { color: #f59e0b; font-size: 1.2rem; }
+  .wizard-toast-close { margin-left: auto; background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; transition: 0.2s; }
+  .wizard-toast-close:hover { color: #1e293b; }
+</style>
 
 {% endblock %}

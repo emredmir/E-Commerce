@@ -29,7 +29,13 @@ from products.views.wizard_step5 import ProductWizardStep5View, ProductWizardPub
 from products.views.api import (
     CategoryBrandAPIView,
     CategoryChildrenAPIView,
-    
+    CollectionListAPIView,
+    CollectionCreateAPIView,
+    CollectionToggleAPIView,
+    ProductQAAskAPIView,
+    ProductQAUpvoteAPIView,
+    ProductQAAnswerDeleteAPIView,
+    ProductQAListAPIView,
 )
 
 from products.views.offer import OfferCreateView, OfferCustomVariantCreateView, CategoryAttributesAPIView
@@ -75,6 +81,17 @@ urlpatterns = [
     path('seller/<slug:store_slug>/inventory/offer/<int:pk>/archive/', StoreProductArchiveView.as_view(), name='offer_archive'),
 
     path('<slug:slug>/', ProductDetailView.as_view(), name='product_detail'),
+
+    # Koleksiyon API URL'leri
+    path('api/collections/', CollectionListAPIView.as_view(), name='api_collections_list'),
+    path('api/collections/toggle/', CollectionToggleAPIView.as_view(), name='api_collections_toggle'),
+    path('api/collections/create/', CollectionCreateAPIView.as_view(), name='api_collections_create'),
+
+    # Q&A (Soru-Cevap) API Uçları
+    path('api/qa/ask/', ProductQAAskAPIView.as_view(), name='api_qa_ask'),
+    path('api/qa/list/<int:product_id>/', ProductQAListAPIView.as_view(), name='api_qa_list'),
+    path('api/qa/upvote/', ProductQAUpvoteAPIView.as_view(), name='api_qa_upvote'),
+    path("api/qa/answers/<int:answer_id>/delete/", ProductQAAnswerDeleteAPIView.as_view(), name="api_qa_answer_delete"),
 
     #----------------------- yeni wizard
     # ==========================================================

@@ -1,5 +1,10 @@
 from django.urls import path
-from .views import StoreCreateView, MyStoresListView, StoreUpdateView, StoreDashboardView, StorePublicDetailView, StoreArchiveView
+from .views import (
+    StoreCreateView, MyStoresListView, StoreUpdateView, 
+    StoreDashboardView, StorePublicDetailView, StoreArchiveView,
+    StoreQuestionsListView, StoreAnswerQuestionAPIView
+    )
+from products.views.api import ProductQAAnswerDeleteAPIView
 
 
 app_name = 'store'
@@ -22,4 +27,9 @@ urlpatterns = [
 
     # PUBLIC VİTRİN
     path('<slug:slug>/', StorePublicDetailView.as_view(), name='store_detail'),
+
+    # Soru ve Cevaplar (Satıcı Paneli)
+    path('<slug:slug>/questions/', StoreQuestionsListView.as_view(), name='store_questions'),
+    path('<slug:slug>/questions/<int:question_id>/answer/', StoreAnswerQuestionAPIView.as_view(), name='api_store_answer_question'),
+    path('api/qa/answer/<int:answer_id>/delete/', ProductQAAnswerDeleteAPIView.as_view(), name='api_qa_answer_delete'),
 ]

@@ -15,7 +15,7 @@ from products.models import (
     ProductImage,
 )
 from products.forms.storefront import ProductFilterForm
-from products.services.storefront import ProductDetailService
+from products.services.storefront import ProductDetailService, ProductQAService
 from products.services.storefront_offers import StorefrontOfferService
 
 logger = logging.getLogger(__name__)
@@ -428,6 +428,18 @@ class ProductDetailView(View):
             variant_id=request.GET.get("variant"),
             offer_id=request.GET.get("offer"),
         )
+
+        # ----------------------------------------------------
+        # Q&A
+        # ----------------------------------------------------
+
+        qa_context = ProductQAService.get_context(
+            product=product,
+            request=request,
+            offer_id=request.GET.get("offer"),
+        )
+
+        context.update(qa_context)
 
         # ----------------------------------------------------
         # BENZER VE MARKA ÜRÜNLERİ

@@ -1,0 +1,204 @@
+{% extends "accounts/profile.html" %}
+{% load static %}
+
+{% block title %}Favorilerim ve Koleksiyonlarım - Hesabım{% endblock %}
+
+{% block main_content %}
+<style>
+    :root {
+        --c-primary: #0284c7; /* Teal 600 - Senin ana rengin */
+        --c-primary-hover: #0369a1;
+        --c-gray-100: #f1f5f9;
+        --c-gray-200: #e2e8f0;
+        --c-gray-400: #94a3b8;
+        --c-gray-600: #475569;
+        --c-gray-800: #1e293b;
+        --c-bg: #f8f9fa;
+        --c-danger: #ef4444;
+        --c-danger-bg: #fee2e2;
+    }
+
+    .cl-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid var(--c-gray-200); padding-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+    .cl-title { margin: 0; font-size: 1.3rem; font-weight: 700; color: var(--c-gray-800); }
+    .cl-btn-new { background: #fff; border: 1px solid var(--c-primary); color: var(--c-primary); padding: 6px 14px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: .2s; font-size: 0.9rem; white-space: nowrap; }
+    .cl-btn-new:hover { background: var(--c-primary); color: #fff; }
+
+    .cl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+    
+    .cl-card { background: #fff; border: 1px solid var(--c-gray-200); border-radius: 8px; overflow: hidden; transition: .2s; text-decoration: none; display: flex; flex-direction: column; }
+    .cl-card:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); border-color: var(--c-primary); }
+    
+    .cl-preview-box { width: 100%; aspect-ratio: 1/1; background: var(--c-bg); padding: 8px; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 6px; box-sizing: border-box; }
+    .cl-preview-img-wrap { background: #fff; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid var(--c-gray-200); }
+    .cl-preview-img-wrap img { width: 100%; height: 100%; object-fit: contain; }
+    .cl-preview-empty { background: #fff; border-radius: 4px; border: 1px dashed var(--c-gray-200); display: flex; align-items: center; justify-content: center; color: var(--c-gray-400); font-size: 0.8rem; }
+    
+    .cl-info { padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+    .cl-name { font-size: 1rem; font-weight: 700; color: var(--c-gray-800); margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px;}
+    .cl-badge { background: var(--c-danger-bg); color: var(--c-danger); font-size: 0.65rem; padding: 2px 4px; border-radius: 4px; font-weight: 700; flex-shrink: 0; }
+    .cl-count { font-size: 0.8rem; color: var(--c-gray-600); font-weight: 500; }
+
+    .cl-sort-select { padding: 6px 10px; border: 1px solid var(--c-gray-200); border-radius: 6px; font-size: 0.85rem; color: var(--c-gray-800); outline: none; background: #fff; cursor: pointer; }
+    
+    .cl-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: none; align-items: center; justify-content: center; }
+    .cl-modal { background: #fff; padding: 24px; border-radius: 8px; width: 100%; max-width: 400px; box-shadow: 0 20px 40px rgba(0,0,0,0.2);}
+    .cl-input { width: 100%; padding: 10px; border: 1px solid var(--c-gray-200); border-radius: 6px; margin: 12px 0; font-size: 1rem; box-sizing: border-box; outline: none;}
+    .cl-input:focus { border-color: var(--c-primary); }
+    .cl-modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+</style>
+
+<div style="width: 100%;">
+    <div class="cl-header">
+        <h1 class="cl-title">Favorilerim ve Koleksiyonlarım</h1>
+        
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <!-- Sıralama Kutusu -->
+            <select class="cl-sort-select" onchange="window.location.href='?sort='+this.value">
+                <option value="newest" {% if request.GET.sort == 'newest' or not request.GET.sort %}selected{% endif %}>En Yeniler</option>
+                <option value="oldest" {% if request.GET.sort == 'oldest' %}selected{% endif %}>En Eskiler</option>
+                <option value="name_asc" {% if request.GET.sort == 'name_asc' %}selected{% endif %}>İsme Göre (A-Z)</option>
+                <option value="name_desc" {% if request.GET.sort == 'name_desc' %}selected{% endif %}>İsme Göre (Z-A)</option>
+            </select>
+
+            <button class="cl-btn-new" onclick="document.getElementById('new-list-modal').style.display='flex'">
+                <i class="fa-solid fa-plus"></i> Yeni Liste Oluştur
+            </button>
+        </div>
+    </div>
+
+    <div class="cl-grid">
+        {% for collection in collections %}
+        <a href="{% url 'accounts:collection_detail' pk=collection.id %}" class="cl-card">
+            
+            <div class="cl-preview-box">
+                <!-- 0'dan 3'e kadar indexler (4 Kutu) -->
+                {% for i in "1234" %}
+                    {% if forloop.counter <= collection.preview_items|length %}
+                        <!-- Listenin o anki indexine gelen ürünü çek -->
+                        {% with current_item_index=forloop.counter0 %}
+                            {% for preview_item in collection.preview_items %}
+                                {% if forloop.counter0 == current_item_index %}
+                                <div class="cl-preview-img-wrap">
+                                    {% if preview_item.variant.get_thumbnail_url %}
+                                        <img src="{{ preview_item.variant.get_thumbnail_url }}" alt="Görsel">
+                                    {% else %}
+                                        <img src="{% static 'core/images/placeholder.png' %}" alt="Placeholder">
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endwith %}
+                    {% else %}
+                        <!-- Eğer liste bittiyse ve 4'e tamamlanmadıysa, boş çerçeve bas -->
+                        <div class="cl-preview-empty" style="width: 100%; height: 100%;"><i class="fa-solid fa-image"></i></div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+
+            <div class="cl-info">
+                <h3 class="cl-name">
+                    {{ collection.name }}
+                    {% if collection.is_default %}
+                        <span class="cl-badge"><i class="fa-solid fa-heart"></i></span>
+                    {% endif %}
+                </h3>
+                <span class="cl-count">{{ collection.item_count }} Ürün</span>
+            </div>
+        </a>
+        {% empty %}
+        <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #6c757d;">
+            <i class="fa-regular fa-folder-open" style="font-size: 3rem; margin-bottom: 16px; color: var(--light-gray);"></i>
+            <h3>Henüz bir liste oluşturmadınız.</h3>
+            <p>Favorilerinizi kaydetmek için ürün sayfalarındaki kalp ikonuna tıklayın.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- YENİ LİSTE OLUŞTURMA MODALI -->
+<div class="cl-modal-overlay" id="new-list-modal">
+    <div class="cl-modal">
+        <h3 style="margin-top: 0; color: var(--gray-800);">Yeni Liste Oluştur</h3>
+        <input type="text" id="new-list-name" class="cl-input" placeholder="Örn: Ev Eşyaları, Doğum Günü İsteklerim...">
+        <div class="cl-modal-actions">
+            <button class="cl-btn-new" style="background: transparent; color: #6c757d; border-color: transparent;" onclick="document.getElementById('new-list-modal').style.display='none'">İptal</button>
+            <button class="cl-btn-new" id="btn-create-list" style="background: var(--primary-color); color: #fff;">Oluştur</button>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'products/js/wizard_ui.js' %}"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        // Yeni liste oluşturma AJAX işlemi
+        const createBtn = document.getElementById('btn-create-list');
+        const nameInput = document.getElementById('new-list-name');
+        
+        createBtn.addEventListener('click', async () => {
+            const name = nameInput.value.trim();
+            
+            if(!name) { 
+                WizardUI.showToast('error', "Lütfen liste adını girin.");
+                return; 
+            }
+
+            const originalText = createBtn.innerHTML;
+            createBtn.disabled = true; 
+            createBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Oluşturuluyor...';
+            
+            try {
+                const res = await fetch("{% url 'products:api_collections_create' %}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": "{{ csrf_token }}"
+                    },
+                    // Variant_id yerine null gönderiyoruz, çünkü sadece liste yaratıyoruz
+                    body: JSON.stringify({ name: name, variant_id: null })
+                });
+                // Güvenlik: Kullanıcının oturumu düşmüşse 403 döner
+                if (!res.ok) {
+                    WizardUI.showToast('error', "İşlem yetkiniz yok veya oturum kapandı.");
+                    createBtn.disabled = false; 
+                    createBtn.innerHTML = originalText;
+                    return;
+                }
+                
+                const data = await res.json();
+                
+                if(data.success) {
+                    // 1. Modalı Gizle
+                    document.getElementById('new-list-modal').style.display='none';
+                    
+                    // 2. Mesajı Göster
+                    WizardUI.showToast('success', "Yeni liste başarıyla oluşturuldu.");
+                    
+                    // 3. SPAM KORUMASI: Tüm sayfayı (body) tıklanamaz yap ve fare imlecini bekleme (loading) yap
+                    document.body.style.pointerEvents = "none";
+                    document.body.style.cursor = "wait";
+                    
+                    // 4. 800ms sonra (Animasyonun rahatça izlenebilmesi için) sayfayı hızlıca yenile
+                    setTimeout(() => { 
+                        window.location.reload(); 
+                    }, 800);
+                } else {
+                    WizardUI.showToast('error', data.error || "Bu isimde bir liste zaten var.");
+                    createBtn.disabled = false; 
+                    createBtn.innerHTML = originalText;
+                }
+            } catch(e) { 
+                WizardUI.showToast('error', "Bağlantı sorunu oluştu.");
+                createBtn.disabled = false; 
+                createBtn.innerHTML = originalText;
+            }
+        });
+
+        // Enter'a basınca tetikleme
+        nameInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                createBtn.click();
+            }
+        });
+    });
+</script>
+{% endblock %}

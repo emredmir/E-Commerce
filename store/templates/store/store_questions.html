@@ -1,0 +1,700 @@
+{% extends "core/home.html" %}
+{% load static %}
+{% load tz %}
+
+{% block title %}{{ store.store_name }} - Müşteri Soruları{% endblock %}
+
+{% block content %}
+
+<!-- SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<style>
+    :root {
+        --teal-50: #caf0f8;
+        --teal-100: #ade8f4;
+        --teal-500: #00b4d8;
+        --teal-600: #0096c7;
+        --teal-700: #0077b6;
+        --teal-900: #03045e;
+
+        --gray-50: #fafafa;
+        --gray-100: #f4f4f5;
+        --gray-200: #e4e4e7;
+        --gray-300: #d4d4d8;
+        --gray-400: #a1a1aa;
+        --gray-500: #71717a;
+        --gray-600: #52525b;
+        --gray-700: #3f3f46;
+        --gray-800: #27272a;
+        --gray-900: #18181b;
+
+        --radius: 12px;
+        --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
+    }
+
+    body { background-color: var(--gray-50); }
+
+    /* LAYOUT & SIDEBAR */
+    .seller-layout { display: flex; gap: 24px; max-width: 1400px; margin: 32px auto; padding: 0 24px; align-items: start; }
+
+    .seller-sidebar {
+        width: 280px; background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-sm);
+        border: 1px solid var(--gray-200); position: sticky; top: 24px; overflow: hidden; flex-shrink: 0;
+    }
+
+    .sidebar-profile {
+        padding: 32px 24px 24px; text-align: center;
+        background: linear-gradient(180deg, var(--teal-50) 0%, #fff 100%);
+        border-bottom: 1px solid var(--gray-100);
+    }
+
+    .sidebar-avatar {
+        width: 80px; height: 80px; border-radius: 24px; background: var(--teal-600); color: #fff;
+        display: inline-flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 700;
+        margin-bottom: 12px; box-shadow: 0 8px 16px rgba(0, 150, 199, 0.2);
+    }
+    .sidebar-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 24px; }
+
+    .sidebar-store-name { font-size: 1.1rem; font-weight: 700; color: var(--gray-900); margin: 0 0 6px 0; }
+    .sidebar-badge { display: inline-block; padding: 4px 10px; background: #f0fdf4; color: #16a34a; font-size: 0.75rem; font-weight: 700; border-radius: 20px; border: 1px solid #bbf7d0; }
+
+    .sidebar-nav { padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; list-style: none; margin: 0; }
+    .sidebar-nav a { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--gray-600); font-weight: 600; text-decoration: none; border-radius: 10px; transition: .2s; }
+    .sidebar-nav a:hover { background: var(--gray-50); color: var(--gray-900); }
+    .sidebar-nav a.active { background: var(--teal-50); color: var(--teal-700); }
+    .sidebar-nav a i { font-size: 1.1rem; width: 24px; text-align: center; }
+
+    /* MAIN CONTENT */
+    .seller-main { flex: 1; min-width: 0; }
+
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .page-title { margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--gray-900); }
+
+    /* --- TABS --- */
+    .qa-tabs-container { margin-bottom: 20px; }
+    .qa-tabs { display: flex; gap: 24px; border-bottom: 2px solid var(--gray-200); }
+    
+    .qa-tab-wrapper { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding-bottom: 12px; position: relative; }
+    .qa-tab-btn {
+        background: transparent; border: none; font-size: 1.1rem; font-weight: 700;
+        color: var(--gray-500); cursor: pointer; padding: 0; transition: 0.3s;
+    }
+    .qa-tab-wrapper.active .qa-tab-btn { color: var(--gray-800); }
+    .qa-tab-wrapper.active::after {
+        content: ''; position: absolute; bottom: -2px; left: 0; width: 100%; height: 3px; background: var(--teal-600); border-radius: 3px 3px 0 0;
+    }
+    
+    .qa-tab-subtitle { font-size: 0.8rem; font-weight: 600; transition: 0.3s; }
+    .qa-tab-subtitle.has-pending { color: var(--teal-700); }
+    .qa-tab-subtitle.no-pending { color: var(--gray-400); }
+
+    /* --- CHAT KİLİTLEMESİ (CSS GRID/FLEX KORUMASI) --- */
+    .chat-container {
+        display: flex;
+        flex-direction: row;
+        height: 600px;
+        max-height: 600px;
+        width: 100%; 
+        background: #fff;
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+        box-sizing: border-box;
+    }
+
+    /* SOL: MESAJLAR LİSTESİ */
+    .chat-sidebar {
+        width: 320px;
+        min-width: 320px;
+        max-width: 320px;
+        flex-shrink: 0;
+        border-right: 1px solid var(--gray-200);
+        background: var(--gray-50);
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+    }
+    .chat-sidebar::-webkit-scrollbar { width: 4px; }
+    .chat-sidebar::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 4px; }
+
+    .chat-list-item {
+        display: flex; align-items: center; gap: 12px; padding: 16px;
+        border-bottom: 1px solid var(--gray-200); cursor: pointer; transition: 0.2s;
+        position: relative;
+    }
+    .chat-list-item:hover { background: #fff; }
+    .chat-list-item.active { background: #fff; border-left: 4px solid var(--teal-600); padding-left: 12px; }
+    
+    .chat-list-img {
+        width: 50px; height: 50px; border-radius: 6px; background: #fff;
+        border: 1px solid var(--gray-200); flex-shrink: 0; object-fit: contain; padding: 2px;
+    }
+    .chat-list-info { flex: 1; min-width: 0; }
+    .chat-list-title { font-size: 0.85rem; font-weight: 700; color: var(--gray-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;}
+    .chat-list-desc { font-size: 0.8rem; color: var(--gray-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    
+    /* Uyarı Noktası (Cevap Bekliyor) */
+    .pending-dot {
+        width: 10px; height: 10px; background: var(--teal-500); border-radius: 50%;
+        position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+        box-shadow: 0 0 0 2px #fff; 
+    }
+
+    /* SAĞ: MESAJ DETAYI (CHAT WINDOW) */
+    .chat-window {
+        position: relative;
+        height: 100%;
+        max-height: 100%;
+        flex: 1; 
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+    
+    .chat-empty-state {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        width: 100% !important; height: 100%; min-width: 0 !important; max-width: none !important;
+        box-sizing: border-box; color: var(--gray-400); text-align: center;
+    }
+    
+    .chat-header {
+        padding: 16px 24px; border-bottom: 1px solid var(--gray-200);
+        display: flex; justify-content: space-between; align-items: center; background: #fff;
+    }
+    .chat-header-title { margin: 0; font-size: 1rem; font-weight: 700; color: var(--gray-800); }
+    .chat-header-meta { font-size: 0.8rem; color: var(--gray-500); font-weight: 600;}
+
+    /* SAĞ ORTA MESAJ ALANI */
+    .chat-body {
+        flex: 1; padding: 24px; overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; background: #fafafa; min-width: 0; min-height: 0;
+    }
+    .chat-body::-webkit-scrollbar { width: 6px; }
+    .chat-body::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 10px; }
+    
+    .bubble { max-width: 85%; padding: 12px 16px; border-radius: 16px; font-size: 0.95rem; line-height: 1.5; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.05); word-wrap: break-word; overflow-wrap: break-word; word-break: break-word;}
+    .bubble-time { font-size: 0.7rem; color: var(--gray-500); margin-top: 6px; display: block; text-align: left; font-weight: 500;}
+    
+    /* MÜŞTERİ SORUSU (Sola Yaslı, Gri) */
+    .bubble-customer { background: #fff; border: 1px solid var(--gray-200); color: var(--gray-800); align-self: flex-start; border-bottom-left-radius: 4px;}
+    
+    /* SATICI CEVABI (Sağa Yaslı, Mavi) */
+    .bubble-store { background: #e0f2fe; border: 1px solid #bae6fd; color: var(--gray-800); align-self: flex-end; border-bottom-right-radius: 4px;}
+    .bubble-store .bubble-time { text-align: right; }
+
+    /* Satıcı Cevabı Silme Butonu */
+    .btn-delete-a {
+        background: transparent; border: none; color: #94a3b8; cursor: pointer; 
+        font-size: 0.8rem; margin-top: 4px; display: flex; align-items: center; gap: 4px; transition: 0.2s;
+        flex-shrink: 0;
+    }
+    .btn-delete-a:hover { color: #ef4444; }
+
+    /* CEVAP YAZMA ALANI (FOOTER) */
+    .chat-footer {
+        padding: 16px 24px; border-top: 1px solid var(--gray-200); background: #fff;
+        display: flex; flex-direction: column; gap: 12px; min-width: 0;
+    }
+    .chat-footer .answered-info {
+        text-align: center; color: var(--gray-500); font-size: 0.9rem; font-weight: 500; 
+        background: var(--gray-50); padding: 12px; border-radius: 8px; border: 1px dashed var(--gray-200);
+    }
+    .reply-box { display: flex; gap: 12px; width: 100%; }
+    .reply-input { flex: 1; padding: 12px 16px; border: 1px solid var(--gray-300); border-radius: 8px; resize: none; outline: none; font-family: inherit; font-size: 0.95rem;}
+    .reply-input:focus { border-color: var(--teal-500); }
+    .reply-btn { background: var(--teal-600); color: #fff; border: none; padding: 0 20px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; white-space: nowrap;}
+    .reply-btn:hover { background: var(--teal-700); }
+    .reply-btn:disabled { background: var(--gray-300); cursor: not-allowed; }
+
+    /* Gizli Chat Bölümleri (JS İçin) */
+    .chat-detail-content {
+        display: none;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        box-sizing: border-box;
+    }
+    .chat-detail-content.active { display: flex; }
+
+    @media (max-width: 992px) {
+        .seller-layout { flex-direction: column; }
+        .seller-sidebar { width: 100%; position: relative; top: 0; }
+        .chat-container { flex-direction: column; height: auto; max-height: none;}
+        .chat-sidebar { width: 100%; min-width: 100%; max-width: 100%; max-height: 300px; border-right: none; border-bottom: 1px solid var(--gray-200); }
+        .chat-window { height: 500px; }
+    }
+</style>
+
+<div class="seller-layout">
+
+    <!-- 1. SIDEBAR -->
+    <aside class="seller-sidebar">
+        <div class="sidebar-profile">
+            <div class="sidebar-avatar">
+                {% if store.logo %}
+                    <img src="{{ store.logo.url }}" alt="{{ store.store_name }}">
+                {% else %}
+                    {{ store.store_name|slice:":1"|upper }}
+                {% endif %}
+            </div>
+            <h2 class="sidebar-store-name">{{ store.store_name }}</h2>
+            <div class="sidebar-badge"><i class="fa-solid fa-check-circle"></i> Onaylı Mağaza</div>
+        </div>
+        <ul class="sidebar-nav">
+            <li><a href="{% url 'store:store_dashboard' store.slug %}"><i class="fa-solid fa-chart-pie"></i> Özet Paneli</a></li>
+            <li><a href="{% url 'products:store_product_list' store.slug %}"><i class="fa-solid fa-box-open"></i> Envanter (Ürünler)</a></li>
+            <li><a href="#"><i class="fa-solid fa-clipboard-list"></i> Siparişler</a></li>
+            <li><a href="{% url 'store:store_questions' store.slug %}" class="active"><i class="fa-solid fa-comments"></i> Müşteri Soruları</a></li>
+            <li><a href="{% url 'store:update_store' store.slug %}"><i class="fa-solid fa-gear"></i> Mağaza Ayarları</a></li>
+            <li style="margin-top: 16px; border-top: 1px solid var(--gray-100); padding-top: 16px;">
+                <a href="{% url 'store:store_list' %}" style="color: var(--red-600);"><i class="fa-solid fa-arrow-right-from-bracket"></i> Mağaza Değiştir</a>
+            </li>
+        </ul>
+    </aside>
+
+    <!-- 2. MAIN CONTENT (SORULAR / CHAT MİMARİSİ) -->
+    <main class="seller-main">
+        
+        <div class="page-header">
+            <h1 class="page-title">Müşteri Soruları</h1>
+        </div>
+
+        <!-- TABS -->
+        <div class="qa-tabs-container">
+            <div class="qa-tabs">
+                <div class="qa-tab-wrapper active">
+                    <button class="qa-tab-btn">Ürün Soruları</button>
+                    <div class="qa-tab-subtitle js-main-subtitle {% if pending_count > 0 %}has-pending{% else %}no-pending{% endif %}" id="pending-text">
+                        {% if pending_count > 0 %}{{ pending_count }} soru cevap bekliyor{% else %}Tüm sorular cevaplandı{% endif %}
+                    </div>
+                </div>
+
+                <div class="qa-tab-wrapper" style="opacity: 0.5; cursor: not-allowed;" title="Çok Yakında">
+                    <button class="qa-tab-btn" disabled>Sipariş Soruları</button>
+                    <div class="qa-tab-subtitle no-pending">Gelen soru yok</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHAT CONTAINER -->
+        <div class="chat-container">
+            
+            <!-- SOL SÜTUN -->
+            <div class="chat-sidebar">
+                {% for q in questions %}
+                    <!-- "has_visible_answer" annotate'ı ile geldiği için kontrol "has_visible_answer" olmalı -->
+                    <div class="chat-list-item js-chat-item" data-qid="{{ q.id }}">
+                        
+                        <img src="{% if q.get_thumbnail_url %}{{ q.get_thumbnail_url }}{% else %}{% static 'core/images/placeholder.png' %}{% endif %}" alt="Görsel" class="chat-list-img">
+                        
+                        <div class="chat-list-info">
+                            <div class="chat-list-title">
+                                {% if q.is_anonymous %}Anonim Müşteri{% else %}{{ q.user.first_name|default:"Müşteri" }} {{ q.user.last_name|first|default:"" }}.{% endif %}
+                            </div>
+                            <div class="chat-list-desc">{{ q.product.name }}</div>
+                        </div>
+                        
+                        <!-- Cevaplanmamışsa -->
+                        {% if not q.has_visible_answer %}
+                            <div class="pending-dot js-pending-badge"></div>
+                        {% endif %}
+                    </div>
+                {% empty %}
+                    <div style="text-align: center; padding: 40px 20px; color: var(--gray-400);">
+                        <i class="fa-regular fa-face-smile" style="font-size: 2rem; margin-bottom: 12px;"></i>
+                        <p style="margin:0; font-size: 0.9rem;">Şu an için hiç sorunuz yok.</p>
+                    </div>
+                {% endfor %}
+            </div>
+
+            <!-- SAĞ SÜTUN -->
+            <div class="chat-window">
+                
+                <div class="chat-empty-state js-empty-state">
+                    <i class="fa-regular fa-comments" style="font-size: 3rem; margin-bottom: 16px; color: var(--gray-300);"></i>
+                    <h3>Sorular Bekliyor</h3>
+                    <p style="font-size: 0.95rem; margin: 0; color: var(--gray-500); max-width: 80%;">
+                        Cevaplamak veya görüntülemek için sol taraftan bir soruya tıklayın.
+                    </p>
+                </div>
+
+                {% for q in questions %}
+                    <div class="chat-detail-content js-chat-content" id="chat-content-{{ q.id }}">
+                        
+                        <!-- HEADER -->
+                        <div class="chat-header">
+                            <div>
+                                <h4 class="chat-header-title">{{ q.product.name }}</h4>
+                                <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                                    <span class="chat-header-meta">Konu: {{ q.get_topic_display }}</span>
+                                    
+                                    {% if q.variant_context %}
+                                        <span style="background: var(--teal-50); color: var(--teal-700); font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--teal-100);">
+                                            Varyant: {% for val in q.variant_context.attribute_values.all %}{{ val.value }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <a href="{% url 'products:product_detail' slug=q.product.slug %}" target="_blank" style="color: var(--teal-600); font-size: 0.9rem; font-weight: 600; text-decoration: none;"><i class="fa-solid fa-arrow-up-right-from-square"></i> Ürüne Git</a>
+                        </div>
+
+                        <!-- BODY -->
+                        <div class="chat-body" id="chat-body-{{ q.id }}">
+                            <!-- MÜŞTERİ SORUSU -->
+                            <div class="bubble bubble-customer">
+                                {{ q.text|linebreaksbr }}
+                                <span class="bubble-time">
+                                    {% if q.is_anonymous %}Müşteri{% else %}{{ q.user.first_name|default:"Müşteri" }}{% endif %} • {{ q.created_at|timezone:"Europe/Istanbul"|date:"d M Y, H:i" }}
+                                </span>
+                            </div>
+
+                            <!-- SATICI CEVABI -->
+                            {% if q.has_visible_answer and q.answers.all %}
+                                {% for ans in q.answers.all %}
+                                    <div class="bubble bubble-store">
+                                        {{ ans.text|linebreaksbr }}
+                                        <div style="display: flex; gap: 12px; align-items: center; margin-top: 6px;">
+                                            <button type="button" class="btn-delete-a js-btn-delete-a" data-delete-url="{% url 'store:api_qa_answer_delete' answer_id=ans.id %}">
+                                                <i class="fa-solid fa-trash-can"></i> Sil
+                                            </button>
+                                            <span class="bubble-time">Siz • {{ ans.created_at|timezone:"Europe/Istanbul"|date:"d M Y, H:i" }}</span>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+
+                        <!-- FOOTER -->
+                        <div class="chat-footer">
+                            {% if not q.has_visible_answer %}
+                                <form class="reply-box js-reply-form" data-qid="{{ q.id }}" 
+                                data-url="{% url 'store:api_store_answer_question' slug=store.slug question_id=q.id %}"
+                                data-delete-base-url="{% url 'store:api_qa_answer_delete' answer_id=999999 %}">
+                                    {% csrf_token %}
+                                    <textarea class="reply-input js-reply-input" rows="2" placeholder="Müşterinize vereceğiniz cevabı buraya yazın..." required></textarea>
+                                    <button type="submit" class="reply-btn js-reply-btn">Cevapla <i class="fa-solid fa-paper-plane"></i></button>
+                                </form>
+                            {% else %}
+                                <div class="answered-info">
+                                    <i class="fa-solid fa-check-circle" style="color: var(--green-600);"></i> Bu soruyu zaten cevapladınız.
+                                </div>
+                            {% endif %}
+                        </div>
+
+                    </div>
+                {% endfor %}
+
+            </div>
+        </div>
+        
+        <!-- Sayfalama -->
+        {% if is_paginated %}
+        <div style="display: flex; justify-content: center; gap: 6px; margin-top: 24px;">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}" style="padding: 8px 14px; border-radius: 8px; border: 1px solid var(--gray-200); background: white; color: var(--gray-700); text-decoration: none;"><i class="fas fa-chevron-left"></i> Önceki</a>
+            {% endif %}
+            <span style="padding: 8px 14px; border-radius: 8px; border: 1px solid var(--teal-600); background: var(--teal-600); color: white; font-weight: 600;">Sayfa {{ page_obj.number }}</span>
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}" style="padding: 8px 14px; border-radius: 8px; border: 1px solid var(--gray-200); background: white; color: var(--gray-700); text-decoration: none;">Sonraki <i class="fas fa-chevron-right"></i></a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+    </main>
+</div>
+
+<!-- WIZARD UI CSS -->
+<style>
+  .wizard-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100000; display: flex; align-items: center; justify-content: center; }
+  .wizard-modal-overlay[hidden] { display: none !important; }
+  .wizard-modal-box { background: #fff; padding: 24px; border-radius: 8px; width: 100%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+  .wizard-modal-title { margin-top: 0; color: #1e293b; font-size: 1.25rem; }
+  .wizard-modal-text { color: #475569; margin-bottom: 24px; font-size: 1rem;}
+  .wizard-modal-actions { display: flex; justify-content: flex-end; gap: 12px; }
+  .wizard-btn-cancel { background: transparent; border: 1px solid #cbd5e1; padding: 8px 16px; border-radius: 6px; cursor: pointer; color: #475569; font-weight: 600; font-size: 0.95rem; }
+  .wizard-btn-cancel:hover { background: #f8f9fa; }
+  .wizard-btn-confirm { background: #ef4444; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; color: #fff; font-weight: 600; font-size: 0.95rem; }
+  .wizard-btn-confirm:hover { background: #dc2626; }
+  body.modal-open { overflow: hidden; }
+  #wizard-toast-container { position: fixed; top: 80px; right: 20px; z-index: 100000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+  .wizard-toast { background: #fff; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); padding: 16px 20px; display: flex; align-items: center; gap: 12px; transform: translateX(120%); opacity: 0; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); pointer-events: auto; min-width: 250px; border-left: 4px solid #cbd5e1; }
+  .wizard-toast.show { transform: translateX(0); opacity: 1; }
+  .wizard-toast-success { border-left-color: #10b981; }
+  .wizard-toast-success i { color: #10b981; font-size: 1.2rem; }
+  .wizard-toast-error { border-left-color: #ef4444; }
+  .wizard-toast-error i { color: #ef4444; font-size: 1.2rem; }
+  .wizard-toast-warning { border-left-color: #f59e0b; }
+  .wizard-toast-warning i { color: #f59e0b; font-size: 1.2rem; }
+  .wizard-toast-close { margin-left: auto; background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; transition: 0.2s; }
+  .wizard-toast-close:hover { color: #1e293b; }
+</style>
+
+<!-- WIZARD UI TOAST CONTAINER -->
+<div id="wizard-toast-container"></div>
+
+<!-- WIZARD UI CONFIRM MODAL -->
+<div id="wizard-confirm-modal" class="wizard-modal-overlay" hidden>
+    <div class="wizard-modal-box">
+        <h3 data-modal-title class="wizard-modal-title">Emin misiniz?</h3>
+        <p data-modal-message class="wizard-modal-text">Bu işlem geri alınamaz.</p>
+        <div class="wizard-modal-actions">
+            <button data-modal-cancel class="wizard-btn-cancel">Vazgeç</button>
+            <button data-modal-confirm class="wizard-btn-confirm">Onayla</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- JAVASCRIPT -->
+<script src="{% static 'products/js/wizard_ui.js' %}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const chatItems = document.querySelectorAll('.js-chat-item');
+    const chatContents = document.querySelectorAll('.js-chat-content');
+    const emptyState = document.querySelector('.js-empty-state');
+    const pendingText = document.getElementById('pending-text');
+    let currentPendingCount = parseInt("{{ pending_count|default:'0' }}", 10);
+
+    // CSRF Token Yardımcı Fonksiyonu (Silme isteği için gerekli)
+                function getCookie(name) {
+                    let cookieValue = null;
+                    if (document.cookie && document.cookie !== '') {
+                        const cookies = document.cookie.split(';');
+                        for (let i = 0; i < cookies.length; i++) {
+                            const cookie = cookies[i].trim();
+                            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                                break;
+                            }
+                        }
+                    }
+                    return cookieValue;
+                }
+
+    function updatePendingText(count) {
+        if (count <= 0) {
+            pendingText.innerText = "Tüm sorular cevaplandı";
+            pendingText.classList.remove('has-pending');
+            pendingText.classList.add('no-pending');
+        } else {
+            pendingText.innerText = count + " soru cevap bekliyor";
+            pendingText.classList.remove('no-pending');
+            pendingText.classList.add('has-pending');
+        }
+    }
+
+    // 1. Tıklanan soruyu sağ tarafta açma
+    chatItems.forEach(item => {
+        item.addEventListener('click', () => {
+            chatItems.forEach(c => c.classList.remove('active'));
+            item.classList.add('active');
+
+            const qid = item.dataset.qid;
+            if (emptyState) emptyState.style.display = 'none';
+            
+            chatContents.forEach(content => {
+                content.classList.remove('active');
+            });
+            const activeContent = document.getElementById(`chat-content-${qid}`);
+            activeContent.classList.add('active');
+            
+            // Açılınca scroll'u en alta indir
+            const chatBody = document.getElementById(`chat-body-${qid}`);
+            chatBody.scrollTop = chatBody.scrollHeight;
+        });
+    });
+
+    // 2. Form Gönderme (AJAX ile Cevaplama)
+    const replyForms = document.querySelectorAll('.js-reply-form');
+    
+    replyForms.forEach(form => {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const qid = form.dataset.qid;
+            const url = form.dataset.url;
+            const inputEl = form.querySelector('.js-reply-input');
+            const btnEl = form.querySelector('.js-reply-btn');
+            const text = inputEl.value.trim();
+
+            if (!text) return;
+
+            const originalBtnHtml = btnEl.innerHTML;
+            btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            btnEl.disabled = true;
+            inputEl.disabled = true;
+
+            try {
+                const csrfTokenInput = form.querySelector('[name=csrfmiddlewaretoken]');
+                
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": csrfTokenInput.value
+                    },
+                    body: JSON.stringify({ text: text })
+                });
+
+                const data = await res.json();
+
+                
+                
+                if (data.success) {
+                    // İşlem Başarılı! Ekrana satıcının mavi balonunu ekleyelim
+                    const chatBody = document.getElementById(`chat-body-${qid}`);
+                    const deleteBaseUrl = form.dataset.deleteBaseUrl.replace('999999', data.answer.id);
+                    
+                    const newBubble = document.createElement('div');
+                    newBubble.className = "bubble bubble-store";
+                    newBubble.innerHTML = `
+                        ${data.answer.text.replace(/\n/g, '<br>')}
+                        <div style="display: flex; gap: 12px; align-items: center; justify-content: flex-end; margin-top: 6px;">
+                            <button type="button" class="btn-delete-a js-btn-delete-a" data-delete-url="${deleteBaseUrl}">
+                                <i class="fa-solid fa-trash-can"></i> Sil
+                            </button>
+                            <span class="bubble-time">Siz • ${data.answer.created_at}</span>
+                        </div>
+                    `;
+                    
+                    chatBody.appendChild(newBubble);
+                    chatBody.scrollTop = chatBody.scrollHeight; 
+
+                    // Footer'ı değiştir
+                    const footer = form.parentElement;
+                    footer.innerHTML = `
+                        <div class="answered-info">
+                            <i class="fa-solid fa-check-circle" style="color: var(--green-600);"></i> Bu soruyu az önce cevapladınız.
+                        </div>
+                    `;
+
+                    // Sol menüde uyarıyı sil
+                    const activeListItem = document.querySelector(`.js-chat-item[data-qid="${qid}"]`);
+                    const dot = activeListItem.querySelector('.js-pending-badge');
+                    if(dot) dot.remove();
+
+                    // Sayacı azalt
+                    currentPendingCount--;
+                    updatePendingText(currentPendingCount);
+
+                    Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Cevabınız yayınlandı!', showConfirmButton: false, timer: 3000 });
+
+                } else {
+                    Swal.fire("Hata", (data.error || "Bilinmeyen bir hata oluştu."), "error");
+                    btnEl.innerHTML = originalBtnHtml;
+                    btnEl.disabled = false;
+                    inputEl.disabled = false;
+                }
+
+            } catch (err) {
+                Swal.fire("Bağlantı Hatası", "Sunucu ile iletişim kurulamadı.", "error");
+                btnEl.innerHTML = originalBtnHtml;
+                btnEl.disabled = false;
+                inputEl.disabled = false;
+            }
+        });
+
+        // Enter'a basınca mesaj gönderilsin
+        const inputEl = form.querySelector('.js-reply-input');
+        inputEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                form.dispatchEvent(new Event('submit'));
+            }
+        });
+    });
+
+    // -------------------------------------------------------------
+    // 3. CEVAP SİLME İŞLEMİ (Sayfanın en altındaki script'e ekleyin)
+    // Dinamik eklenen butonları da yakalayabilmek için Document üzerinden dinliyoruz
+    // -------------------------------------------------------------
+    document.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.js-btn-delete-a');
+        if (!btn) return;
+
+        const deleteUrl = btn.dataset.deleteUrl;
+
+        // WizardUI varsa onu kullan, yoksa Swal (SweetAlert) kullan
+        let isConfirmed = false;
+        if (typeof WizardUI !== 'undefined') {
+            isConfirmed = await WizardUI.showConfirm({
+                title: "Cevabı Sil",
+                message: "Bu cevabı silmek istediğinize emin misiniz? Soru tekrar 'Cevap Bekliyor' durumuna dönecektir.",
+                confirmText: "Evet, Sil",
+                cancelText: "Vazgeç"
+            });
+        } else if (typeof Swal !== 'undefined') {
+            const result = await Swal.fire({
+                title: 'Cevabı Sil',
+                text: "Bu cevabı silmek istediğinize emin misiniz? Soru tekrar 'Cevap Bekliyor' durumuna dönecektir.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: 'Evet, Sil',
+                cancelButtonText: 'Vazgeç'
+            });
+            isConfirmed = result.isConfirmed;
+        } else {
+            isConfirmed = confirm("Cevabı silmek istediğinize emin misiniz?");
+        }
+
+        if (!isConfirmed) return;
+
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch(deleteUrl, {
+                method: 'DELETE',
+                headers: {
+                    "X-CSRFToken": getCookie('csrftoken'),
+                    "Content-Type": "application/json"
+                }
+            });
+
+            if (res.status === 401 || res.status === 403) {
+                if (typeof WizardUI !== 'undefined') WizardUI.showToast("error", "Oturum süreniz dolmuş veya yetkiniz yok.");
+                else Swal.fire("Hata", "Oturum süreniz dolmuş veya yetkiniz yok.", "error");
+
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                return;
+            }
+
+            const data = await res.json();
+
+            if (data.success) {
+                if (typeof WizardUI !== 'undefined') WizardUI.showToast("success", "Cevabınız başarıyla silindi.");
+                else Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Cevabınız silindi!', showConfirmButton: false, timer: 3000 });
+
+                // Satıcı tarafındaki sayacın ve input formunun eski haline gelmesi için sayfayı yeniliyoruz
+                setTimeout(() => {
+                    window.location.reload();
+                }, 600);
+            } else {
+                if (typeof WizardUI !== 'undefined') WizardUI.showToast("error", data.error || "Cevap silinemedi.");
+                else Swal.fire("Hata", data.error || "Cevap silinemedi.", "error");
+
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }
+
+        } catch (error) {
+            if (typeof WizardUI !== 'undefined') WizardUI.showToast("error", "Bağlantı hatası.");
+            else Swal.fire("Hata", "Bağlantı hatası.", "error");
+
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+        }
+    });
+
+});
+</script>
+
+{% endblock %}
