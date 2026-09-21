@@ -31,5 +31,4 @@ urlpatterns = [
     path('questions/<int:question_id>/read/', MarkAnswerAsReadAPIView.as_view(), name='api_mark_answer_read'),
 
     path('api/qa/question/<int:question_id>/delete/', ProductQADeleteAPIView.as_view(), name='api_qa_question_delete'),
-    # path("api/qa/questions/<int:question_id>/delete/", ProductQADeleteAPIView.as_view(), name="api_qa_question_delete"),
 ]

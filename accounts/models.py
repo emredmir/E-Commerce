@@ -4,6 +4,8 @@ from .managers import CustomUserManager
 from django.core.validators import RegexValidator
 from django.core.exceptions import ValidationError
 
+import uuid
+
 # Telefon numarası için düzenli ifade doğrulayıcısı
 phone_validator = RegexValidator(
     regex=r'^\+?1?\d{9,15}$',
@@ -75,14 +77,114 @@ class Address(models.Model):
         return f"{self.title} - {self.full_name}"
 
 
+class SellerType(models.TextChoices):
+    PERSONAL = "PERSONAL", "Bireysel"
+    PRIVATE_COMPANY = "PRIVATE_COMPANY", "Şahıs Şirketi"
+    LIMITED_OR_JOINT_STOCK_COMPANY = (
+        "LIMITED_OR_JOINT_STOCK_COMPANY",
+        "Limited / Anonim Şirket",
+    )
+
+
+class IyzicoOnboardingStatus(models.TextChoices):
+    NOT_STARTED = "not_started", "Başlatılmadı"
+    PENDING = "pending", "Bekliyor"
+    ACTIVE = "active", "Aktif"
+    FAILED = "failed", "Başarısız"
+    SUSPENDED = "suspended", "Askıya Alındı"
+
+
+def generate_submerchant_external_id():
+    return f"seller-{uuid.uuid4().hex}"
+
 class SellerProfile(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='seller_profile')
-    company_name = models.CharField(max_length=255)
+
+    # SELLER TYPE
+    
+    seller_type = models.CharField(
+        max_length=40,
+        choices=SellerType.choices,
+        default=SellerType.PERSONAL,
+    )
+
+    # SELLER / COMPANY INFORMATION
+    company_name = models.CharField(max_length=255, blank=True,)
+    legal_company_title = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Şirketin resmi ticari unvanı.",
+    )
     company_address = models.TextField()
     company_phone = models.CharField(max_length=15, blank=True, null=True, validators=[phone_validator])
+
+    tax_office = models.CharField(
+        max_length=150,
+        blank=True,
+    )
+
+    tax_number = models.CharField(
+        max_length=50,
+        blank=True,
+    )
+
+    identity_number = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="Bireysel satıcılar için T.C. kimlik numarası.",
+    )
+
     iban = models.CharField(max_length=34, validators=[iban_validator], verbose_name="IBAN")
+
+    # PLATFORM APPROVAL
     is_approved = models.BooleanField(default=False)
+
+    # ======================================================================
+    # IYZICO SUBMERCHANT
+    # ======================================================================
+
+    iyzico_submerchant_external_id = models.CharField(
+        max_length=100,
+        unique=True,
+        default=generate_submerchant_external_id,
+        editable=False,
+    )
+
+    iyzico_submerchant_key = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+    )
+
+    iyzico_onboarding_status = models.CharField(
+        max_length=20,
+        choices=IyzicoOnboardingStatus.choices,
+        default=IyzicoOnboardingStatus.NOT_STARTED,
+    )
+
+    iyzico_onboarded_at = models.DateTimeField(
+        blank=True,
+        null=True,
+    )
+
+    iyzico_last_sync_at = models.DateTimeField(
+        blank=True,
+        null=True,
+    )
+
+    iyzico_last_error_code = models.CharField(
+        max_length=50,
+        blank=True,
+    )
+
+    iyzico_last_error_message = models.TextField(
+        blank=True,
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
+
+    
+
 
     class Meta:
         verbose_name = "Satıcı Profili"

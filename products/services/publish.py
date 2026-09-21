@@ -100,16 +100,21 @@ class DraftPublishService:
                 product=product,
             )
 
-            # DİKKAT: Görsel aktarımını işlem başarılı olduktan VE VERİTABANINA YAZILDIKTAN
-            # SONRA (on_commit) arka plana atıyoruz! Aksi takdirde Celery daha biz DB'ye yazmadan
-            # ürünü bulmaya çalışıp "Product.DoesNotExist" hatası verebilir.
-            transaction.on_commit(
-                lambda: async_copy_product_images.delay(
-                    draft_id=draft.pk, 
-                    product_id=product.pk, 
-                    is_merge=is_merge
-                )
-            )
+            # # DİKKAT: Görsel aktarımını işlem başarılı olduktan VE VERİTABANINA YAZILDIKTAN
+            # # SONRA (on_commit) arka plana atıyoruz! Aksi takdirde Celery daha biz DB'ye yazmadan
+            # # ürünü bulmaya çalışıp "Product.DoesNotExist" hatası verebilir.
+            # transaction.on_commit(
+            #     lambda: async_copy_product_images.delay(
+            #         draft_id=draft.pk, 
+            #         product_id=product.pk, 
+            #         is_merge=is_merge
+            #     )
+            # )
+            # GEÇİCİ ÇÖZÜM: Celery altyapısı kurulana kadar görselleri senkron (anında) kopyalıyoruz.
+            if is_merge:
+                cls._copy_missing_images(draft=draft, product=product)
+            else:
+                cls._copy_images(draft=draft, product=product)
 
             transaction.on_commit(
                 lambda: SearchIndexingService.index_product_async(
@@ -193,11 +198,6 @@ class DraftPublishService:
                     f"başka bir sisteme kaydedildi. Lütfen barkodu kontrol edin."
                 )
 
-            product_variant = ProductVariant.objects.create(
-                product=product,
-                barcode=draft_variant.barcode,
-                is_active=True,
-            )
 
             # Varsayılan varyant seçimi
             if draft_variant.is_default:
@@ -444,12 +444,6 @@ class DraftPublishService:
                         f"Siz yayına alırken '{draft_variant.barcode}' barkodu saniyeler farkıyla "
                         f"başka bir sisteme kaydedildi. Lütfen barkodu kontrol edin."
                     )
-
-                product_variant = ProductVariant.objects.create(
-                    product=product,
-                    barcode=draft_variant.barcode,
-                    is_active=True,
-                )
 
                 product_variant.attribute_values.set(
                     draft_variant.attribute_values.all()

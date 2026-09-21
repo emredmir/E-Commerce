@@ -4,6 +4,7 @@ from django.db import transaction
 from products.models import ProductDraftVariant, ProductVariant
 from products.services.variant import DraftVariantService
 from products.services.offer_publish import OfferPublishService
+from django.db.models import Max
 
 
 class OfferCreateService:
@@ -306,6 +307,9 @@ class OfferCreateService:
         #
         updated_variants = []
 
+        # Hiç varyant yoksa 0 döner.
+        max_sort_order = draft.variants.aggregate(Max('sort_order'))['sort_order__max'] or 0
+
         for data in variants_data:
 
             variant_type = data["type"]
@@ -333,9 +337,12 @@ class OfferCreateService:
                 )
 
                 if draft_variant is None:
+                    # YENİ VARYANT OLUŞTURULURKEN:
+                    max_sort_order += 1 # Benzersiz olması için max değeri 1 artırıyoruz
+
                     draft_variant = ProductDraftVariant.objects.create(
                         draft=draft,
-                        sort_order=catalog_variant.sort_order,
+                        sort_order=max_sort_order,
                         price=data["price"],
                         stock=data["stock"],
                         sku=data["sku"],

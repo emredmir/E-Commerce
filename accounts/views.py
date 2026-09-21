@@ -23,6 +23,7 @@ from django.db.models import Count, F, Prefetch, Window, Subquery, DecimalField,
 from django.db.models.functions import RowNumber
 
 from products.models import ProductCollection, ProductCollectionItem, ProductQuestion, ProductAnswer
+from cart.services.cart import CartService
 
 def register_view(request):
     if request.method == 'POST':
@@ -33,6 +34,9 @@ def register_view(request):
             # Kullanıcıya backend tanımla (sadece bir backend kullanıyorsan bu güvenlidir)
             backend = get_backends()[0]  # İlk backend: EmailOrPhoneBackend
             user.backend = f"{backend.__module__}.{backend.__class__.__name__}"
+
+            # Login olmadan hemen önce sepeti birleştir
+            CartService.merge_guest_cart(request, user)
 
             login(request, user)
             messages.success(request, "Kayıt başarılı!")
@@ -50,6 +54,8 @@ def login_view(request):
             password = form.cleaned_data.get('password')
             user = authenticate(request, username=username, password=password)
             if user is not None:
+                # Login olmadan hemen önce sepeti birleştir
+                CartService.merge_guest_cart(request, user)
                 login(request, user)
                 messages.success(request, "Giriş başarılı!")
                 return redirect('core:home')

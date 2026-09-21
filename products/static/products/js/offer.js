@@ -4,6 +4,41 @@
 
 document.addEventListener("DOMContentLoaded", () => {
 
+    /* --- SAYFA YENİLENDİĞİNDE HAFIZADAKİ VERİLERİ GERİ YAZ --- */
+    const savedDraft = sessionStorage.getItem("pwOfferTableDraft");
+    if (savedDraft) {
+        try {
+            const parsedDraft = JSON.parse(savedDraft);
+            parsedDraft.forEach(savedRow => {
+                // Kaydedilmiş ID'ye göre satırı bul
+                const rowEl = document.querySelector(`.js-offer-row[data-id="${savedRow.id}"]`);
+                if (rowEl) {
+                    if (savedRow.price) {
+                        const pInput = rowEl.querySelector(".js-input-price");
+                        if (pInput) pInput.value = savedRow.price;
+                    }
+                    if (savedRow.stock) {
+                        const sInput = rowEl.querySelector(".js-input-stock");
+                        if (sInput) sInput.value = savedRow.stock;
+                    }
+                    if (savedRow.sku) {
+                        const kInput = rowEl.querySelector(".js-input-sku");
+                        if (kInput) kInput.value = savedRow.sku;
+                    }
+                    if (savedRow.barcode) {
+                        const bInput = rowEl.querySelector(".js-input-barcode");
+                        // Eğer barkod inputu disabled (kilitli katalog barkodu) değilse yaz
+                        if (bInput && !bInput.disabled) bInput.value = savedRow.barcode;
+                    }
+                }
+            });
+        } catch (e) {
+            console.error("Taslak geri yüklenirken hata oluştu", e);
+        }
+        // İşimiz bitince hafızayı temizle ki sonraki girişlerde eski veriler gelmesin
+        sessionStorage.removeItem("pwOfferTableDraft");
+    }
+
     /* ----------------------------------------------------------
      * 1. Araçlar (Utils)
      * ---------------------------------------------------------- */
@@ -805,6 +840,20 @@ document.addEventListener("DOMContentLoaded", () => {
             // BAŞARILI! Sayfayı yeniliyoruz ki tabloya eklensin
             WizardUI.showToast("success", "Yeni seçenek başarıyla eklendi.");
             closeModal();
+
+            /* --- TABLODAKİ VERİLERİ KAYBETMEMEK İÇİN HAFIZAYA AL --- */
+            const currentTableData = [];
+            document.querySelectorAll(".js-offer-row").forEach(row => {
+                currentTableData.push({
+                    id: row.dataset.id,
+                    price: row.querySelector(".js-input-price")?.value || "",
+                    stock: row.querySelector(".js-input-stock")?.value || "",
+                    sku: row.querySelector(".js-input-sku")?.value || "",
+                    barcode: row.querySelector(".js-input-barcode")?.value || ""
+                });
+            });
+            sessionStorage.setItem("pwOfferTableDraft", JSON.stringify(currentTableData));
+
             setTimeout(() => { window.location.reload(); }, 1000);
 
         } catch (error) {

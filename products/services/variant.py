@@ -458,6 +458,11 @@ class DraftVariantService:
             )
         )
 
+        # Lock işlemini ve Max Sort Order bulmayı döngüden önce SADECE 1 KERE yapıyoruz.
+        ProductDraft.objects.select_for_update().get(pk=draft.pk)
+        last_order = ProductDraftVariant.objects.filter(draft=draft).aggregate(max_order=Max("sort_order"))["max_order"]
+        current_sort_order = 0 if last_order is None else last_order + 1
+
         created_variants = []
         skipped = 0
 
@@ -474,13 +479,13 @@ class DraftVariantService:
                 skipped += 1
                 continue
             
-            variant = (
-                DraftVariantService
-                .create_draft_variant(
-                    draft=draft,
-                    attribute_values=combination,
-                )
+            variant = ProductDraftVariant.objects.create(
+                draft=draft,
+                sort_order=current_sort_order, # Döngü içindeki sırayı kullan
             )
+            variant.attribute_values.set(combination)
+            
+            current_sort_order += 1 # Sonraki varyant için sırayı RAM üzerinde 1 artır
             
             existing_sets.add(
                 variant_key

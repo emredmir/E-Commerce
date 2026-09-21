@@ -327,12 +327,12 @@ class VariantDeleteView(
         draft = variant.draft
 
         try:
+            with transaction.atomic():
+                DraftVariantService.delete_variant(
+                    variant,
+                )
 
-            DraftVariantService.delete_variant(
-                variant,
-            )
-
-            DraftImageService.clean_orphaned_groups(draft=draft)
+                DraftImageService.clean_orphaned_groups(draft=draft)
 
             variants = DraftVariantService.get_variants(
                 draft,
@@ -405,11 +405,12 @@ class VariantDeleteAllView(
         )
 
         try:
-            # Taslağa ait tüm varyantları sil
-            ProductDraftVariant.objects.filter(draft=draft).delete()
-
-            # Varyant kalmadığı için ortak grup hariç tüm görselleri sil
-            DraftImageService.clean_orphaned_groups(draft=draft)
+            with transaction.atomic():
+                # Taslağa ait tüm varyantları sil
+                ProductDraftVariant.objects.filter(draft=draft).delete()
+    
+                # Varyant kalmadığı için ortak grup hariç tüm görselleri sil
+                DraftImageService.clean_orphaned_groups(draft=draft)
             
             # Liste artık boş olduğu için boş dizi gönderiyoruz
             variants = []

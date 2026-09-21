@@ -52,6 +52,8 @@ INSTALLED_APPS = [
     'accounts.apps.AccountsConfig', #apps değiştiği için
     'store',
     'products',
+    'cart',
+    'orders',
 ]
 
 MIDDLEWARE = [

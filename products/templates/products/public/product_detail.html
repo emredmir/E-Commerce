@@ -1365,7 +1365,11 @@
             <div class="pd-actions">
                 {% if buy_box_offer %}
                     <button class="pd-btn pd-btn-buy"><i class="fa-regular fa-credit-card"></i> Şimdi Al</button>
-                    <button class="pd-btn pd-btn-cart"><i class="fa-solid fa-cart-plus"></i> Sepete Ekle</button>
+                    <button type="button" class="pd-btn pd-btn-cart js-add-to-cart-btn" 
+                            data-store-product-id="{{ buy_box_offer.id }}" 
+                            data-url="{% url 'cart:add_to_cart' %}">
+                        <i class="fa-solid fa-cart-plus"></i> Sepete Ekle
+                    </button>
                 {% else %}
                     <button class="pd-btn" style="background: var(--gray-200); color: var(--gray-500); cursor: not-allowed;" disabled>Şu An Temin Edilemiyor</button>
                 {% endif %}
@@ -1510,7 +1514,11 @@
                     <div class="pd-other-actions">
                         <!-- LINK KONTROLÜ: Eğer ürünün asıl sahibine (default_buybox) tıklanıyorsa offer parametresi koyma ki URL temiz kalsın -->
                         <a href="?variant={{ selected_variant.id }}{% if other.id != default_buybox.id %}&offer={{ other.id }}{% endif %}" class="pd-btn-small outline">Ürüne Git</a>
-                        <button class="pd-btn-small solid">Sepete Ekle</button>
+                        <button type="button" class="pd-btn-small solid js-add-to-cart-btn" 
+                                data-store-product-id="{{ other.id }}" 
+                                data-url="{% url 'cart:add_to_cart' %}">
+                            Sepete Ekle
+                        </button>
                     </div>
 
                 </div>
@@ -1765,7 +1773,12 @@
                                 <td style="width: 140px;">
                                     <div style="display: flex; flex-direction: column; gap: 8px;">
                                         <a href="?variant={{ selected_variant.id }}{% if offer.id != default_buybox.id %}&offer={{ offer.id }}{% endif %}" class="pd-btn-small outline" style="width: 100%; box-sizing: border-box;">Ürüne Git</a>
-                                        <button class="pd-btn-small solid" style="width: 100%;">Sepete Ekle</button>
+                                        <button type="button" class="pd-btn-small solid js-add-to-cart-btn" 
+                                                data-store-product-id="{{ offer.id }}" 
+                                                data-url="{% url 'cart:add_to_cart' %}" 
+                                                style="width: 100%;">
+                                            Sepete Ekle
+                                        </button>
                                     </div>
                                 </td>
                             </tr>

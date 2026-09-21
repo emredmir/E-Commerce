@@ -20,6 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initInstallmentMenu();
     initFavorites();
     initQA();
+    initAddToCart();
 });
 
 
@@ -1184,6 +1185,80 @@ function initQA() {
         });
     }
 }
+
+/* ----------------------------------------------------------
+ * 12. SEPETE EKLEME (AJAX)
+ * ---------------------------------------------------------- */
+function initAddToCart() {
+    const addToCartBtns = document.querySelectorAll('.js-add-to-cart-btn');
+    if (addToCartBtns.length === 0) return;
+
+    // Django CSRF Token okuyucu
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    addToCartBtns.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const storeProductId = this.getAttribute('data-store-product-id');
+            const url = this.getAttribute('data-url');
+            
+            if (!storeProductId || !url) return;
+
+            // Butonu bekleme moduna al
+            const originalContent = this.innerHTML;
+            this.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Ekleniyor...';
+            this.disabled = true;
+
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    store_product_id: parseInt(storeProductId),
+                    quantity: 1
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showCustomToast(data.message || "Ürün sepete eklendi.", "success");
+                    
+                    // Header'daki Sepet ikonu sayacını güncellemek istersen:
+                    // const headerCartCount = document.querySelector('.header-cart-count');
+                    // if(headerCartCount) headerCartCount.innerText = data.total_items;
+                } else {
+                    showCustomToast(data.error || "Eklenirken bir hata oluştu.", "error");
+                }
+            })
+            .catch(error => {
+                console.error('Cart Error:', error);
+                showCustomToast("Sistemsel bir hata oluştu.", "error");
+            })
+            .finally(() => {
+                // İşlem bitince butonu eski haline çevir
+                this.innerHTML = originalContent;
+                this.disabled = false;
+            });
+        });
+    });
+}
+
 
 /* ----------------------------------------------------------
  * MODERN BİLDİRİM (TOAST) SİSTEMİ

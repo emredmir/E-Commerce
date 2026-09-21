@@ -1,0 +1,1929 @@
+{% extends "core/home.html" %}
+{% load static %}
+
+{% block title %}Ödeme | E-Ticaret{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+
+<style>
+    /* =========================================================
+       SENİN SEPET SAYFANLA AYNI RENK PALETİ
+       ========================================================= */
+    :root {
+        --teal-50:#f0f9ff;
+        --teal-100:#e0f2fe;
+        --teal-300:#7dd3fc;
+        --teal-500:#0ea5e9;
+        --teal-600:#0284c7;
+        --teal-700:#0369a1;
+        --teal-800:#075985;
+
+        --gray-50:#f8f9fa;
+        --gray-100:#f1f5f9;
+        --gray-200:#e2e8f0;
+        --gray-300:#cbd5e1;
+        --gray-400:#94a3b8;
+        --gray-500:#64748b;
+        --gray-600:#475569;
+        --gray-700:#334155;
+        --gray-800:#1e293b;
+        --gray-900:#0f172a;
+
+        --orange-400:#fb923c;
+        --orange-500:#f97316;
+        --orange-50:#fff7ed;
+
+        --green-500:#22c55e;
+        --green-600:#16a34a;
+        --green-50:#f0fdf4;
+
+        --red-500:#ef4444;
+        --red-600:#dc2626;
+        --red-50:#fef2f2;
+
+        --radius-lg:16px;
+        --radius-md:10px;
+        --radius-sm:6px;
+
+        --shadow-sm:0 2px 8px rgba(0,0,0,0.04);
+        --shadow-md:
+            0 4px 6px -1px rgba(0,0,0,0.1),
+            0 2px 4px -1px rgba(0,0,0,0.06);
+    }
+
+    /* =========================================================
+       ANA CONTAINER
+       ========================================================= */
+    .checkout-container {
+        max-width:1440px;
+        margin:20px auto 60px;
+        padding:0 24px;
+        font-family:'Segoe UI',system-ui,sans-serif;
+    }
+
+    /* =========================================================
+       ÜST BAR
+       ========================================================= */
+    .checkout-topbar {
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        margin-bottom:24px;
+    }
+
+    .checkout-back-link {
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        color:var(--gray-600);
+        font-size:.95rem;
+        font-weight:700;
+        text-decoration:none;
+        transition:.2s;
+    }
+
+    .checkout-back-link:hover {
+        color:var(--teal-600);
+    }
+
+    .checkout-title {
+        margin:0;
+        font-size:1.5rem;
+        font-weight:700;
+        color:var(--gray-900);
+    }
+
+    .checkout-security-badge {
+        display:flex;
+        align-items:center;
+        gap:7px;
+        color:var(--gray-500);
+        font-size:.85rem;
+        font-weight:600;
+    }
+
+    .checkout-security-badge i {
+        color:var(--green-600);
+    }
+
+    /* =========================================================
+       ANA GRID
+       ========================================================= */
+    .checkout-main-grid {
+        display:grid;
+        grid-template-columns:minmax(0, 1fr) 360px;
+        gap:24px;
+        align-items:start;
+    }
+
+    .checkout-left-col {
+        display:flex;
+        flex-direction:column;
+        gap:20px;
+        min-width:0;
+    }
+
+    /* =========================================================
+       CHECKOUT SECTION CARD
+       ========================================================= */
+    .checkout-section-card {
+        background:#fff;
+        border:1px solid var(--gray-200);
+        border-radius:var(--radius-lg);
+        box-shadow:var(--shadow-sm);
+        overflow:hidden;
+    }
+
+    .checkout-section-header {
+        display:flex;
+        align-items:center;
+        gap:12px;
+        padding:18px 24px;
+        background:var(--gray-50);
+        border-bottom:1px solid var(--gray-200);
+    }
+
+    .checkout-section-number {
+        width:32px;
+        height:32px;
+        border-radius:50%;
+        background:var(--teal-100);
+        color:var(--teal-700);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:.9rem;
+        font-weight:800;
+        flex-shrink:0;
+    }
+
+    .checkout-section-heading {
+        margin:0;
+        color:var(--gray-900);
+        font-size:1.05rem;
+        font-weight:700;
+    }
+
+    .checkout-section-subtitle {
+        margin:3px 0 0;
+        color:var(--gray-500);
+        font-size:.85rem;
+    }
+
+    .checkout-section-body {
+        padding:24px;
+    }
+
+    /* =========================================================
+       1 - TESLİMAT ADRESİ
+       ========================================================= */
+    .address-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 16px;
+    }
+
+    .address-option {
+        display: flex;
+        flex-direction: column;
+        padding: 16px;
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius-md);
+        background: #fff;
+        cursor: pointer;
+        transition: .2s;
+        position: relative;
+    }
+
+    .address-select-area {
+        display: block;
+        cursor: pointer;
+        width: 100%;
+    }
+
+    .address-select-area:hover {
+        color: inherit;
+    }
+
+    .address-select-area .address-header-row {
+        cursor: pointer;
+    }
+
+    .address-option:hover {
+        border-color: var(--teal-300);
+        background: var(--teal-50);
+    }
+
+    /* Seçili Adres Stili */
+    .address-option input[type="radio"]:checked + .address-content-wrapper {
+        border-color: var(--teal-500);
+    }
+
+    .address-option:has(input[type="radio"]:checked) {
+        border-color: var(--teal-500);
+        background: var(--teal-50);
+        box-shadow: 0 0 0 2px rgba(14, 165, 233, .08);
+    }
+
+    .address-header-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 8px;
+    }
+
+    .address-radio {
+        margin-top: 3px;
+        width: 18px;
+        height: 18px;
+        accent-color: var(--teal-600);
+        flex-shrink: 0;
+        cursor: pointer;
+    }
+
+    .address-title-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .address-title {
+        font-size: .95rem;
+        font-weight: 700;
+        color: var(--gray-900);
+    }
+
+    .address-default-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 7px;
+        border-radius: var(--radius-sm);
+        background: var(--green-50);
+        color: var(--green-600);
+        font-size: .7rem;
+        font-weight: 700;
+        width: max-content;
+    }
+
+    .address-body {
+        padding-left: 30px;
+    }
+
+    .address-name {
+        margin: 0 0 4px;
+        color: var(--gray-800);
+        font-size: .9rem;
+        font-weight: 600;
+    }
+
+    .address-text {
+        margin: 0 0 12px;
+        color: var(--gray-500);
+        font-size: .85rem;
+        line-height: 1.5;
+    }
+
+    .address-actions {
+        display: flex;
+        gap: 10px;
+        padding-left: 30px;
+    }
+
+    .btn-address-edit {
+        background: transparent;
+        border: 1px solid var(--gray-300);
+        color: var(--gray-600);
+        padding: 6px 12px;
+        border-radius: var(--radius-sm);
+        font-size: .8rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: .2s;
+    }
+
+    .btn-address-edit:hover {
+        background: #fff;
+        border-color: var(--teal-500);
+        color: var(--teal-600);
+    }
+
+    .address-empty-state {
+        border: 1px dashed var(--gray-300);
+        border-radius: var(--radius-md);
+        background: var(--gray-50);
+        padding: 32px 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        color: var(--gray-500);
+    }
+
+    .address-empty-state i {
+        color: var(--teal-500);
+        font-size: 2rem;
+        margin-bottom: 12px;
+    }
+
+    .address-empty-state strong {
+        color: var(--gray-800);
+        font-size: 1.05rem;
+        margin-bottom: 6px;
+    }
+
+    .btn-new-address {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 20px;
+        padding: 12px 20px;
+        background: #fff;
+        color: var(--teal-700);
+        border: 1px dashed var(--teal-500);
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        cursor: pointer;
+        transition: .2s;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .btn-new-address:hover {
+        background: var(--teal-50);
+    }
+
+    /* FATURA TOGGLE ALANI */
+    .billing-toggle-box {
+        margin-top: 24px;
+        padding-top: 24px;
+        border-top: 1px solid var(--gray-200);
+    }
+
+    .billing-checkbox-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        font-weight: 600;
+        color: var(--gray-800);
+        font-size: .95rem;
+    }
+
+    .billing-checkbox-wrapper input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        accent-color: var(--teal-600);
+        cursor: pointer;
+    }
+
+    .billing-address-section {
+        margin-top: 16px;
+        padding: 16px;
+        background: var(--gray-50);
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius-md);
+        display: none; /* JS ile açılıp kapanacak */
+    }
+
+
+    /* =========================================================
+       3 - ÖDEME ARACI
+       ========================================================= */
+    .payment-method-list {
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+    }
+
+    .payment-method {
+        position:relative;
+    }
+
+    .payment-method input {
+        position:absolute;
+        opacity:0;
+        pointer-events:none;
+    }
+
+    .payment-method-label {
+        display:flex;
+        align-items:center;
+        gap:14px;
+        padding:16px;
+        border:1px solid var(--gray-200);
+        border-radius:var(--radius-md);
+        background:#fff;
+        cursor:pointer;
+        transition:.2s;
+    }
+
+    .payment-method-label:hover {
+        border-color:var(--teal-300);
+        background:var(--teal-50);
+    }
+
+    .payment-method input:checked + .payment-method-label {
+        border-color:var(--teal-500);
+        background:var(--teal-50);
+        box-shadow:0 0 0 2px rgba(14,165,233,.08);
+    }
+
+    .payment-method-radio {
+        width:18px;
+        height:18px;
+        accent-color:var(--teal-600);
+        flex-shrink:0;
+    }
+
+    .payment-method-icon {
+        width:42px;
+        height:42px;
+        border-radius:var(--radius-md);
+        background:var(--teal-100);
+        color:var(--teal-700);
+        display:flex;
+        justify-content:center;
+        align-items:center;
+        font-size:1.1rem;
+        flex-shrink:0;
+    }
+
+    .payment-method-content {
+        flex:1;
+        min-width:0;
+    }
+
+    .payment-method-title {
+        display:block;
+        color:var(--gray-900);
+        font-size:.95rem;
+        font-weight:700;
+        margin-bottom:3px;
+    }
+
+    .payment-method-desc {
+        color:var(--gray-500);
+        font-size:.8rem;
+        line-height:1.4;
+    }
+
+    .payment-method-badge {
+        padding:5px 8px;
+        border-radius:var(--radius-sm);
+        background:var(--gray-100);
+        color:var(--gray-500);
+        font-size:.7rem;
+        font-weight:700;
+        white-space:nowrap;
+    }
+
+    /* Kayıtlı kart alanı */
+    .saved-cards-box {
+        margin-top:16px;
+        padding:16px;
+        border-radius:var(--radius-md);
+        border:1px dashed var(--gray-300);
+        background:var(--gray-50);
+    }
+
+    .saved-cards-title {
+        margin:0 0 12px;
+        font-size:.85rem;
+        font-weight:700;
+        color:var(--gray-700);
+    }
+
+    .saved-card-placeholder {
+        display:flex;
+        align-items:center;
+        gap:12px;
+        padding:14px;
+        background:#fff;
+        border:1px solid var(--gray-200);
+        border-radius:var(--radius-md);
+        color:var(--gray-500);
+    }
+
+    .saved-card-placeholder i {
+        color:var(--teal-500);
+        font-size:1.1rem;
+    }
+
+    .saved-card-placeholder-text {
+        display:flex;
+        flex-direction:column;
+        gap:3px;
+    }
+
+    .saved-card-placeholder-text strong {
+        color:var(--gray-700);
+        font-size:.85rem;
+    }
+
+    .saved-card-placeholder-text span {
+        font-size:.78rem;
+        color:var(--gray-500);
+    }
+
+    /* =========================================================
+       4 - KARGO
+       ========================================================= */
+
+    .store-shipping-row {
+        padding: 14px 16px;
+        background: var(--gray-50);
+        border-top: 1px dashed var(--gray-200);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: .9rem;
+        font-weight: 600;
+        color: var(--gray-800);
+    }
+    .store-shipping-row .shipping-price {
+        color: var(--green-600); /* Kargo bedava için yeşil */
+    }
+
+    .shipping-method-list {
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+    }
+
+    .shipping-method {
+        position:relative;
+    }
+
+    .shipping-method input {
+        position:absolute;
+        opacity:0;
+        pointer-events:none;
+    }
+
+    .shipping-method label {
+        display:flex;
+        align-items:center;
+        gap:14px;
+        padding:16px;
+        border:1px solid var(--gray-200);
+        border-radius:var(--radius-md);
+        background:#fff;
+        cursor:pointer;
+        transition:.2s;
+    }
+
+    .shipping-method label:hover {
+        border-color:var(--teal-300);
+        background:var(--teal-50);
+    }
+
+    .shipping-method input:checked + label {
+        border-color:var(--teal-500);
+        background:var(--teal-50);
+    }
+
+    .shipping-method-radio {
+        width:18px;
+        height:18px;
+        accent-color:var(--teal-600);
+        flex-shrink:0;
+    }
+
+    .shipping-method-icon {
+        width:40px;
+        height:40px;
+        border-radius:var(--radius-sm);
+        background:var(--gray-100);
+        color:var(--gray-600);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        flex-shrink:0;
+    }
+
+    .shipping-method input:checked + label .shipping-method-icon {
+        background:var(--teal-100);
+        color:var(--teal-700);
+    }
+
+    .shipping-method-content {
+        flex:1;
+        min-width:0;
+    }
+
+    .shipping-method-title {
+        display:block;
+        color:var(--gray-900);
+        font-size:.9rem;
+        font-weight:700;
+        margin-bottom:3px;
+    }
+
+    .shipping-method-desc {
+        color:var(--gray-500);
+        font-size:.78rem;
+    }
+
+    .shipping-method-price {
+        color:var(--gray-900);
+        font-size:.95rem;
+        font-weight:800;
+        white-space:nowrap;
+    }
+
+    .checkout-shipping-summary {
+        margin-top:16px;
+        padding: 10px 14px;
+        background:var(--gray-50);
+        border:1px solid var(--gray-200);
+        border-radius:var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+
+    }
+
+    .checkout-shipping-summary .shipping-fee-box {
+        display:flex;
+        align-items:center;
+        gap:8px;
+        color:var(--gray-600);
+        font-size:.9rem;
+        font-weight:600;
+    }
+
+    .checkout-shipping-summary .shipping-fee-box i {
+        color:var(--teal-600);
+    }
+
+    .checkout-shipping-timer {
+        margin-top: 0;
+        padding: 10px;
+        background: var(--teal-50);
+        color: var(--teal-600);
+        border: 1px dashed var(--teal-500);
+        border-radius: var(--radius-sm);
+        font-size: 0.82rem;
+        font-weight: 600;
+        text-align: center;
+        line-height: 1.4;
+    }
+    
+    .checkout-shipping-timer i {
+        margin-right: 4px;
+    }
+
+    .shipping-fee-amount {
+        color:var(--gray-900);
+        font-weight:800;
+    }
+
+    .shipping-fee-free {
+        color:var(--green-600);
+    }
+
+    /* =========================================================
+       5 - SEPET İÇERİĞİ
+       ========================================================= */
+    .checkout-cart-store {
+        border:1px solid var(--gray-200);
+        border-radius:var(--radius-md);
+        overflow:hidden;
+        margin-bottom:16px;
+    }
+
+    .checkout-cart-store:last-child {
+        margin-bottom:0;
+    }
+
+    .checkout-cart-store-header {
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        padding:13px 16px;
+        background:var(--gray-50);
+        border-bottom:1px solid var(--gray-200);
+    }
+
+    .checkout-cart-store-name {
+        display:flex;
+        align-items:center;
+        gap:7px;
+        color:var(--gray-800);
+        font-size:.88rem;
+        font-weight:700;
+    }
+
+    .checkout-cart-store-name i {
+        color:var(--teal-500);
+    }
+
+    .checkout-cart-store-count {
+        color:var(--gray-500);
+        font-size:.78rem;
+        font-weight:600;
+    }
+
+    .checkout-cart-item {
+        display:flex;
+        align-items:center;
+        gap:14px;
+        padding:16px;
+        border-bottom:1px solid var(--gray-200);
+    }
+
+    .checkout-cart-item:last-child {
+        border-bottom:none;
+    }
+
+    .checkout-cart-image {
+        width:72px;
+        height:72px;
+        border:1px solid var(--gray-200);
+        border-radius:var(--radius-sm);
+        background:#fff;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        overflow:hidden;
+        flex-shrink:0;
+    }
+
+    .checkout-cart-image img {
+        max-width:100%;
+        max-height:100%;
+        object-fit:contain;
+    }
+
+    .checkout-cart-image-placeholder {
+        color:var(--gray-400);
+        font-size:1.2rem;
+    }
+
+    .checkout-cart-details {
+        flex:1;
+        min-width:0;
+    }
+
+    .checkout-cart-title {
+        margin:0 0 5px;
+        color:var(--gray-900);
+        font-size:.9rem;
+        font-weight:700;
+        line-height:1.4;
+        display:-webkit-box;
+        -webkit-line-clamp:2;
+        line-clamp:2;
+        -webkit-box-orient:vertical;
+        overflow:hidden;
+    }
+
+    .checkout-cart-attrs {
+        display:flex;
+        flex-wrap:wrap;
+        gap:6px;
+    }
+
+    .checkout-cart-attr {
+        padding:3px 7px;
+        border-radius:var(--radius-sm);
+        background:var(--gray-100);
+        color:var(--gray-600);
+        font-size:.7rem;
+        font-weight:600;
+    }
+
+    .checkout-cart-qty {
+        color:var(--gray-500);
+        font-size:.8rem;
+        font-weight:600;
+        white-space:nowrap;
+    }
+
+    .checkout-cart-price {
+        color:var(--teal-700);
+        font-size:.95rem;
+        font-weight:800;
+        white-space:nowrap;
+    }
+
+    /* SEPET & KARGO BİRLEŞİMİ (STORE BAZLI) */
+.checkout-store-card {
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.checkout-store-card:last-child {
+    margin-bottom: 0;
+}
+
+.checkout-store-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.checkout-store-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--gray-800);
+    font-size: .95rem;
+    font-weight: 700;
+}
+
+.checkout-store-name i {
+    color: var(--teal-500);
+}
+
+.checkout-item-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    border-bottom: 1px solid var(--gray-100);
+    background: #fff;
+}
+
+.checkout-item-image {
+    width: 64px;
+    height: 64px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #fff;
+}
+
+.checkout-item-image img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.checkout-item-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.checkout-item-title {
+    margin: 0 0 6px;
+    color: var(--gray-900);
+    font-size: .9rem;
+    font-weight: 600;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.checkout-item-attrs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.checkout-item-attr {
+    padding: 3px 6px;
+    border-radius: var(--radius-sm);
+    background: var(--gray-100);
+    color: var(--gray-600);
+    font-size: .7rem;
+    font-weight: 600;
+}
+
+.checkout-item-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: 8px;
+}
+
+.checkout-item-qty {
+    color: var(--gray-600);
+    font-size: .85rem;
+    font-weight: 700;
+    background: var(--gray-100);
+    padding: 4px 10px;
+    border-radius: 20px;
+}
+
+.checkout-item-price {
+    color: var(--teal-700);
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.checkout-store-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    background: #fff;
+    border-top: 1px dashed var(--gray-200);
+}
+
+
+.store-subtotal-box {
+    font-size: .95rem;
+    color: var(--gray-600);
+}
+
+.store-subtotal-amount {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--teal-700);
+    margin-left: 6px;
+}
+
+
+    /* =========================================================
+       YARDIM / BİLGİLENDİRME
+       ========================================================= */
+    .checkout-help-card {
+        padding:22px 24px;
+        background:#fff;
+        border:1px solid var(--gray-200);
+        border-radius:var(--radius-lg);
+        box-shadow:var(--shadow-sm);
+    }
+
+    .checkout-help-title {
+        margin:0 0 8px;
+        color:var(--gray-800);
+        font-size:.95rem;
+        font-weight:700;
+    }
+
+    .checkout-help-text {
+        margin:0;
+        color:var(--gray-500);
+        font-size:.82rem;
+        line-height:1.7;
+    }
+
+    .checkout-help-links {
+        display:flex;
+        flex-wrap:wrap;
+        gap:6px;
+        margin-top:8px;
+    }
+
+    .checkout-help-links a {
+        color:var(--teal-700);
+        font-size:.82rem;
+        font-weight:700;
+        text-decoration:none;
+    }
+
+    .checkout-help-links a:hover {
+        text-decoration:underline;
+    }
+
+    .checkout-help-links span {
+        color:var(--gray-300);
+    }
+
+    /* =========================================================
+       SAĞ - SİPARİŞ ÖZETİ
+       ========================================================= */
+    .checkout-summary-col {
+        position:sticky;
+        top:24px;
+        display:flex;
+        flex-direction:column;
+        gap:16px;
+    }
+
+    .checkout-summary-card {
+        background:#fff;
+        border:1px solid var(--gray-200);
+        border-radius:var(--radius-lg);
+        padding:24px;
+        box-shadow:var(--shadow-sm);
+    }
+
+    .checkout-summary-title {
+        margin:0 0 20px;
+        color:var(--gray-900);
+        font-size:1.25rem;
+        font-weight:700;
+    }
+
+    .checkout-summary-row {
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:16px;
+        margin-bottom:16px;
+        color:var(--gray-600);
+        font-size:.95rem;
+        font-weight:500;
+    }
+
+    .checkout-summary-row:last-of-type {
+        margin-bottom:0;
+    }
+
+    .checkout-summary-value {
+        color:var(--gray-900);
+        font-weight:700;
+        white-space:nowrap;
+    }
+
+    .checkout-summary-divider {
+        height:1px;
+        background:var(--gray-200);
+        margin:20px 0;
+    }
+
+    .checkout-summary-total {
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:16px;
+    }
+
+    .checkout-summary-total-label {
+        color:var(--gray-900);
+        font-size:1.05rem;
+        font-weight:700;
+    }
+
+    .checkout-summary-total-value {
+        color:var(--teal-700);
+        font-size:1.55rem;
+        font-weight:800;
+        white-space:nowrap;
+    }
+
+    /* =========================================================
+       ÖDEME BUTONU
+       ========================================================= */
+    .checkout-btn-payment {
+        width:100%;
+        min-height:54px;
+        margin-top:24px;
+        padding:15px 18px;
+        border:none;
+        border-radius:var(--radius-md);
+        background:var(--teal-600);
+        color:#fff;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        gap:9px;
+        font-size:1.05rem;
+        font-weight:700;
+        cursor:pointer;
+        transition:.2s;
+        box-shadow:0 4px 12px rgba(2,132,199,.22);
+    }
+
+    .checkout-btn-payment:hover:not(:disabled) {
+        background:var(--teal-700);
+        transform:translateY(-2px);
+        box-shadow:0 6px 16px rgba(2,132,199,.3);
+    }
+
+    .checkout-btn-payment:disabled {
+        background:var(--gray-400);
+        box-shadow:none;
+        cursor:not-allowed;
+        transform:none;
+    }
+
+    .checkout-secure-badge {
+        display:flex;
+        justify-content:center;
+        align-items:center;
+        gap:8px;
+        margin-top:16px;
+        color:var(--gray-500);
+        font-size:.82rem;
+        font-weight:600;
+    }
+
+    .checkout-secure-badge i {
+        color:var(--green-600);
+    }
+
+    /* =========================================================
+       SÖZLEŞME METNİ
+       ========================================================= */
+    .checkout-legal-text {
+        margin:16px 0 0;
+        color:var(--gray-500);
+        font-size:.76rem;
+        line-height:1.7;
+        text-align:center;
+    }
+
+    .checkout-legal-text a {
+        color:var(--teal-700);
+        font-weight:700;
+        text-decoration:none;
+    }
+
+    .checkout-legal-text a:hover {
+        text-decoration:underline;
+    }
+
+    /* =========================================================
+       ÖZET ALT BİLGİ
+       ========================================================= */
+    .checkout-summary-note {
+        background:var(--teal-50);
+        border:1px solid var(--teal-100);
+        border-radius:var(--radius-md);
+        padding:13px 14px;
+        color:var(--gray-600);
+        font-size:.78rem;
+        line-height:1.5;
+    }
+
+    .checkout-summary-note i {
+        color:var(--teal-600);
+        margin-right:5px;
+    }
+
+    /* =========================================================
+       RESPONSIVE
+       ========================================================= */
+    @media (max-width:1100px) {
+        .checkout-main-grid {
+            grid-template-columns:1fr;
+        }
+
+        .checkout-summary-col {
+            position:static;
+        }
+    }
+
+    @media (max-width:768px) {
+        .checkout-container {
+            padding:0 16px;
+            margin-top:16px;
+        }
+
+        .checkout-topbar {
+            flex-wrap:wrap;
+            gap:12px;
+        }
+
+        .checkout-title {
+            width:100%;
+            order:-1;
+            font-size:1.35rem;
+        }
+
+        .checkout-security-badge {
+            display:none;
+        }
+
+        .checkout-section-header {
+            padding:16px;
+        }
+
+        .checkout-section-body {
+            padding:16px;
+        }
+
+        .billing-choice-group {
+            grid-template-columns:1fr;
+        }
+
+        .checkout-cart-item {
+            align-items:flex-start;
+            flex-wrap:wrap;
+        }
+
+        .checkout-cart-details {
+            min-width:calc(100% - 90px);
+        }
+
+        .checkout-cart-qty {
+            margin-left:86px;
+        }
+
+        .checkout-cart-price {
+            margin-left:auto;
+        }
+
+        .checkout-summary-card {
+            padding:20px;
+        }
+    }
+
+    @media (max-width:480px) {
+        .checkout-back-link {
+            font-size:.85rem;
+        }
+
+        .checkout-section-heading {
+            font-size:.95rem;
+        }
+
+        .checkout-section-subtitle {
+            font-size:.78rem;
+        }
+
+        .checkout-section-number {
+            width:29px;
+            height:29px;
+        }
+
+        .checkout-summary-total-value {
+            font-size:1.35rem;
+        }
+    }
+</style>
+
+
+<div class="checkout-container">
+    <!-- =====================================================
+         ÜST BAR
+         ===================================================== -->
+    <div class="checkout-topbar">
+        <a href="{% url 'cart:detail' %}" class="checkout-back-link">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Sepete geri dön</span>
+        </a>
+        <h1 class="checkout-title">Siparişi Tamamla</h1>
+        <div class="checkout-security-badge">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>Güvenli Alışveriş</span>
+        </div>
+    </div>
+    <!-- =====================================================
+         ANA GRID
+         ===================================================== -->
+    <div class="checkout-main-grid">
+        <!-- =================================================
+             SOL KOLON
+             ================================================= -->
+        <div class="checkout-left-col">
+            <!-- =================================================
+                 1. TESLİMAT ADRESİ
+                 ================================================= -->
+            <section class="checkout-section-card">
+                <div class="checkout-section-header">
+                    <div class="checkout-section-number">1</div>
+                
+                    <div>
+                        <h2 class="checkout-section-heading">Teslimat ve Fatura Adresi</h2>
+                        <p class="checkout-section-subtitle" style="margin-top: 3px; color: var(--gray-500); font-size: 0.85rem;">
+                            Siparişinizin teslim edileceği adresi seçin.
+                        </p>
+                    </div>
+                </div>
+            
+                <div class="checkout-section-body">
+                    {% if addresses %}
+
+                        <div class="address-grid">
+                        
+                            {% for address in addresses %}
+                        
+                                <div class="address-option">
+                                
+                                    <!-- SEÇİM ALANI -->
+                                    <label
+                                        for="shipping-address-{{ address.id }}"
+                                        class="address-select-area"
+                                    >
+                                
+                                        <div class="address-header-row">
+                                        
+                                            <input
+                                                type="radio"
+                                                id="shipping-address-{{ address.id }}"
+                                                name="shipping_address_id"
+                                                value="{{ address.id }}"
+                                                class="address-radio"
+                                                {% if address.is_default or forloop.first %}checked{% endif %}
+                                            >
+                                        
+                                            <div class="address-title-group">
+                                            
+                                                <span class="address-title">
+                                                    {{ address.title }}
+                                                </span>
+                                            
+                                                {% if address.is_default %}
+                                            
+                                                    <span class="address-default-badge">
+                                                        Varsayılan
+                                                    </span>
+                                                
+                                                {% endif %}
+                                                
+                                            </div>
+                                        
+                                        </div>
+                                    
+                                    
+                                        <div class="address-body">
+                                        
+                                            <p class="address-name">
+                                                {{ address.full_name }}
+                                            </p>
+                                        
+                                            <p class="address-text">
+                                            
+                                                {{ address.address_line1 }}
+                                            
+                                                {% if address.address_line2 %}
+                                                    {{ address.address_line2 }}
+                                                {% endif %}
+                                            
+                                                <br>
+                                            
+                                                {{ address.city }},
+                                                {{ address.state }}
+                                                {{ address.postal_code }}
+                                            
+                                            </p>
+                                        
+                                        </div>
+                                    
+                                    </label>
+                                
+                                
+                                    <!-- DÜZENLE -->
+                                    <div class="address-actions">
+                                    
+                                        <button
+                                            type="button"
+                                            class="btn-address-edit"
+                                            data-id="{{ address.id }}"
+                                        >
+                                            Düzenle
+                                        </button>
+                                    
+                                    </div>
+                                
+                                </div>
+                            
+                            {% endfor %}
+                            
+                        </div>
+                    
+                    {% else %}
+                    
+                        <div class="address-empty-state">
+                        
+                            <i class="fa-solid fa-map-location-dot"></i>
+                        
+                            <strong>
+                                Henüz kayıtlı bir adresiniz bulunmuyor
+                            </strong>
+                        
+                            <span>
+                                Siparişinize devam edebilmek için lütfen bir
+                                teslimat adresi ekleyin.
+                            </span>
+                        
+                        </div>
+                    
+                    {% endif %}
+                    
+                    
+                    <!-- YENİ ADRES -->
+                    <button
+                        type="button"
+                        class="btn-new-address js-add-address-btn"
+                    >
+                        <i class="fa-solid fa-plus"></i>
+                        Yeni Adres Ekle
+                    </button>
+                
+                
+                    <!-- =================================================
+                         FATURA ADRESİ
+                         ================================================= -->
+                
+                    <div class="billing-toggle-box">
+                    
+                        <label class="billing-checkbox-wrapper">
+                        
+                            <input
+                                type="checkbox"
+                                id="use_same_billing"
+                                checked
+                            >
+                        
+                            <span>
+                                Fatura adresimi teslimat adresim olarak kullan
+                            </span>
+                        
+                        </label>
+                    
+                    
+                        <!-- FARKLI FATURA ADRESLERİ -->
+                    
+                        <div
+                            id="billing-addresses-wrapper"
+                            class="billing-address-section"
+                        >
+                    
+                            <h3
+                                style="
+                                    font-size: 0.95rem;
+                                    font-weight: 700;
+                                    margin: 0 0 12px;
+                                    color: var(--gray-800);
+                                "
+                            >
+                                Fatura Adresi Seçin
+                            </h3>
+                        
+                        
+                            {% if addresses %}
+                        
+                                <div class="address-grid">
+                                
+                                    {% for address in addresses %}
+                                
+                                        <div
+                                            class="address-option"
+                                            style="padding: 12px;"
+                                        >
+                                
+                                            <label
+                                                for="billing-address-{{ address.id }}"
+                                                class="address-select-area"
+                                            >
+                                
+                                                <div class="address-header-row">
+                                                
+                                                    <input
+                                                        type="radio"
+                                                        id="billing-address-{{ address.id }}"
+                                                        name="billing_address_id"
+                                                        value="{{ address.id }}"
+                                                        class="address-radio"
+                                                        {% if address.is_default or forloop.first %}checked{% endif %}
+                                                    >
+                                                
+                                                    <span class="address-title">
+                                                        {{ address.title }}
+                                                    </span>
+                                                
+                                                </div>
+                                            
+                                            
+                                                <div
+                                                    class="address-body"
+                                                    style="padding-left: 28px;"
+                                                >
+                                            
+                                                    <p
+                                                        class="address-name"
+                                                        style="font-size: 0.85rem;"
+                                                    >
+                                                        {{ address.full_name }}
+                                                    </p>
+                                                
+                                                    <p
+                                                        class="address-text"
+                                                        style="
+                                                            font-size: 0.8rem;
+                                                            margin: 0;
+                                                        "
+                                                    >
+                                                        {{ address.address_line1 }}
+                                                        <br>
+                                                        {{ address.city }},
+                                                        {{ address.state }}
+                                                        {{ address.postal_code }}
+                                                    </p>
+                                                
+                                                </div>
+                                            
+                                            </label>
+                                        
+                                        </div>
+                                    
+                                    {% endfor %}
+                                    
+                                </div>
+                            
+                            {% else %}
+                            
+                                <p
+                                    style="
+                                        font-size: 0.85rem;
+                                        color: var(--gray-500);
+                                    "
+                                >
+                                    Kayıtlı adresiniz bulunmuyor.
+                                </p>
+                            
+                            {% endif %}
+                            
+                        </div>
+                    
+                    </div>
+                
+                </div>
+            
+            </section>
+            <!-- =================================================
+                 2. ÖDEME ARACI
+                 ================================================= -->
+            <section class="checkout-section-card">
+                <div class="checkout-section-header">
+                    <div class="checkout-section-number">2</div>
+                    <div>
+                        <h2 class="checkout-section-heading">
+                            Ödeme Aracı
+                        </h2>
+                        <p class="checkout-section-subtitle">
+                            Kullanmak istediğiniz ödeme yöntemini seçin.
+                        </p>
+                    </div>
+                </div>
+                <div class="checkout-section-body">
+                    <div class="payment-method-list">
+                        <!-- KAYITLI KART -->
+                        <div class="payment-method">
+                            <input
+                                type="radio"
+                                id="payment-saved-card"
+                                name="payment_method"
+                                value="saved_card"
+                            >
+                            <label
+                                for="payment-saved-card"
+                                class="payment-method-label"
+                            >
+                                <span class="payment-method-radio"></span>
+                                <div class="payment-method-icon">
+                                    <i class="fa-solid fa-credit-card"></i>
+                                </div>
+                                <div class="payment-method-content">
+                                    <span class="payment-method-title">
+                                        Kayıtlı kart
+                                    </span>
+                                    <span class="payment-method-desc">
+                                        Daha önce hesabınıza kaydettiğiniz
+                                        kartlardan birini kullanın.
+                                    </span>
+                                </div>
+                                <span class="payment-method-badge">
+                                    Güvenli
+                                </span>
+                            </label>
+                        </div>
+                        <!-- YENİ KART -->
+                        <div class="payment-method">
+                            <input
+                                type="radio"
+                                id="payment-new-card"
+                                name="payment_method"
+                                value="new_card"
+                                checked
+                            >
+                            <label
+                                for="payment-new-card"
+                                class="payment-method-label"
+                            >
+                                <span class="payment-method-radio"></span>
+                                <div class="payment-method-icon">
+                                    <i class="fa-solid fa-plus"></i>
+                                </div>
+                                <div class="payment-method-content">
+                                    <span class="payment-method-title">
+                                        Yeni kart kullan
+                                    </span>
+                                    <span class="payment-method-desc">
+                                        Yeni kart bilgilerinizi güvenli ödeme
+                                        ekranında girebilirsiniz.
+                                    </span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    <!--
+                        KAYITLI KARTLAR
+                        Şimdilik placeholder.
+                        StoredCard sistemi bağlandığında JS/backend
+                        tarafından doldurulacak.
+                    -->
+                    <div class="saved-cards-box">
+                        <h3 class="saved-cards-title">
+                            Kayıtlı Kartlarınız
+                        </h3>
+                        <div class="saved-card-placeholder">
+                            <i class="fa-regular fa-credit-card"></i>
+                            <div class="saved-card-placeholder-text">
+                                <strong>
+                                    Henüz kayıtlı kart bulunmuyor.
+                                </strong>
+                                <span>
+                                    Ödeme sırasında yeni kart ekleyebilir veya
+                                    hesabınızdan kart yönetebilirsiniz.
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <!-- =================================================
+                 3. TESLİMAT İÇERİĞİ VE KARGO
+                 ================================================= -->
+            <section class="checkout-section-card">
+                <div class="checkout-section-header">
+                    <div class="checkout-section-number">3</div>
+                    <div>
+                        <h2 class="checkout-section-heading">
+                            Teslimat İçeriği
+                        </h2>
+                        <p class="checkout-section-subtitle">
+                            Siparişinizde yer alan ürünleri kontrol edin.
+                        </p>
+                    </div>
+                </div>
+                <div class="checkout-section-body">
+
+                        {% for group in selected_grouped_items %}
+                            <div class="checkout-store-card">
+                                <div class="checkout-cart-store">
+                                    <div class="checkout-cart-store-header">
+                                        <div class="checkout-cart-store-name">
+                                            <i class="fa-solid fa-store"></i>
+                                            <span>
+                                                Satıcı: {{ group.store.store_name }}
+                                            </span>
+                                        </div>
+                                        <div class="checkout-cart-store-count">
+                                            {{ group.items|length }} Ürün
+                                        </div>
+                                    </div>
+                                    {% for item in group.items %}
+                                        <div class="checkout-cart-item">
+                                            <div class="checkout-cart-image">
+                                                {% if item.store_product.variant.get_thumbnail_url %}
+                                                    <img
+                                                        src="{{ item.store_product.variant.get_thumbnail_url }}"
+                                                        alt="{{ item.store_product.variant.product.name }}"
+                                                    >
+                                                {% else %}
+                                                    <div class="checkout-cart-image-placeholder">
+                                                        <i class="fa-regular fa-image"></i>
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="checkout-cart-details">
+                                                <h3 class="checkout-cart-title">
+                                                    {{ item.store_product.variant.product.name }}
+                                                </h3>
+                                                <div class="checkout-cart-attrs">
+                                                    {% for attr_value in item.store_product.variant.attribute_values.all %}
+                                                        <span class="checkout-cart-attr">
+                                                            {{ attr_value.attribute.name }}:
+                                                            {{ attr_value.value }}
+                                                        </span>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                            <div class="checkout-cart-qty">
+                                                x{{ item.quantity }}
+                                            </div>
+                                            <div class="checkout-cart-price">
+                                                <span
+                                                    class="js-format-money"
+                                                    data-raw="{{ item.unit_price }}"
+                                                ></span>
+                                                TL
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                <!-- MAĞAZA ARA TOPLAMI -->
+                                <div class="checkout-store-footer">
+                                    <div class="store-subtotal-box">
+                                        Ara Toplam:
+                                        <span
+                                            class="store-subtotal-amount js-format-money"
+                                            data-raw="{{ group.store_total_price }}"
+                                        ></span>
+                                    
+                                        TL
+                                    </div>
+                                
+                                </div>
+                            </div>
+                        {% empty %}
+
+                            <div class="address-empty-state">
+                            
+                                <div class="address-empty-content">
+                                
+                                    <i class="fa-solid fa-cart-shopping"></i>
+                                
+                                    <strong>
+                                        Sepette seçili ürün bulunmuyor.
+                                    </strong>
+                                
+                                    <span>
+                                        Sipariş oluşturmak için sepetinizden en az bir ürün seçin.
+                                    </span>
+                                
+                                </div>
+                            
+                            </div>
+                        {% endfor %}
+                        <!-- =================================================
+                             GENEL KARGO
+                             ================================================= -->
+                        <div class="checkout-shipping-summary">
+                        
+                            <div class="shipping-fee-box">
+                            
+                                <i class="fa-solid fa-truck-fast"></i>
+                            
+                                <span>Kargo:</span>
+                            
+                                {% if is_free_shipping %}
+                            
+                                    <span class="shipping-fee-amount shipping-fee-free">
+                                        Ücretsiz
+                                    </span>
+                                
+                                {% else %}
+                                
+                                    <span class="shipping-fee-amount">
+                                    
+                                        <span
+                                            class="js-format-money"
+                                            data-raw="{{ shipping_total }}"
+                                        ></span>
+                                    
+                                        TL
+                                    
+                                    </span>
+                                
+                                {% endif %}
+                                
+                            </div>
+
+                            <!-- KARGO SAAT SAYACI -->
+
+                            <div
+                                class="shipping-timer-box checkout-shipping-timer js-shipping-timer-text"
+                            >
+                            </div>
+                        
+                        </div>
+
+                </div>
+            </section>
+            <!-- =================================================
+                 YARDIM / BİLGİLENDİRME
+                 ================================================= -->
+            <section class="checkout-help-card">
+                <h3 class="checkout-help-title">
+                    Yardıma mı ihtiyacınız var?
+                </h3>
+                <p class="checkout-help-text">
+                    Siparişiniz, ödeme veya teslimatla ilgili yardıma
+                    ihtiyacınız varsa destek sayfalarımızı ziyaret
+                    edebilirsiniz.
+                </p>
+                <div class="checkout-help-links">
+                    <a href="#">
+                        Yardım Merkezi
+                    </a>
+                    <span>•</span>
+                    <a href="#">
+                        İletişim
+                    </a>
+                    <span>•</span>
+                    <a href="#">
+                        İade ve İptal
+                    </a>
+                    <span>•</span>
+                    <a href="#">
+                        Kargo ve Teslimat
+                    </a>
+                </div>
+            </section>
+        </div>
+        <!-- =================================================
+             SAĞ KOLON - SİPARİŞ ÖZETİ
+             ================================================= -->
+        <aside class="checkout-summary-col">
+            <div class="checkout-summary-card">
+                <h2 class="checkout-summary-title">
+                    Sipariş Özeti
+                </h2>
+                <!-- ÜRÜNLER -->
+                <div class="checkout-summary-row">
+                    <span>
+                        Ürünler ({{ selected_items_count }} ürün)
+                    </span>
+                    <span class="checkout-summary-value">
+                        <span
+                            class="js-format-money"
+                            data-raw="{{ selected_total_price }}"
+                        ></span>
+                        TL
+                    </span>
+                </div>
+                <!-- KARGO -->
+                <div class="checkout-summary-row">
+                    <span>Kargo</span>
+                                
+                    <span
+                        class="checkout-summary-value"
+                        id="checkout-shipping-summary"
+                    >
+                        <span
+                            class="js-format-money"
+                            data-raw="{{ shipping_total }}"
+                        ></span>
+                        TL
+                    </span>
+                </div>
+                <div class="checkout-summary-divider"></div>
+                <!-- TOPLAM -->
+                <div class="checkout-summary-total">
+                    <span class="checkout-summary-total-label">
+                        Sipariş Toplamı
+                    </span>
+                
+                    <span
+                        class="checkout-summary-total-value"
+                        id="checkout-final-total"
+                    >
+                        <span
+                            class="js-format-money"
+                            data-raw="{{ checkout_total }}"
+                        ></span>
+                        TL
+                    </span>
+                </div>
+                <!-- ÖDEMEYE GEÇ -->
+                <button
+                    type="button"
+                    id="checkout-payment-button"
+                    class="checkout-btn-payment"
+                    disabled
+                >
+                    <span>Ödemeye Geç</span>
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
+                <!-- GÜVENLİK -->
+                <div class="checkout-secure-badge">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span>
+                        Güvenli ödeme
+                    </span>
+                </div>
+                <!-- BİLGİ -->
+                <div class="checkout-summary-note">
+                    <i class="fa-solid fa-circle-info"></i>
+                    Ödeme aşamasına geçtiğinizde işleminiz güvenli ödeme
+                    altyapısı üzerinden tamamlanacaktır.
+                </div>
+                <!-- HUKUKİ METİN -->
+                <p class="checkout-legal-text">
+                    Ödemeye geçerek
+                    <a href="#">
+                        Kullanım Koşulları
+                    </a>
+                    ve
+                    <a href="#">
+                        Mesafeli Satış Sözleşmesi
+                    </a>
+                    hükümlerini kabul etmiş olursunuz.
+                    Kişisel verilerinizin işlenmesine ilişkin ayrıntılar için
+                    <a href="#">
+                        Gizlilik ve KVKK
+                    </a>
+                    sayfamızı inceleyebilirsiniz.
+                </p>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<script src="{% static 'orders/js/checkout.js' %}"></script>
+
+
+{% endblock %}
