@@ -12,10 +12,97 @@ phone_validator = RegexValidator(
     message="Geçerli bir telefon numarası girin. Örn: +905xxxxxxxxx"
 )
 
-iban_validator = RegexValidator(
-    regex=r'^[A-Z]{2}\d{2}[A-Z0-9]{1,30}$',
-    message="Geçerli bir IBAN girin."
-)
+def validate_iban(value):
+    """
+    IBAN format + checksum doğrulaması.
+
+    Kontroller:
+        1. Boş değer kabul edilir.
+        2. Boşluklar temizlenir.
+        3. IBAN büyük harfe çevrilir.
+        4. Genel IBAN formatı kontrol edilir.
+        5. TR IBAN'ı için 26 karakter kontrol edilir.
+        6. ISO 13616 / MOD-97 checksum doğrulaması yapılır.
+
+    Not:
+        Validator değeri normalize ederek DB'ye yazmaz.
+        Normalize işlemi SellerProfile.clean() içerisinde yapılır.
+    """
+
+    if value in (None, ""):
+        return
+
+    iban = "".join(str(value).split()).upper()
+
+    # -------------------------------------------------------------------------
+    # FORMAT
+    # -------------------------------------------------------------------------
+
+    if not iban:
+        return
+
+    if len(iban) < 15 or len(iban) > 34:
+        raise ValidationError(
+            "IBAN uzunluğu geçersiz."
+        )
+
+    if not iban[:2].isalpha():
+        raise ValidationError(
+            "IBAN ülke kodu geçersiz."
+        )
+
+    if not iban[2:4].isdigit():
+        raise ValidationError(
+            "IBAN kontrol rakamları geçersiz."
+        )
+
+    if not iban.isalnum():
+        raise ValidationError(
+            "IBAN yalnızca harf ve rakamlardan oluşmalıdır."
+        )
+
+    # -------------------------------------------------------------------------
+    # TÜRKİYE
+    # -------------------------------------------------------------------------
+
+    if iban.startswith("TR") and len(iban) != 26:
+        raise ValidationError(
+            "Türkiye IBAN'ı 26 karakter uzunluğunda olmalıdır."
+        )
+
+    # -------------------------------------------------------------------------
+    # MOD-97 CHECKSUM
+    # -------------------------------------------------------------------------
+    #
+    # IBAN:
+    #   TRkk...
+    #
+    # önce son 4 karakter sona taşınır:
+    #
+    #   data + TRkk
+    #
+    # harfler:
+    #   A = 10
+    #   B = 11
+    #   ...
+    #   Z = 35
+    #
+    # ardından mod 97 == 1 olmalıdır.
+    # -------------------------------------------------------------------------
+
+    rearranged = iban[4:] + iban[:4]
+
+    numeric = "".join(
+        str(ord(char) - ord("A") + 10)
+        if char.isalpha()
+        else char
+        for char in rearranged
+    )
+
+    if int(numeric) % 97 != 1:
+        raise ValidationError(
+            "IBAN checksum doğrulaması başarısız."
+        )
 
 class CustomUser(AbstractUser):
     username = None  # Django'nun varsayılan username alanını kaldırıyoruz
@@ -91,6 +178,10 @@ class IyzicoOnboardingStatus(models.TextChoices):
     PENDING = "pending", "Bekliyor"
     ACTIVE = "active", "Aktif"
     FAILED = "failed", "Başarısız"
+    RECONCILIATION_REQUIRED = (
+        "reconciliation_required",
+        "Mutabakat Gerekli",
+    )
     SUSPENDED = "suspended", "Askıya Alındı"
 
 
@@ -131,10 +222,10 @@ class SellerProfile(models.Model):
     identity_number = models.CharField(
         max_length=20,
         blank=True,
-        help_text="Bireysel satıcılar için T.C. kimlik numarası.",
+        help_text="Bireysel ve şahıs şirketi satıcıları için T.C. kimlik numarası.",
     )
 
-    iban = models.CharField(max_length=34, validators=[iban_validator], verbose_name="IBAN")
+    iban = models.CharField(max_length=34, validators=[validate_iban], verbose_name="IBAN")
 
     # PLATFORM APPROVAL
     is_approved = models.BooleanField(default=False)
@@ -146,7 +237,6 @@ class SellerProfile(models.Model):
     iyzico_submerchant_external_id = models.CharField(
         max_length=100,
         unique=True,
-        default=generate_submerchant_external_id,
         editable=False,
     )
 
@@ -156,8 +246,13 @@ class SellerProfile(models.Model):
         null=True,
     )
 
+    iyzico_onboarding_started_at = models.DateTimeField(
+        blank=True,
+        null=True,
+    )
+
     iyzico_onboarding_status = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=IyzicoOnboardingStatus.choices,
         default=IyzicoOnboardingStatus.NOT_STARTED,
     )
@@ -184,27 +279,31 @@ class SellerProfile(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     
+    def save(self, *args, **kwargs):
+        if not self.iyzico_submerchant_external_id:
+            self.iyzico_submerchant_external_id = (
+                generate_submerchant_external_id()
+            )
 
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = "Satıcı Profili"
         verbose_name_plural = "Satıcı Profilleri"
 
     def __str__(self):
-        return f"{self.user.email} - {self.company_name}"
+        return (
+            f"{self.user.email} - "
+            f"{self.company_name or self.legal_company_title}"
+        )
     
     def clean(self):
         super().clean()
-        
-        # Eğer IBAN alanı doldurulmuşsa
+
         if self.iban:
-            # IBAN'ın ilk 2 karakterini alarak ülke kodunu kontrol et
-            country_code = self.iban[:2].upper()
-            
-            # Türkiye IBAN'ı için özel kontrol
-            if country_code == 'TR':
-                if len(self.iban) != 26:
-                    raise ValidationError("Türkiye'ye ait IBAN'lar 26 karakter uzunluğunda olmalıdır.")
+            self.iban = "".join(
+                str(self.iban).split()
+            ).upper()
                 
 class SellerProfileUpdateRequest(models.Model):
     seller_profile = models.ForeignKey(SellerProfile, on_delete=models.CASCADE, related_name='change_requests')
@@ -212,7 +311,7 @@ class SellerProfileUpdateRequest(models.Model):
     new_company_name = models.CharField(max_length=255, blank=True, verbose_name="Yeni Şirket Adı")
     new_company_address = models.TextField(blank=True, verbose_name="Yeni Şirket Adresi")
     new_company_phone = models.CharField(max_length=15, blank=True, null=True, validators=[phone_validator], verbose_name="Yeni Telefon")
-    new_iban = models.CharField(max_length=34, blank=True, validators=[iban_validator], verbose_name="Yeni IBAN")
+    new_iban = models.CharField(max_length=34, blank=True, validators=[validate_iban], verbose_name="Yeni IBAN")
     
     STATUS_CHOICES = (
         ('pending', 'Onay Bekliyor'),

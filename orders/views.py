@@ -1,16 +1,20 @@
 import json
 import logging
 from decimal import Decimal
+from django.db import transaction
 from django.http import JsonResponse
-from django.shortcuts import redirect
+from django.shortcuts import redirect, get_object_or_404
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.views.generic import TemplateView
 
 from accounts.models import Address
 from cart.services.cart import CartService
+
+from .models import Order, PaymentTransaction, PaymentStatus
 
 from .exceptions import (
     CartAccessError,
@@ -22,12 +26,26 @@ from .exceptions import (
     InvalidOrderStateError,
     OrderDomainError,
     OrderNotFoundError,
+    PaymentAlreadyInProgressError,
+    PaymentAlreadyProcessedError,
+    PaymentError,
+    PaymentGatewayError,
+    PaymentInitializationError,
+    PaymentValidationError,
+    PaymentVerificationError,
     ProductUnavailableError,
     ReservationError,
+    ReservationExpiredError,
+    StoredCardNotFoundError,
+    CardStorageOperationInProgressError,
+    CardStorageConsistencyError,
+    CardStorageGatewayError,
 )
 from .services.order import AddressData, OrderService
 from .services.shipping import ShippingService
 from .services.stock_reservation import StockReservationService
+from .services.payment import PaymentService, PaymentCardData, PaymentBuyerData
+from .services.card_storage import CardStorageService, StoredCardCreateData
 
 
 logger = logging.getLogger(__name__)
@@ -201,6 +219,20 @@ class CheckoutPageView(TemplateView):
         else:
             context["addresses"] = []
 
+         # ------------------------------------------------------------------
+        # SAVED CARDS
+        # ------------------------------------------------------------------
+
+        if self.request.user.is_authenticated:
+            context["stored_cards"] = (
+                CardStorageService.list_cards(
+                    user=self.request.user,
+                    active_only=True,
+                )
+            )
+        else:
+            context["stored_cards"] = []
+
         return context
 
     def _build_selected_grouped_items(self):
@@ -300,6 +332,21 @@ class BaseOrderAPIView(View):
         # 404 - NOT FOUND
         # ---------------------------------------------------------------------
 
+        except StoredCardNotFoundError as exc:
+            logger.info(
+                "Stored card not found. "
+                "method=%s path=%s error=%s",
+                request.method,
+                request.path,
+                exc,
+            )
+
+            return self.error_response(
+                message=str(exc),
+                code="STORED_CARD_NOT_FOUND",
+                status=404,
+            )
+
         except OrderNotFoundError as exc:
             logger.info(
                 "Order not found. "
@@ -338,14 +385,31 @@ class BaseOrderAPIView(View):
         # 409 - CONFLICT
         # ---------------------------------------------------------------------
 
+        except CardStorageOperationInProgressError as exc:
+            logger.info(
+                "Stored card operation in progress. "
+                "method=%s path=%s error=%s",
+                request.method,
+                request.path,
+                exc,
+            )
+
+            return self.error_response(
+                message=str(exc),
+                code="CARD_STORAGE_OPERATION_IN_PROGRESS",
+                status=409,
+            )
+
         except (
             InsufficientStockError,
             InvalidOrderStateError,
-            ProductUnavailableError,
             ReservationError,
+            ReservationExpiredError,
+            PaymentAlreadyInProgressError,
+            PaymentAlreadyProcessedError,
         ) as exc:
             logger.info(
-                "Order conflict. "
+                "Order/payment conflict. "
                 "method=%s path=%s error=%s",
                 request.method,
                 request.path,
@@ -367,9 +431,11 @@ class BaseOrderAPIView(View):
             EmptyOrderError,
             InvalidAddressError,
             InvalidCurrencyError,
+            ProductUnavailableError,
+            PaymentValidationError,
         ) as exc:
             logger.info(
-                "Order validation error. "
+                "Order/payment validation error. "
                 "method=%s path=%s error=%s",
                 request.method,
                 request.path,
@@ -380,6 +446,93 @@ class BaseOrderAPIView(View):
                 message=str(exc),
                 code=self._get_error_code(exc),
                 status=400,
+            )
+
+        # ---------------------------------------------------------------------
+        # 502 - PAYMENT GATEWAY
+        # ---------------------------------------------------------------------
+
+        except CardStorageConsistencyError as exc:
+            logger.error(
+                "Stored card consistency error. "
+                "method=%s path=%s error=%s",
+                request.method,
+                request.path,
+                exc,
+                exc_info=True,
+            )
+
+            return self.error_response(
+                message=(
+                    "Kayıtlı kart işlemi doğrulanamadı. "
+                    "Lütfen daha sonra tekrar deneyin."
+                ),
+                code="CARD_STORAGE_CONSISTENCY_ERROR",
+                status=502,
+            )
+
+        except CardStorageGatewayError as exc:
+            logger.warning(
+                "Stored card gateway error. "
+                "method=%s path=%s error=%s",
+                request.method,
+                request.path,
+                exc,
+                exc_info=True,
+            )
+
+            return self.error_response(
+                message=(
+                    "Kayıtlı kart servisiyle iletişim "
+                    "kurulurken bir sorun oluştu."
+                ),
+                code="CARD_STORAGE_GATEWAY_ERROR",
+                status=502,
+            )
+
+        except (
+            PaymentGatewayError,
+            PaymentInitializationError,
+        ) as exc:
+            logger.warning(
+                "Payment gateway error. "
+                "method=%s path=%s error=%s",
+                request.method,
+                request.path,
+                exc,
+                exc_info=True,
+            )
+
+            return self.error_response(
+                message=(
+                    "Ödeme sağlayıcısı ile iletişim kurulurken "
+                    "bir sorun oluştu. Lütfen tekrar deneyin."
+                ),
+                code=self._get_error_code(exc),
+                status=502,
+            )
+
+        # ---------------------------------------------------------------------
+        # 502 - PAYMENT VERIFICATION
+        # ---------------------------------------------------------------------
+
+        except PaymentVerificationError as exc:
+            logger.error(
+                "Payment verification failed. "
+                "method=%s path=%s error=%s",
+                request.method,
+                request.path,
+                exc,
+                exc_info=True,
+            )
+
+            return self.error_response(
+                message=(
+                    "Ödeme doğrulanamadı. "
+                    "Lütfen işlemi tekrar deneyin."
+                ),
+                code="PAYMENT_VERIFICATION_ERROR",
+                status=502,
             )
 
         # ---------------------------------------------------------------------
@@ -847,6 +1000,331 @@ class BaseOrderAPIView(View):
         return normalized_ids
 
 
+# ==============================================================================
+# BASE STORED CARD API VIEW
+# ==============================================================================
+
+
+class BaseStoredCardAPIView(BaseOrderAPIView):
+    """
+    Stored Card endpoint'leri için ortak API base view.
+
+    Stored Card yalnızca authenticated kullanıcılar içindir.
+
+    Sorumluluk:
+        - authentication kontrolü
+        - standart BaseOrderAPIView response yapısını kullanmak
+
+    Business logic içermez.
+    """
+
+    def dispatch(
+        self,
+        request,
+        *args,
+        **kwargs,
+    ):
+        if not request.user.is_authenticated:
+            return self.error_response(
+                message=(
+                    "Kayıtlı kart işlemleri için "
+                    "giriş yapmalısınız."
+                ),
+                code="AUTHENTICATION_REQUIRED",
+                status=401,
+            )
+
+        return super().dispatch(
+            request,
+            *args,
+            **kwargs,
+        )
+
+# ==============================================================================
+# STORED CARD LIST / CREATE API
+# ==============================================================================
+
+
+class StoredCardListCreateAPIView(
+    BaseStoredCardAPIView
+):
+    """
+    Kullanıcının kayıtlı kartlarını listeler
+    veya yeni kart kaydeder.
+
+    GET:
+        /orders/payment/cards/
+
+    POST:
+        /orders/payment/cards/
+
+    POST Header:
+        Idempotency-Key: <unique-key>
+    """
+
+    http_method_names = [
+        "get",
+        "post",
+        "options",
+    ]
+
+    # --------------------------------------------------------------------------
+    # GET
+    # --------------------------------------------------------------------------
+
+    def get(
+        self,
+        request,
+        *args,
+        **kwargs,
+    ):
+        cards = CardStorageService.list_cards(
+            user=request.user,
+            active_only=True,
+        )
+
+        return self.success_response(
+            {
+                "cards": [
+                    self._serialize_card(card)
+                    for card in cards
+                ],
+            }
+        )
+
+    # --------------------------------------------------------------------------
+    # POST
+    # --------------------------------------------------------------------------
+
+    def post(
+        self,
+        request,
+        *args,
+        **kwargs,
+    ):
+        data, error = self.require_json(request)
+
+        if error:
+            return error
+
+        idempotency_key = (
+            request.headers.get(
+                "Idempotency-Key"
+            )
+            or ""
+        ).strip()
+
+        card = StoredCardCreateData(
+            card_holder_name=str(
+                data.get(
+                    "card_holder_name",
+                    "",
+                )
+            ).strip(),
+
+            card_number=str(
+                data.get(
+                    "card_number",
+                    "",
+                )
+            ).strip(),
+
+            expire_month=str(
+                data.get(
+                    "expire_month",
+                    "",
+                )
+            ).strip(),
+
+            expire_year=str(
+                data.get(
+                    "expire_year",
+                    "",
+                )
+            ).strip(),
+
+            card_alias=str(
+                data.get(
+                    "card_alias",
+                    "",
+                )
+            ).strip(),
+        )
+
+        make_default = data.get(
+            "make_default",
+            False,
+        )
+
+        if not isinstance(
+            make_default,
+            bool,
+        ):
+            raise PaymentValidationError(
+                "make_default boolean olmalıdır."
+            )
+
+        stored_card = (
+            CardStorageService.create_card(
+                user=request.user,
+                card=card,
+                idempotency_key=idempotency_key,
+                make_default=make_default,
+            )
+        )
+
+        return self.success_response(
+            {
+                "message": (
+                    "Kart başarıyla kaydedildi."
+                ),
+                "card": self._serialize_card(
+                    stored_card
+                ),
+            },
+            status=201,
+        )
+
+    # --------------------------------------------------------------------------
+    # SERIALIZER
+    # --------------------------------------------------------------------------
+
+    @staticmethod
+    def _serialize_card(
+        card,
+    ):
+        return {
+            "id": card.id,
+            "card_alias": card.card_alias,
+            "bin_number": card.bin_number,
+            "last_four_digits": (
+                card.last_four_digits
+            ),
+            "card_type": card.card_type,
+            "card_association": (
+                card.card_association
+            ),
+            "card_family": card.card_family,
+            "card_bank_code": (
+                card.card_bank_code
+            ),
+            "card_bank_name": (
+                card.card_bank_name
+            ),
+            "expire_month": (
+                card.expire_month
+            ),
+            "expire_year": (
+                card.expire_year
+            ),
+            "is_default": card.is_default,
+            "is_active": card.is_active,
+        }
+
+# ==============================================================================
+# STORED CARD DELETE API
+# ==============================================================================
+
+
+class StoredCardDeleteAPIView(
+    BaseStoredCardAPIView
+):
+    """
+    Kullanıcının kayıtlı kartını siler.
+
+    DELETE:
+        /orders/payment/cards/<card_id>/
+
+    Header:
+        Idempotency-Key: <unique-key>
+    """
+
+    http_method_names = [
+        "delete",
+        "options",
+    ]
+
+    def delete(
+        self,
+        request,
+        card_id,
+        *args,
+        **kwargs,
+    ):
+        idempotency_key = (
+            request.headers.get(
+                "Idempotency-Key"
+            )
+            or ""
+        ).strip()
+
+        card = (
+            CardStorageService.delete_card(
+                user=request.user,
+                card_id=card_id,
+                idempotency_key=idempotency_key,
+            )
+        )
+
+        return self.success_response(
+            {
+                "message": (
+                    "Kayıtlı kart başarıyla silindi."
+                ),
+                "card": (
+                    StoredCardListCreateAPIView
+                    ._serialize_card(card)
+                ),
+            }
+        )
+
+# ==============================================================================
+# STORED CARD DEFAULT API
+# ==============================================================================
+
+
+class StoredCardDefaultAPIView(
+    BaseStoredCardAPIView
+):
+    """
+    Kullanıcının aktif kayıtlı kartını
+    default kart olarak seçer.
+
+    POST:
+        /orders/payment/cards/<card_id>/default/
+    """
+
+    http_method_names = [
+        "post",
+        "options",
+    ]
+
+    def post(
+        self,
+        request,
+        card_id,
+        *args,
+        **kwargs,
+    ):
+        card = (
+            CardStorageService.set_default_card(
+                user=request.user,
+                card_id=card_id,
+            )
+        )
+
+        return self.success_response(
+            {
+                "message": (
+                    "Varsayılan kart güncellendi."
+                ),
+                "card": (
+                    StoredCardListCreateAPIView
+                    ._serialize_card(card)
+                ),
+            }
+        )
+
 # =============================================================================
 # CREATE ORDER API
 # =============================================================================
@@ -1036,6 +1514,12 @@ class CheckoutCreateOrderAPIView(BaseOrderAPIView):
             currency=currency,
         )
 
+        if not request.user.is_authenticated:
+            request.session["checkout_order_number"] = (
+                order.order_number
+            )
+            request.session.modified = True
+
         # ---------------------------------------------------------------------
         # 10. RESPONSE
         # ---------------------------------------------------------------------
@@ -1068,4 +1552,744 @@ class CheckoutCreateOrderAPIView(BaseOrderAPIView):
                 ),
             },
             status=201,
+        )
+
+# =============================================================================
+# CHECKOUT PAYMENT API
+# =============================================================================
+
+class CheckoutPaymentAPIView(BaseOrderAPIView):
+    """
+    Mevcut PENDING_PAYMENT Order için iyzico 3DS initialize başlatır.
+
+    POST /orders/checkout/<order_number>/payment/
+
+    Yeni kart örneği:
+
+        {
+            "payment_method": "new_card",
+            "card_holder_name": "John Doe",
+            "card_number": "5528790000000008",
+            "expire_month": "12",
+            "expire_year": "2030",
+            "cvc": "123",
+            "installment": 1
+        }
+
+    Kayıtlı kart örneği:
+
+        {
+            "payment_method": "stored_card",
+            "stored_card_id": 15,
+            "installment": 1
+        }
+
+    Bu endpoint:
+
+        Order
+            ↓
+        PaymentService.initialize_3ds()
+            ↓
+        PaymentTransaction(INITIATED)
+            ↓
+        iyzico
+            ↓
+        PaymentTransaction(PENDING)
+            ↓
+        threeDSHtmlContent
+
+    döngüsünü başlatır.
+
+    Bu view:
+        - PaymentTransaction oluşturmaz.
+        - Order status değiştirmez.
+        - Reservation consume etmez.
+        - Stok düşmez.
+        - Cart temizlemez.
+        - Kart bilgilerini DB'ye yazmaz.
+
+    Yeni kart:
+        - PAN / CVC yalnızca request yaşam döngüsü boyunca memory'de bulunur.
+
+    Kayıtlı kart:
+        - PAN / CVC request'te bulunmaz.
+        - Yalnızca stored_card_id gönderilir.
+        - Gerçek cardUserKey / cardToken PaymentService tarafından
+          kullanıcının sahip olduğu aktif StoredCard kaydından alınır.
+    """
+
+    http_method_names = [
+        "post",
+        "options",
+    ]
+
+    def post(
+        self,
+        request,
+        order_number,
+        *args,
+        **kwargs,
+    ):
+        # ---------------------------------------------------------------------
+        # 1. JSON
+        # ---------------------------------------------------------------------
+
+        data, error = self.require_json(request)
+
+        if error:
+            return error
+
+        # ---------------------------------------------------------------------
+        # 2. ORDER
+        # ---------------------------------------------------------------------
+
+        order = self._get_order(
+            request=request,
+            order_number=order_number,
+        )
+
+        # ---------------------------------------------------------------------
+        # 3. PAYMENT METHOD
+        # ---------------------------------------------------------------------
+
+        payment_method = self._get_payment_method(
+            data=data,
+        )
+
+        # ---------------------------------------------------------------------
+        # 4. CARD
+        # ---------------------------------------------------------------------
+        #
+        # Yeni kart:
+        #
+        #     Request'ten PaymentCardData oluşturulur.
+        #
+        # Kayıtlı kart:
+        #
+        #     Kart numarası / CVC alınmaz.
+        #     stored_card_id PaymentService'e gönderilir.
+        # ---------------------------------------------------------------------
+
+        payment_card = None
+        stored_card_id = None
+
+        if payment_method == PaymentService.PAYMENT_METHOD_NEW_CARD:
+
+            payment_card = self._build_payment_card(
+                data=data,
+            )
+
+        else:
+
+            stored_card_id = (
+                self._get_stored_card_id(
+                    data=data,
+                )
+            )
+
+        # ---------------------------------------------------------------------
+        # 5. BUYER
+        # ---------------------------------------------------------------------
+
+        buyer = self._build_buyer(
+            request=request,
+            order=order,
+        )
+
+        # ---------------------------------------------------------------------
+        # 6. INSTALLMENT
+        # ---------------------------------------------------------------------
+
+        installment = data.get(
+            "installment",
+            1,
+        )
+
+        # ---------------------------------------------------------------------
+        # 7. INITIALIZE 3DS
+        # ---------------------------------------------------------------------
+
+        result = PaymentService.initialize_3ds(
+            order_id=order.id,
+            buyer=buyer,
+            payment_method=payment_method,
+            payment_card=payment_card,
+            stored_card_id=stored_card_id,
+            installment=installment,
+        )
+
+        # ---------------------------------------------------------------------
+        # 8. RESPONSE
+        # ---------------------------------------------------------------------
+
+        return self.success_response(
+            {
+                "payment_transaction_id": (
+                    result.payment_transaction_id
+                ),
+                "payment_id": result.payment_id,
+                "conversation_id": result.conversation_id,
+                "three_ds_html_content": (
+                    result.three_ds_html_content
+                ),
+            }
+        )
+
+    # =========================================================================
+    # ORDER ACCESS
+    # =========================================================================
+
+    @staticmethod
+    def _get_order(
+        *,
+        request,
+        order_number,
+    ):
+        """
+        Order erişimini HTTP katmanında kontrol eder.
+
+        Authenticated:
+            order.user == request.user
+
+        Guest:
+            create-order aşamasında session'a yazılmış
+            order_number ile eşleşme aranır.
+
+        Guest checkout için Order modelinde session_key tutulmadığı
+        için session binding kullanıyoruz.
+        """
+
+        order = (
+            Order.objects
+            .select_related("user")
+            .filter(
+                order_number=order_number,
+            )
+            .first()
+        )
+
+        if not order:
+            raise OrderNotFoundError(
+                "Sipariş bulunamadı."
+            )
+
+        # ---------------------------------------------------------------------
+        # AUTHENTICATED USER
+        # ---------------------------------------------------------------------
+
+        if request.user.is_authenticated:
+
+            if order.user_id != request.user.id:
+                raise CartAccessError(
+                    "Bu siparişe erişim yetkiniz bulunmuyor."
+                )
+
+            return order
+
+        # ---------------------------------------------------------------------
+        # GUEST
+        # ---------------------------------------------------------------------
+
+        guest_order_number = request.session.get(
+            "checkout_order_number"
+        )
+
+        if guest_order_number != order.order_number:
+            raise CartAccessError(
+                "Bu siparişe erişim doğrulanamadı."
+            )
+
+        return order
+
+    # =========================================================================
+    # PAYMENT METHOD
+    # =========================================================================
+
+    @staticmethod
+    def _get_payment_method(*, data):
+        """
+        Request body'den payment method okur.
+
+        Varsayılan:
+
+            new_card
+
+        Desteklenen yöntemler:
+
+            new_card
+            stored_card
+        """
+
+        payment_method = data.get(
+            "payment_method",
+            PaymentService.PAYMENT_METHOD_NEW_CARD,
+        )
+
+        if not isinstance(
+            payment_method,
+            str,
+        ):
+            raise PaymentValidationError(
+                "Geçersiz ödeme yöntemi."
+            )
+
+        payment_method = payment_method.strip().lower()
+
+        if payment_method not in {
+            PaymentService.PAYMENT_METHOD_NEW_CARD,
+            PaymentService.PAYMENT_METHOD_STORED_CARD,
+        }:
+            raise PaymentValidationError(
+                "Geçersiz ödeme yöntemi."
+            )
+
+        return payment_method
+
+    # =========================================================================
+    # STORED CARD ID
+    # =========================================================================
+
+    @staticmethod
+    def _get_stored_card_id(*, data):
+        """
+        Request body'den stored_card_id okur.
+
+        Örnek:
+
+            {
+                "payment_method": "stored_card",
+                "stored_card_id": 15
+            }
+
+        Kart sahipliği / aktiflik / provider kontrolü
+        PaymentService tarafından yapılır.
+        """
+
+        if "stored_card_id" not in data:
+            raise PaymentValidationError(
+                "Kayıtlı kart seçilmelidir."
+            )
+
+        raw_stored_card_id = data.get(
+            "stored_card_id"
+        )
+
+        # bool -> int dönüşmesini engelle.
+        if isinstance(
+            raw_stored_card_id,
+            bool,
+        ):
+            raise PaymentValidationError(
+                "Geçersiz kayıtlı kart ID."
+            )
+
+        try:
+            stored_card_id = int(
+                raw_stored_card_id
+            )
+        except (
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise PaymentValidationError(
+                "Geçersiz kayıtlı kart ID."
+            ) from exc
+
+        if stored_card_id <= 0:
+            raise PaymentValidationError(
+                "Geçersiz kayıtlı kart ID."
+            )
+
+        return stored_card_id
+
+    # =========================================================================
+    # PAYMENT CARD
+    # =========================================================================
+
+    @staticmethod
+    def _build_payment_card(*, data):
+        """
+        Request body -> PaymentCardData
+
+        Kart numarası / CVC burada yalnızca request yaşam döngüsü boyunca
+        memory'de bulunur.
+
+        DB'ye kaydedilmez.
+
+        Bu method yalnızca:
+
+            payment_method == new_card
+
+        olduğunda çağrılır.
+        """
+
+        return PaymentCardData(
+            card_holder_name=str(
+                data.get(
+                    "card_holder_name",
+                    "",
+                )
+            ).strip(),
+
+            card_number=str(
+                data.get(
+                    "card_number",
+                    "",
+                )
+            ).strip(),
+
+            expire_month=str(
+                data.get(
+                    "expire_month",
+                    "",
+                )
+            ).strip(),
+
+            expire_year=str(
+                data.get(
+                    "expire_year",
+                    "",
+                )
+            ).strip(),
+
+            cvc=str(
+                data.get(
+                    "cvc",
+                    "",
+                )
+            ).strip(),
+        )
+
+    # =========================================================================
+    # BUYER
+    # =========================================================================
+
+    @staticmethod
+    def _build_buyer(
+        *,
+        request,
+        order,
+    ):
+        """
+        Checkout'ta zaten alınmış sipariş snapshot'larından
+        iyzico buyer DTO'su oluşturur.
+
+        name / surname:
+
+            billing_full_name
+
+        registration_address:
+
+            billing address snapshot
+
+        ip:
+
+            request.META üzerinden alınır.
+        """
+
+        full_name = (
+            str(
+                order.billing_full_name
+                or ""
+            )
+            .strip()
+        )
+
+        name, surname = (
+            CheckoutPaymentAPIView
+            ._split_full_name(
+                full_name
+            )
+        )
+
+        registration_address = (
+            " ".join(
+                part
+                for part in [
+                    order.billing_address_line1,
+                    order.billing_address_line2,
+                    order.billing_state,
+                ]
+                if str(
+                    part or ""
+                ).strip()
+            )
+        )
+
+        return PaymentBuyerData(
+            name=name,
+            surname=surname,
+            registration_address=registration_address,
+            ip=CheckoutPaymentAPIView
+            ._get_client_ip(
+                request
+            ),
+        )
+
+    # =========================================================================
+    # NAME
+    # =========================================================================
+
+    @staticmethod
+    def _split_full_name(full_name):
+        full_name = " ".join(
+            str(full_name or "").split()
+        )
+
+        if not full_name:
+            raise PaymentValidationError(
+                "Ad soyad bilgisi boş olamaz."
+            )
+
+        parts = full_name.split()
+
+        if len(parts) < 2:
+            raise PaymentValidationError(
+                "Ad ve soyad bilgisi birlikte girilmelidir."
+            )
+
+        name = " ".join(
+            parts[:-1]
+        )
+
+        surname = parts[-1]
+
+        return name, surname
+
+    # =========================================================================
+    # IP
+    # =========================================================================
+
+    @staticmethod
+    def _get_client_ip(request):
+        """
+        Reverse proxy arkasında gerçek client IP'sini almayı dener.
+
+        NOT:
+            X-Forwarded-For yalnızca uygulamanın güvenilir bir proxy
+            arkasında çalıştığı sistemlerde güvenilir kabul edilmelidir.
+        """
+
+        forwarded_for = (
+            request.META.get(
+                "HTTP_X_FORWARDED_FOR"
+            )
+        )
+
+        if forwarded_for:
+            return (
+                forwarded_for
+                .split(",")[0]
+                .strip()
+            )
+
+        return (
+            request.META.get(
+                "REMOTE_ADDR",
+                "",
+            )
+            .strip()
+        )
+
+@method_decorator(csrf_exempt, name="dispatch")
+class Iyzico3DSCallbackAPIView(View):
+    """
+    iyzico 3DS callback endpoint.
+
+    POST:
+        /payments/iyzico/3ds/callback/
+
+    iyzico, 3DS doğrulaması sonrasında
+    callbackUrl adresine form-urlencoded POST gönderir.
+    """
+
+    http_method_names = [
+        "post",
+    ]
+
+    def post(
+        self,
+        request,
+        *args,
+        **kwargs,
+    ):
+        payment_id = (
+            request.POST.get("paymentId") or ""
+        ).strip()
+
+        conversation_id = (
+            request.POST.get("conversationId") or ""
+        ).strip()
+
+        conversation_data = (
+            request.POST.get("conversationData") or ""
+        ).strip()
+
+        status = (
+            request.POST.get("status") or ""
+        ).strip().lower()
+
+        md_status = (
+            request.POST.get("mdStatus") or ""
+        ).strip()
+
+        # ==================================================================
+        # CALLBACK INPUT VALIDATION
+        # ==================================================================
+
+        if not payment_id:
+            return JsonResponse(
+                {
+                    "message": (
+                        "3DS callback paymentId bilgisi eksik."
+                    ),
+                },
+                status=400,
+            )
+
+        if not conversation_id:
+            return JsonResponse(
+                {
+                    "message": (
+                        "3DS callback conversationId bilgisi eksik."
+                    ),
+                },
+                status=400,
+            )
+
+        # ==================================================================
+        # 3DS AUTH FAILURE
+        # ==================================================================
+
+        if (
+            status != "success"
+            or md_status != "1"
+        ):
+            with transaction.atomic():
+                payment_tx = (
+                    PaymentTransaction.objects
+                    .select_for_update()
+                    .filter(
+                        provider=PaymentService.PROVIDER,
+                        conversation_id=conversation_id,
+                    )
+                    .first()
+                )
+
+                if payment_tx:
+                    # Mevcut payment_id varsa farklı bir ID ile ezme.
+                    if (
+                        payment_tx.payment_id
+                        and payment_tx.payment_id != payment_id
+                    ):
+                        return JsonResponse(
+                            {
+                                "message": (
+                                    "3DS callback paymentId "
+                                    "doğrulaması başarısız."
+                                ),
+                            },
+                            status=400,
+                        )
+
+                    if payment_tx.status != PaymentStatus.SUCCESS:
+                        payment_tx.payment_id = (
+                            payment_id
+                        )
+                        payment_tx.status = (
+                            PaymentStatus.FAILED
+                        )
+
+                        payment_tx.save(
+                            update_fields=[
+                                "payment_id",
+                                "status",
+                                "updated_at",
+                            ]
+                        )
+
+            return JsonResponse(
+                {
+                    "message": "3DS doğrulaması başarısız.",
+                    "status": status,
+                    "md_status": md_status,
+                },
+                status=400,
+            )
+
+        # ==================================================================
+        # SUCCESS → PAYMENT COMPLETION
+        # ==================================================================
+
+        try:
+            result = PaymentService.complete_3ds(
+                payment_id=payment_id,
+                conversation_id=conversation_id,
+                conversation_data=conversation_data,
+            )
+
+        except PaymentGatewayError as exc:
+            logger.exception(
+                "iyzico 3DS completion gateway error. "
+                "payment_id=%s conversation_id=%s",
+                payment_id,
+                conversation_id,
+            )
+
+            return JsonResponse(
+                {
+                    "message": str(exc),
+                },
+                status=502,
+            )
+
+        except PaymentVerificationError as exc:
+            logger.exception(
+                "iyzico 3DS completion verification error. "
+                "payment_id=%s conversation_id=%s",
+                payment_id,
+                conversation_id,
+            )
+
+            return JsonResponse(
+                {
+                    "message": str(exc),
+                },
+                status=400,
+            )
+
+        except PaymentError as exc:
+            logger.exception(
+                "iyzico 3DS completion payment error. "
+                "payment_id=%s conversation_id=%s",
+                payment_id,
+                conversation_id,
+            )
+
+            return JsonResponse(
+                {
+                    "message": str(exc),
+                },
+                status=400,
+            )
+
+        # ==================================================================
+        # SUCCESS
+        # ==================================================================
+
+        return JsonResponse(
+            {
+                "message": "Ödeme başarıyla tamamlandı.",
+                "payment_transaction_id": (
+                    result.payment_transaction_id
+                ),
+                "order_id": result.order_id,
+                "order_number": result.order_number,
+                "payment_id": result.payment_id,
+                "conversation_id": result.conversation_id,
+                "paid_price": str(
+                    result.paid_price
+                ),
+            },
+            status=200,
         )

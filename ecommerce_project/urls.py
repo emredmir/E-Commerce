@@ -20,6 +20,8 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+from orders.views import Iyzico3DSCallbackAPIView
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('core.urls', namespace='core')),
@@ -28,6 +30,7 @@ urlpatterns = [
     path('products/', include('products.urls', namespace='products')),
     path('cart/', include('cart.urls', namespace='cart')),
     path('orders/', include('orders.urls', namespace='orders')),
+    path("payments/iyzico/3ds/callback/", Iyzico3DSCallbackAPIView.as_view(), name="iyzico-3ds-callback",),
 ]
 
 

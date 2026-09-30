@@ -330,9 +330,8 @@ document.addEventListener("DOMContentLoaded", function() {
             
             if(res.success) {
                 if(res.is_valid) {
-                    // SEPET KUSURSUZ! Order (Ödeme) sayfasına yönlendir.
-                    // NOT: Projendeki urls.py'a göre burayı güncelleyeceğiz!
-                    window.location.href = '/checkout/'; 
+                    // Order (Ödeme) sayfasına yönlendir.
+                    window.location.href = '/orders/checkout/'; 
                 } else {
                     // is_valid: false -> Stok değişmiş veya ürün satıştan kalkmış
                     // CartService arkaplanda sepeti (adeti/seçimi) güncelledi.

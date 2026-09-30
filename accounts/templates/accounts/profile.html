@@ -31,16 +31,22 @@ body {
 
 .page-container {
   display: flex;
+  align-items: flex-start;
   min-height: calc(100vh - 100px);
   max-width: 1200px;
   margin: 20px auto;
   padding: 0 20px;
   gap: 20px;
+  box-sizing: border-box;
 }
 
 /* Sol menü barı */
 .sidebar {
+  flex: 0 0 280px;
   width: 280px;
+  min-width: 280px;
+  max-width: 280px;
+  box-sizing: border-box;
   padding: 24px;
   background-color: var(--card-background);
   border-radius: var(--border-radius);
@@ -211,7 +217,7 @@ body {
             </a>
           </li>
           <li class="menu-list-item">
-            <a href="#" data-page-name="kayitli-kartlarim">
+            <a href="{% url 'accounts:stored_card_list' %}" data-page-name="kayitli-kartlarim">
               <i class="fas fa-credit-card left-icon"></i> Kayıtlı Kartlarım
             </a>
           </li>

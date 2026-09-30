@@ -8,11 +8,12 @@ from django.contrib.auth.views import PasswordChangeView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.urls import reverse_lazy
-from django.views.generic import UpdateView, FormView, DetailView, ListView
+from django.views.generic import UpdateView, FormView, DetailView, ListView, TemplateView
 from django.views import View
 from django.http import JsonResponse
 from django.template.loader import render_to_string
 import json
+import logging
 
 from products.services.storefront_offers import StorefrontOfferService
 from products.services.storefront import ProductQAService
@@ -24,6 +25,20 @@ from django.db.models.functions import RowNumber
 
 from products.models import ProductCollection, ProductCollectionItem, ProductQuestion, ProductAnswer
 from cart.services.cart import CartService
+from orders.services.card_storage import (
+    CardStorageService,
+    StoredCardCreateData,
+)
+
+from orders.exceptions import (
+    CardStorageConsistencyError,
+    CardStorageGatewayError,
+    CardStorageOperationInProgressError,
+    PaymentValidationError,
+    StoredCardNotFoundError,
+)
+
+logger = logging.getLogger(__name__)
 
 def register_view(request):
     if request.method == 'POST':
@@ -81,7 +96,7 @@ class CustomPasswordChangeView(LoginRequiredMixin, SuccessMessageMixin, Password
     form_class = CustomPasswordChangeForm
     template_name = 'accounts/password_change.html'
     success_url = reverse_lazy('accounts:password_change')  # Aynı sayfada kalır
-    success_message = "Şifreniz başarıyla değiştirildi. 🎉"
+    success_message = "Şifreniz başarıyla değiştirildi."
 
     def form_invalid(self, form):
         messages.error(self.request, "Lütfen formu doğru doldurduğunuzdan emin olun.")
@@ -168,6 +183,729 @@ class AddressDeleteView(LoginRequiredMixin, View):
             other.save()
         address.delete()
         return JsonResponse({'success': True})
+
+class StoredCardListView(LoginRequiredMixin, TemplateView):
+    """ 
+    Kullanıcının kayıtlı kartlarını gösterir.
+    GET /accounts/stored-cards/
+
+    Bu view yalnızca presentation/context hazırlığından sorumludur.
+
+    Business logic içermez. 
+    """
+
+    template_name = "accounts/stored_card_list.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        context["stored_cards"] = (
+            CardStorageService.list_cards(
+                user=self.request.user,
+                active_only=True,
+            )
+        )
+
+        return context
+
+# =============================================================================
+# BASE STORED CARD API VIEW
+# =============================================================================
+
+class BaseStoredCardAPIView(View):
+    """
+    Stored Card JSON endpoint'leri için ortak base view.
+
+    Sorumlulukları:
+        - Authentication kontrolü
+        - JSON body parse etmek
+        - Standart success response üretmek
+        - Standart error response üretmek
+        - Card Storage domain exception'larını HTTP response'a çevirmek
+
+    Business logic içermez.
+    """
+
+    http_method_names = [
+        "post",
+        "options",
+    ]
+
+    # -------------------------------------------------------------------------
+    # DISPATCH / EXCEPTION HANDLING
+    # -------------------------------------------------------------------------
+
+    def dispatch(
+        self,
+        request,
+        *args,
+        **kwargs,
+    ):
+        # ---------------------------------------------------------------------
+        # AUTHENTICATION
+        # ---------------------------------------------------------------------
+
+        if not request.user.is_authenticated:
+            return self.error_response(
+                message=(
+                    "Kayıtlı kart işlemleri için "
+                    "giriş yapmalısınız."
+                ),
+                code="AUTHENTICATION_REQUIRED",
+                status=401,
+            )
+
+        try:
+            return super().dispatch(
+                request,
+                *args,
+                **kwargs,
+            )
+
+        # ---------------------------------------------------------------------
+        # 404 - NOT FOUND
+        # ---------------------------------------------------------------------
+
+        except StoredCardNotFoundError as exc:
+            logger.info(
+                "Stored card not found. "
+                "method=%s path=%s user_id=%s error=%s",
+                request.method,
+                request.path,
+                request.user.pk,
+                exc,
+            )
+
+            return self.error_response(
+                message=str(exc),
+                code="STORED_CARD_NOT_FOUND",
+                status=404,
+            )
+
+        # ---------------------------------------------------------------------
+        # 409 - CONFLICT
+        # ---------------------------------------------------------------------
+
+        except CardStorageOperationInProgressError as exc:
+            logger.info(
+                "Stored card operation in progress. "
+                "method=%s path=%s user_id=%s error=%s",
+                request.method,
+                request.path,
+                request.user.pk,
+                exc,
+            )
+
+            return self.error_response(
+                message=str(exc),
+                code="CARD_STORAGE_OPERATION_IN_PROGRESS",
+                status=409,
+            )
+
+        # ---------------------------------------------------------------------
+        # 400 - VALIDATION
+        # ---------------------------------------------------------------------
+
+        except PaymentValidationError as exc:
+            logger.info(
+                "Stored card validation error. "
+                "method=%s path=%s user_id=%s error=%s",
+                request.method,
+                request.path,
+                request.user.pk,
+                exc,
+            )
+
+            return self.error_response(
+                message=str(exc),
+                code=self._get_error_code(exc),
+                status=400,
+            )
+
+        # ---------------------------------------------------------------------
+        # 502 - CONSISTENCY
+        # ---------------------------------------------------------------------
+
+        except CardStorageConsistencyError as exc:
+            logger.error(
+                "Stored card consistency error. "
+                "method=%s path=%s user_id=%s error=%s",
+                request.method,
+                request.path,
+                request.user.pk,
+                exc,
+                exc_info=True,
+            )
+
+            return self.error_response(
+                message=(
+                    "Kayıtlı kart işlemi doğrulanamadı. "
+                    "Lütfen daha sonra tekrar deneyin."
+                ),
+                code="CARD_STORAGE_CONSISTENCY_ERROR",
+                status=502,
+            )
+
+        # ---------------------------------------------------------------------
+        # 502 - GATEWAY
+        # ---------------------------------------------------------------------
+
+        except CardStorageGatewayError as exc:
+            logger.warning(
+                "Stored card gateway error. "
+                "method=%s path=%s user_id=%s error=%s",
+                request.method,
+                request.path,
+                request.user.pk,
+                exc,
+                exc_info=True,
+            )
+
+            return self.error_response(
+                message=(
+                    "Kayıtlı kart servisiyle iletişim "
+                    "kurulurken bir sorun oluştu."
+                ),
+                code="CARD_STORAGE_GATEWAY_ERROR",
+                status=502,
+            )
+
+        # ---------------------------------------------------------------------
+        # UNEXPECTED SYSTEM ERROR
+        # ---------------------------------------------------------------------
+
+        except Exception:
+            logger.exception(
+                "Unexpected stored card error. "
+                "method=%s path=%s user_id=%s",
+                request.method,
+                request.path,
+                request.user.pk,
+            )
+
+            return self.error_response(
+                message=(
+                    "Sistemsel bir hata oluştu. "
+                    "Lütfen tekrar deneyin."
+                ),
+                code="INTERNAL_ERROR",
+                status=500,
+            )
+
+    # -------------------------------------------------------------------------
+    # JSON PARSE
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def require_json(request):
+        """
+        JSON request body parse eder.
+
+        Başarılı:
+
+            (data, None)
+
+        Hatalı:
+
+            (None, JsonResponse)
+        """
+
+        if not request.body:
+            return None, BaseStoredCardAPIView.error_response(
+                message="Request body boş olamaz.",
+                code="EMPTY_REQUEST_BODY",
+                status=400,
+            )
+
+        try:
+            data = json.loads(
+                request.body.decode("utf-8")
+            )
+
+        except (
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            TypeError,
+            ValueError,
+        ):
+            return None, BaseStoredCardAPIView.error_response(
+                message="Geçersiz JSON.",
+                code="INVALID_JSON",
+                status=400,
+            )
+
+        if not isinstance(data, dict):
+            return None, BaseStoredCardAPIView.error_response(
+                message="JSON object gönderilmelidir.",
+                code="INVALID_JSON_OBJECT",
+                status=400,
+            )
+
+        return data, None
+
+    # -------------------------------------------------------------------------
+    # IDEMPOTENCY KEY
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def get_idempotency_key(request):
+        """
+        Idempotency-Key header'ını alır.
+
+        Card Storage create/delete işlemleri provider tarafında
+        doğal olarak idempotent olmadığı için client tarafından
+        aynı logical operation için aynı key kullanılmalıdır.
+        """
+
+        value = request.headers.get(
+            "Idempotency-Key"
+        )
+
+        if value is None:
+            raise PaymentValidationError(
+                "Idempotency-Key gereklidir."
+            )
+
+        value = value.strip()
+
+        if not value:
+            raise PaymentValidationError(
+                "Idempotency-Key gereklidir."
+            )
+
+        return value
+
+    # -------------------------------------------------------------------------
+    # ERROR CODE
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _get_error_code(exc):
+        name = exc.__class__.__name__
+
+        if name.endswith("Error"):
+            name = name[:-5]
+
+        result = []
+
+        for char in name:
+            if char.isupper() and result:
+                result.append("_")
+
+            result.append(
+                char.upper()
+            )
+
+        return "".join(result)
+
+    # -------------------------------------------------------------------------
+    # SUCCESS RESPONSE
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def success_response(
+        data=None,
+        status=200,
+    ):
+        response_data = {
+            "success": True,
+        }
+
+        if data is not None:
+            response_data.update(
+                data
+            )
+
+        return JsonResponse(
+            response_data,
+            status=status,
+        )
+
+    # -------------------------------------------------------------------------
+    # ERROR RESPONSE
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def error_response(
+        message,
+        code=None,
+        status=400,
+    ):
+        response_data = {
+            "success": False,
+            "error": message,
+        }
+
+        if code is not None:
+            response_data["code"] = code
+
+        return JsonResponse(
+            response_data,
+            status=status,
+        )
+
+    # -------------------------------------------------------------------------
+    # STORED CARD RESPONSE
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def serialize_card(card):
+        """
+        StoredCard -> frontend response DTO
+
+        ÖNEMLİ:
+
+            provider_card_token
+            provider_customer_key
+
+        gibi hassas provider bilgileri response'a dahil edilmez.
+        """
+
+        return {
+            "id": card.id,
+            "card_alias": (
+                card.card_alias
+            ),
+            "last_four_digits": (
+                card.last_four_digits
+            ),
+            "card_type": (
+                card.card_type
+            ),
+            "card_association": (
+                card.card_association
+            ),
+            "card_family": (
+                card.card_family
+            ),
+            "card_bank_name": (
+                card.card_bank_name
+            ),
+            "expire_month": (
+                card.expire_month
+            ),
+            "expire_year": (
+                card.expire_year
+            ),
+            "is_default": (
+                card.is_default
+            ),
+            "is_active": (
+                card.is_active
+            ),
+        }
+
+    # -------------------------------------------------------------------------
+    # BOOLEAN VALUE
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def get_boolean(
+        value,
+        *,
+        field_name,
+        default=False,
+    ):
+        """
+        JSON boolean alanını güvenli şekilde normalize eder.
+
+        Örneğin:
+
+            true
+            false
+
+        kabul edilir.
+
+        String:
+
+            "true"
+            "false"
+
+        kabul edilmez.
+        """
+
+        if value is None:
+            return default
+
+        if not isinstance(
+            value,
+            bool,
+        ):
+            raise PaymentValidationError(
+                f"{field_name} boolean olmalıdır."
+            )
+
+        return value
+
+# =============================================================================
+# STORED CARD CREATE API
+# =============================================================================
+
+class StoredCardCreateAPIView(
+    BaseStoredCardAPIView,
+):
+    """
+    Kullanıcının iyzico Card Storage'a yeni kart kaydetmesini sağlar.
+
+    POST /accounts/stored-cards/create/
+
+    Örnek:
+
+        {
+            "card_holder_name": "John Doe",
+            "card_number": "5528790000000008",
+            "expire_month": "12",
+            "expire_year": "2030",
+            "card_alias": "Benim Visa Kartım",
+            "make_default": true
+        }
+
+    CVC alınmaz.
+
+    CardStorageService:
+        - kart validasyonu
+        - idempotency
+        - PaymentCustomer
+        - iyzico Card Storage
+        - StoredCard
+        - default card
+        işlemlerini yönetir.
+
+    Bu view business logic içermez.
+    """
+
+    def post(
+        self,
+        request,
+        *args,
+        **kwargs,
+    ):
+        # ---------------------------------------------------------------------
+        # 1. JSON
+        # ---------------------------------------------------------------------
+
+        data, error = self.require_json(
+            request
+        )
+
+        if error:
+            return error
+
+        # ---------------------------------------------------------------------
+        # 2. IDEMPOTENCY
+        # ---------------------------------------------------------------------
+
+        idempotency_key = (
+            self.get_idempotency_key(
+                request
+            )
+        )
+
+        # ---------------------------------------------------------------------
+        # 3. CARD INPUT
+        # ---------------------------------------------------------------------
+
+        card = StoredCardCreateData(
+            card_holder_name=str(
+                data.get(
+                    "card_holder_name",
+                    "",
+                )
+            ).strip(),
+
+            card_number=str(
+                data.get(
+                    "card_number",
+                    "",
+                )
+            ).strip(),
+
+            expire_month=str(
+                data.get(
+                    "expire_month",
+                    "",
+                )
+            ).strip(),
+
+            expire_year=str(
+                data.get(
+                    "expire_year",
+                    "",
+                )
+            ).strip(),
+
+            card_alias=str(
+                data.get(
+                    "card_alias",
+                    "",
+                )
+            ).strip(),
+        )
+
+        # ---------------------------------------------------------------------
+        # 4. DEFAULT
+        # ---------------------------------------------------------------------
+
+        make_default = self.get_boolean(
+            data.get(
+                "make_default"
+            ),
+            field_name="make_default",
+            default=False,
+        )
+
+        # ---------------------------------------------------------------------
+        # 5. CREATE CARD
+        # ---------------------------------------------------------------------
+
+        stored_card = (
+            CardStorageService.create_card(
+                user=request.user,
+                card=card,
+                idempotency_key=idempotency_key,
+                make_default=make_default,
+            )
+        )
+
+        # ---------------------------------------------------------------------
+        # 6. RESPONSE
+        # ---------------------------------------------------------------------
+
+        return self.success_response(
+            {
+                "message": (
+                    "Kart başarıyla kaydedildi."
+                ),
+                "card": self.serialize_card(
+                    stored_card
+                ),
+            },
+            status=201,
+        )
+
+# =============================================================================
+# STORED CARD DELETE API
+# =============================================================================
+
+class StoredCardDeleteAPIView(
+    BaseStoredCardAPIView,
+):
+    """
+    Kullanıcının kayıtlı kartını siler.
+
+    POST /accounts/stored-cards/<card_id>/delete/
+
+    Örnek header:
+
+        Idempotency-Key: 0f7f2c8d-...
+
+    Fiziksel DB delete yapılmaz.
+
+    CardStorageService:
+        iyzico kartını siler
+        ve
+        local StoredCard.is_active = False
+
+    durumunu yönetir.
+    """
+
+    def post(
+        self,
+        request,
+        card_id,
+        *args,
+        **kwargs,
+    ):
+        # ---------------------------------------------------------------------
+        # 1. IDEMPOTENCY
+        # ---------------------------------------------------------------------
+
+        idempotency_key = (
+            self.get_idempotency_key(
+                request
+            )
+        )
+
+        # ---------------------------------------------------------------------
+        # 2. DELETE CARD
+        # ---------------------------------------------------------------------
+
+        stored_card = (
+            CardStorageService.delete_card(
+                user=request.user,
+                card_id=card_id,
+                idempotency_key=idempotency_key,
+            )
+        )
+
+        # ---------------------------------------------------------------------
+        # 3. RESPONSE
+        # ---------------------------------------------------------------------
+
+        return self.success_response(
+            {
+                "message": (
+                    "Kart başarıyla silindi."
+                ),
+                "card_id": stored_card.id,
+            }
+        )
+
+# =============================================================================
+# STORED CARD DEFAULT API
+# =============================================================================
+
+class StoredCardDefaultAPIView(
+    BaseStoredCardAPIView,
+):
+    """
+    Kullanıcının aktif kayıtlı kartını varsayılan kart yapar.
+
+    POST /accounts/stored-cards/<card_id>/default/
+
+    Bu işlem yalnızca local DB üzerinde gerçekleşir.
+
+    CardStorageService:
+        - user ownership
+        - active card
+        - transaction
+        - row locking
+        - mevcut default temizleme
+        işlemlerini yönetir.
+    """
+
+    def post(
+        self,
+        request,
+        card_id,
+        *args,
+        **kwargs,
+    ):
+        # ---------------------------------------------------------------------
+        # 1. SET DEFAULT
+        # ---------------------------------------------------------------------
+
+        stored_card = (
+            CardStorageService.set_default_card(
+                user=request.user,
+                card_id=card_id,
+            )
+        )
+
+        # ---------------------------------------------------------------------
+        # 2. RESPONSE
+        # ---------------------------------------------------------------------
+
+        return self.success_response(
+            {
+                "message": (
+                    "Varsayılan kart güncellendi."
+                ),
+                "card": self.serialize_card(
+                    stored_card
+                ),
+            }
+        )
 
 class SellerApplicationMixin:
     """

@@ -30,7 +30,12 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = []
 # ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost').split(',')
 
-
+IYZICO_API_KEY = config("IYZICO_API_KEY")
+IYZICO_SECRET_KEY = config("IYZICO_SECRET_KEY")
+IYZICO_BASE_URL = config("IYZICO_BASE_URL")
+IYZICO_3DS_CALLBACK_URL = config("IYZICO_3DS_CALLBACK_URL")
+IYZICO_ENV = config("IYZICO_ENV", default="sandbox",)
+IYZICO_SANDBOX_IDENTITY_NUMBER = config("IYZICO_SANDBOX_IDENTITY_NUMBER", default="",)
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'

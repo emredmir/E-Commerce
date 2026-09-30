@@ -113,6 +113,54 @@ class PaymentVerificationError(PaymentError):
     pass
 
 
+class PaymentValidationError(PaymentError):
+    """Ödeme verileri veya ödeme isteği geçersiz."""
+    pass
+
+
+class PaymentAlreadyInProgressError(PaymentError):
+    """Aynı ödeme işlemi halen devam ediyor."""
+    pass
+
+
+class PaymentInitializationError(PaymentGatewayError):
+    """Ödeme başlatma işlemi başarısız."""
+    pass
+
+
+# ============================================================================
+# CARD STORAGE
+# ============================================================================
+
+class CardStorageGatewayError(PaymentGatewayError):
+    """
+    iyzico Card Storage transport/provider communication error.
+    """
+    pass
+
+
+class CardStorageConsistencyError(PaymentGatewayError):
+    """
+    Local DB state ile iyzico state'i güvenli şekilde eşleştirilemedi.
+
+    Bu exception kullanıcı verisinin hatalı olduğunu ifade etmez;
+    reconciliation / operasyonel inceleme gerektiren bir durumdur.
+    """
+    pass
+
+
+class CardStorageOperationInProgressError(
+    PaymentAlreadyInProgressError,
+):
+    """Aynı mantıksal Card Storage operation halen devam ediyor."""
+    pass
+
+
+class StoredCardNotFoundError(OrderNotFoundError):
+    """Kullanıcının erişebildiği kayıtlı kart bulunamadı."""
+    pass
+
+
 # ============================================================================
 # REFUND
 # ============================================================================

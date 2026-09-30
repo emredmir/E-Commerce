@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models import Q
 
 
 from products.models import StoreProduct
@@ -164,6 +165,11 @@ class Order(models.Model):
         blank=True,
         related_name="orders",
         verbose_name="Müşteri",
+    )
+
+    buyer_identity_number = models.CharField(
+        max_length=50,
+        blank=True,
     )
 
     # Sipariş anındaki müşteri iletişim bilgileri.
@@ -1169,9 +1175,479 @@ class PaymentTransaction(models.Model):
             f"{self.get_status_display()}"
         )
 
+# ==============================================================================
+# 6. PAYMENT CUSTOMER
+# ==============================================================================
+
+
+class PaymentCustomer(models.Model):
+    """
+    Kullanıcının ödeme sağlayıcısındaki müşteri kimliğini temsil eder.
+
+    iyzico Card Storage tarafında:
+        provider_customer_key = cardUserKey
+
+    Bir kullanıcı birden fazla kayıtlı karta sahip olabilir.
+    Tüm kartlar aynı cardUserKey altında tutulabilir.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="payment_customers",
+        verbose_name="Kullanıcı",
+    )
+
+    provider = models.CharField(
+        max_length=50,
+        default="iyzico",
+        db_index=True,
+        verbose_name="Ödeme Sağlayıcı",
+    )
+
+    provider_customer_key = models.CharField(
+        max_length=255,
+        verbose_name="Provider Customer Key",
+    )
+
+    provider_external_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Provider External ID",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Oluşturulma Tarihi",
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Güncellenme Tarihi",
+    )
+
+    class Meta:
+        verbose_name = "Ödeme Müşterisi"
+        verbose_name_plural = "Ödeme Müşterileri"
+
+        ordering = [
+            "-created_at",
+        ]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "user",
+                    "provider",
+                ],
+                name="unique_payment_customer_provider",
+            ),
+
+            models.UniqueConstraint(
+                fields=[
+                    "provider",
+                    "provider_customer_key",
+                ],
+                name="unique_provider_customer_key",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "user",
+                    "provider",
+                ],
+                name="paycust_user_prov_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.user} - "
+            f"{self.provider}"
+        )
+
 
 # ==============================================================================
-# 6. PAYMENT REFUND
+# 7. STORED CARD
+# ==============================================================================
+class StoredCardOperationType(models.TextChoices):
+    CREATE = "CREATE", "Create"
+    DELETE = "DELETE", "Delete"
+
+class StoredCardOperationStatus(models.TextChoices):
+    PENDING = "PENDING", "Pending"
+    PROVIDER_SUCCEEDED = "PROVIDER_SUCCEEDED", "Provider Succeeded"
+    SUCCESS = "SUCCESS", "Success"
+    FAILED = "FAILED", "Failed"
+    RECONCILIATION_REQUIRED = (
+        "RECONCILIATION_REQUIRED",
+        "Reconciliation Required",
+    )
+
+class StoredCard(models.Model):
+    """
+    iyzico Card Storage tarafından tokenize edilmiş kayıtlı kart.
+
+    ÖNEMLİ:
+
+        Burada:
+            - PAN / card number
+            - CVC
+
+        tutulmaz.
+
+        Yalnızca provider'ın verdiği token ve kart metadata'sı tutulur.
+    """
+
+    payment_customer = models.ForeignKey(
+        PaymentCustomer,
+        on_delete=models.CASCADE,
+        related_name="stored_cards",
+        verbose_name="Ödeme Müşterisi",
+    )
+
+    # ==========================================================================
+    # PROVIDER TOKEN
+    # ==========================================================================
+
+    provider_card_token = models.CharField(
+        max_length=255,
+        verbose_name="Provider Card Token",
+    )
+
+    # ==========================================================================
+    # CARD METADATA
+    # ==========================================================================
+
+    card_alias = models.CharField(
+        max_length=293,
+        blank=True,
+        default="",
+        verbose_name="Kart Takma Adı",
+    )
+
+    bin_number = models.CharField(
+        max_length=8,
+        blank=True,
+        default="",
+        verbose_name="BIN",
+    )
+
+    last_four_digits = models.CharField(
+        max_length=4,
+        verbose_name="Son 4 Hane",
+    )
+
+    card_type = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        verbose_name="Kart Tipi",
+    )
+
+    card_association = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        verbose_name="Kart Markası",
+    )
+
+    card_family = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="Kart Ailesi",
+    )
+
+    card_bank_code = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Banka Kodu",
+    )
+
+    card_bank_name = models.CharField(
+        max_length=150,
+        blank=True,
+        default="",
+        verbose_name="Banka Adı",
+    )
+
+    expire_month = models.CharField(
+        max_length=2,
+        blank=True,
+        default="",
+        verbose_name="Son Kullanma Ayı",
+    )
+
+    expire_year = models.CharField(
+        max_length=4,
+        blank=True,
+        default="",
+        verbose_name="Son Kullanma Yılı",
+    )
+
+    # ==========================================================================
+    # LOCAL STATE
+    # ==========================================================================
+
+    is_default = models.BooleanField(
+        default=False,
+        verbose_name="Varsayılan Kart",
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Aktif",
+    )
+
+    # ==========================================================================
+    # TIMESTAMPS
+    # ==========================================================================
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Oluşturulma Tarihi",
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Güncellenme Tarihi",
+    )
+
+    class Meta:
+        verbose_name = "Kayıtlı Kart"
+        verbose_name_plural = "Kayıtlı Kartlar"
+
+        ordering = [
+            "-is_default",
+            "-created_at",
+            "-pk",
+        ]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "payment_customer",
+                    "provider_card_token",
+                ],
+                name="unique_stcard_token",
+            ),
+            models.UniqueConstraint(
+                fields=["payment_customer"],
+                condition=Q(
+                    is_active=True,
+                    is_default=True,
+                ),
+                name="unique_act_def_stcard",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "payment_customer",
+                    "is_active",
+                ],
+                name="stcard_cust_active_idx",
+            ),
+
+            models.Index(
+                fields=[
+                    "payment_customer",
+                    "is_default",
+                ],
+                name="stcard_cust_default_idx",
+            ),
+        ]
+
+    def __str__(self):
+        alias = self.card_alias.strip()
+
+        if alias:
+            return alias
+
+        return (
+            f"**** {self.last_four_digits}"
+        )
+
+
+class StoredCardOperation(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="stored_card_operations",
+    )
+
+    provider = models.CharField(
+        max_length=30,
+        default="iyzico",
+    )
+
+    operation_type = models.CharField(
+        max_length=20,
+        choices=StoredCardOperationType.choices,
+    )
+
+    status = models.CharField(
+        max_length=32,
+        choices=StoredCardOperationStatus.choices,
+        default=StoredCardOperationStatus.PENDING,
+    )
+
+    idempotency_key = models.CharField(
+        max_length=128,
+    )
+
+    # HMAC-SHA256 hex digest. PAN/CVC are never persisted.
+    request_fingerprint = models.CharField(
+        max_length=64,
+    )
+
+    stored_card = models.ForeignKey(
+        StoredCard,
+        on_delete=models.PROTECT,
+        related_name="operations",
+        blank=True,
+        null=True,
+    )
+
+    make_default = models.BooleanField(
+        default=False,
+    )
+
+    provider_card_token = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+    )
+
+    provider_customer_key = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+    )
+
+    # Stored only when iyzico actually returns an externalId.
+    provider_external_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+    )
+
+    error_code = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    error_message = models.CharField(
+        max_length=500,
+        blank=True,
+    )
+
+    completed_at = models.DateTimeField(
+        blank=True,
+        null=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "user",
+                    "provider",
+                    "operation_type",
+                    "idempotency_key",
+                ],
+                name="stcard_idmptncy_key",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "user",
+                    "provider",
+                    "operation_type",
+                ],
+                condition=Q(
+                    operation_type=StoredCardOperationType.CREATE,
+                    status__in=[
+                        StoredCardOperationStatus.PENDING,
+                        StoredCardOperationStatus.PROVIDER_SUCCEEDED,
+                        StoredCardOperationStatus.RECONCILIATION_REQUIRED,
+                    ],
+                ),
+                name="active_stcard_create",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "stored_card",
+                    "provider",
+                    "operation_type",
+                ],
+                condition=Q(
+                    operation_type=StoredCardOperationType.DELETE,
+                    status__in=[
+                        StoredCardOperationStatus.PENDING,
+                        StoredCardOperationStatus.PROVIDER_SUCCEEDED,
+                        StoredCardOperationStatus.RECONCILIATION_REQUIRED,
+                    ],
+                ),
+                name="active_stcard_delete",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        operation_type=StoredCardOperationType.CREATE,
+                    )
+                    | Q(
+                        operation_type=StoredCardOperationType.DELETE,
+                        stored_card__isnull=False,
+                    )
+                ),
+                name="stcard_target_valid",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=[
+                    "user",
+                    "operation_type",
+                    "status",
+                    "created_at",
+                ],
+                name="op_user_state_idx",
+            ),
+            models.Index(
+                fields=[
+                    "stored_card",
+                    "operation_type",
+                    "status",
+                ],
+                name="op_card_state_idx",
+            ),
+        ]
+        ordering = [
+            "-created_at",
+            "-pk",
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.provider}:{self.operation_type}:"
+            f"{self.idempotency_key}:{self.status}"
+        )
+# ==============================================================================
+# 8. PAYMENT REFUND
 # ==============================================================================
 
 

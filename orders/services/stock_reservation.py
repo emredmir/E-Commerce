@@ -545,15 +545,11 @@ class StockReservationService:
     
         reservations = list(
             StockReservation.objects
-            .select_for_update(of=("self",))
-            .select_related(
-                "order_item",
-            )
+            .select_for_update()
             .filter(
                 order_item_id__in=order_item_ids,
             )
             .order_by(
-                "order_item__store_product_id",
                 "order_item_id",
                 "-created_at",
                 "-id",
@@ -1286,7 +1282,7 @@ class StockReservationService:
 
         store_products = (
             StoreProduct.objects
-            .select_for_update(of=("self",))
+            .select_for_update()
             .select_related(
                 "store",
                 "variant",
@@ -1337,7 +1333,7 @@ class StockReservationService:
 
         return list(
             StockReservation.objects
-            .select_for_update(of=("self",))
+            .select_for_update()
             .select_related(
                 "order_item",
             )

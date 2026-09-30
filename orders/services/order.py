@@ -399,7 +399,7 @@ class OrderService:
 
         queryset = (
             CartItem.objects
-            .select_for_update(of=("self",))
+            .select_for_update()
             .select_related(
                 "store_product",
                 "store_product__store",
@@ -631,7 +631,7 @@ class OrderService:
 
         store_products = list(
             StoreProduct.objects
-            .select_for_update(of=("self",))
+            .select_for_update()
             .select_related(
                 "store",
                 "variant",
@@ -1036,7 +1036,6 @@ class OrderService:
                 }
             )
 
-        # Snapshot'ın sırası her zaman deterministic olsun.
         attributes.sort(
             key=lambda item: (
                 item["attribute"],

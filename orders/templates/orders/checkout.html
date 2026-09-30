@@ -56,6 +56,7 @@
        ANA CONTAINER
        ========================================================= */
     .checkout-container {
+        box-sizing:border-box;
         max-width:1440px;
         margin:20px auto 60px;
         padding:0 24px;
@@ -112,7 +113,7 @@
        ========================================================= */
     .checkout-main-grid {
         display:grid;
-        grid-template-columns:minmax(0, 1fr) 360px;
+        grid-template-columns:minmax(0, 1fr) minmax(320px, 360px);
         gap:24px;
         align-items:start;
     }
@@ -389,141 +390,821 @@
 
     /* =========================================================
        3 - ÖDEME ARACI
+       YENİ KART FORMU
        ========================================================= */
     .payment-method-list {
-        display:flex;
-        flex-direction:column;
-        gap:12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 100%;
     }
 
     .payment-method {
-        position:relative;
+        position: relative;
+        width: 100%;
     }
 
-    .payment-method input {
-        position:absolute;
-        opacity:0;
-        pointer-events:none;
+    /* Gerçek radio gizli */
+    .payment-method input[type="radio"] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
     }
 
+    /* Ana seçim kartı */
     .payment-method-label {
-        display:flex;
-        align-items:center;
-        gap:14px;
-        padding:16px;
-        border:1px solid var(--gray-200);
-        border-radius:var(--radius-md);
-        background:#fff;
-        cursor:pointer;
-        transition:.2s;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+
+        padding: 16px;
+
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius-md);
+
+        background: #fff;
+
+        cursor: pointer;
+
+        transition:
+            border-color .2s,
+            background-color .2s,
+            box-shadow .2s,
+            transform .15s;
     }
 
     .payment-method-label:hover {
-        border-color:var(--teal-300);
-        background:var(--teal-50);
+        border-color: var(--teal-300);
+        background: var(--teal-50);
     }
 
-    .payment-method input:checked + .payment-method-label {
-        border-color:var(--teal-500);
-        background:var(--teal-50);
-        box-shadow:0 0 0 2px rgba(14,165,233,.08);
+    /* Seçili yöntem */
+    .payment-method input[type="radio"]:checked + .payment-method-label {
+        border-color: var(--teal-500);
+        background: var(--teal-50);
+        box-shadow: 0 0 0 2px rgba(14, 165, 233, .08);
     }
 
+    /* Özel radio */
     .payment-method-radio {
-        width:18px;
-        height:18px;
-        accent-color:var(--teal-600);
-        flex-shrink:0;
+        position: relative;
+
+        width: 18px;
+        height: 18px;
+
+        flex: 0 0 18px;
+
+        box-sizing: border-box;
+
+        border: 2px solid var(--gray-300);
+        border-radius: 50%;
+
+        background: #fff;
+
+        transition:
+            border-color .2s,
+            background-color .2s;
     }
 
+    .payment-method input[type="radio"]:checked
+    + .payment-method-label
+    .payment-method-radio {
+        border-color: var(--teal-600);
+    }
+
+    .payment-method input[type="radio"]:checked
+    + .payment-method-label
+    .payment-method-radio::after {
+        content: "";
+
+        position: absolute;
+        top: 50%;
+        left: 50%;
+
+        width: 8px;
+        height: 8px;
+
+        border-radius: 50%;
+
+        background: var(--teal-600);
+
+        transform: translate(-50%, -50%);
+    }
+
+    /* İkon kutusu */
     .payment-method-icon {
-        width:42px;
-        height:42px;
-        border-radius:var(--radius-md);
-        background:var(--teal-100);
-        color:var(--teal-700);
-        display:flex;
-        justify-content:center;
-        align-items:center;
-        font-size:1.1rem;
-        flex-shrink:0;
+        width: 42px;
+        height: 42px;
+
+        flex: 0 0 42px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        border-radius: var(--radius-md);
+
+        background: var(--teal-100);
+        color: var(--teal-700);
+
+        font-size: 1.1rem;
     }
 
+    /* Yazı alanı */
     .payment-method-content {
-        flex:1;
-        min-width:0;
+        flex: 1;
+        min-width: 0;
+
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
     }
 
     .payment-method-title {
-        display:block;
-        color:var(--gray-900);
-        font-size:.95rem;
-        font-weight:700;
-        margin-bottom:3px;
+        display: block;
+
+        margin: 0;
+
+        color: var(--gray-900);
+        font-size: .95rem;
+        font-weight: 700;
+
+        line-height: 1.3;
     }
 
     .payment-method-desc {
-        color:var(--gray-500);
-        font-size:.8rem;
-        line-height:1.4;
+        display: block;
+
+        margin: 0;
+
+        color: var(--gray-500);
+        font-size: .8rem;
+        font-weight: 400;
+
+        line-height: 1.45;
     }
 
+    /* "Kayıt yok" rozeti */
     .payment-method-badge {
-        padding:5px 8px;
-        border-radius:var(--radius-sm);
-        background:var(--gray-100);
-        color:var(--gray-500);
-        font-size:.7rem;
-        font-weight:700;
-        white-space:nowrap;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+
+        flex-shrink: 0;
+
+        padding: 5px 8px;
+
+        border-radius: var(--radius-sm);
+
+        background: var(--gray-100);
+        color: var(--gray-500);
+
+        font-size: .7rem;
+        font-weight: 700;
+
+        white-space: nowrap;
     }
 
-    /* Kayıtlı kart alanı */
-    .saved-cards-box {
+    /* Disabled kayıtlı kart */
+    .payment-method input[type="radio"]:disabled
+    + .payment-method-label {
+        opacity: .55;
+        cursor: not-allowed;
+    }
+
+    .payment-method input[type="radio"]:disabled
+    + .payment-method-label:hover {
+        border-color: var(--gray-200);
+        background: #fff;
+    }
+
+    /* =========================================================
+       MOBİL
+       ========================================================= */
+
+    @media (max-width: 600px) {
+
+        .payment-method-label {
+            padding: 14px;
+            gap: 11px;
+        }
+
+        .payment-method-icon {
+            width: 38px;
+            height: 38px;
+            flex-basis: 38px;
+            font-size: 1rem;
+        }
+
+        .payment-method-title {
+            font-size: .9rem;
+        }
+
+        .payment-method-desc {
+            font-size: .76rem;
+        }
+
+        .payment-method-badge {
+            display: none;
+        }
+    }
+    .new-card-payment-box {
+        width:100%;
         margin-top:16px;
-        padding:16px;
-        border-radius:var(--radius-md);
-        border:1px dashed var(--gray-300);
-        background:var(--gray-50);
-    }
-
-    .saved-cards-title {
-        margin:0 0 12px;
-        font-size:.85rem;
-        font-weight:700;
-        color:var(--gray-700);
-    }
-
-    .saved-card-placeholder {
-        display:flex;
-        align-items:center;
-        gap:12px;
-        padding:14px;
+        padding:20px;
+    
         background:#fff;
+    
         border:1px solid var(--gray-200);
         border-radius:var(--radius-md);
-        color:var(--gray-500);
+    
+        box-sizing:border-box;
     }
-
-    .saved-card-placeholder i {
-        color:var(--teal-500);
-        font-size:1.1rem;
-    }
-
-    .saved-card-placeholder-text {
+    
+    .payment-card-fields {
+    
         display:flex;
         flex-direction:column;
-        gap:3px;
+    
+        gap:16px;
+    
+        width:100%;
+        min-width:0;
     }
-
-    .saved-card-placeholder-text strong {
-        color:var(--gray-700);
+    
+    .payment-card-field {
+    
+        display:flex;
+        flex-direction:column;
+    
+        gap:7px;
+    
+        width:100%;
+        min-width:0;
+    }
+    
+    .payment-card-field label {
+    
+        color:var(--gray-800);
+    
         font-size:.85rem;
+    
+        font-weight:700;
+    }
+    
+    .payment-card-field input,
+    .payment-card-field select {
+    
+        width:100%;
+        min-width:0;
+    
+        box-sizing:border-box;
+    
+        height:46px;
+    
+        padding:0 13px;
+    
+        border:1px solid var(--gray-300);
+        border-radius:var(--radius-sm);
+    
+        background:#fff;
+    
+        color:var(--gray-900);
+    
+        font-size:.9rem;
+    
+        outline:none;
+    
+        transition:
+            border-color .2s,
+            box-shadow .2s,
+            background .2s;
+    }
+    
+    .payment-card-field input::placeholder {
+    
+        color:var(--gray-400);
+    
+    }
+    
+    .payment-card-field input:focus,
+    .payment-card-field select:focus {
+    
+        border-color:var(--teal-500);
+    
+        box-shadow:
+            0 0 0 3px
+            rgba(14,165,233,.10);
+    
+        background:#fff;
     }
 
-    .saved-card-placeholder-text span {
+    .payment-field-error {
+        display: block;
+        
+        margin-top: -1px;
+        
+        color: var(--red-600);
+        
+        font-size: .76rem;
+        font-weight: 600;
+        
+        line-height: 1.4;
+    }
+    
+    .payment-field-error[hidden] {
+        display: none !important;
+    }
+    
+    /* =========================================================
+       AY / YIL / CVC
+       ========================================================= */
+    
+    .payment-card-fields-row {
+    
+        display:grid;
+    
+        grid-template-columns:
+            minmax(0, 1fr)
+            minmax(0, 1fr)
+            minmax(0, 1fr);
+    
+        gap:12px;
+    
+        width:100%;
+    }
+    
+    .payment-card-fields-row
+    .payment-card-field {
+    
+        min-width:0;
+    }
+
+    /* =========================================================
+       SAVE CARD
+       ========================================================= */
+
+    .payment-card-save-option {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin-top: 18px;
+        padding: 12px 14px;
+        border: 1px solid #dbe3ea;
+        border-radius: 9px;
+        background: #f8fafc;
+        cursor: pointer;
+        transition:
+            border-color 0.2s ease,
+            background-color 0.2s ease;
+    }
+
+    .payment-card-save-option:hover {
+        border-color: #9bddec;
+        background: #f0fdff;
+    }
+
+    .payment-card-save-option input {
+        width: 17px;
+        height: 17px;
+        margin-top: 2px;
+        flex: 0 0 17px;
+        accent-color: #00b4d8;
+    }
+
+    .payment-card-save-content {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .payment-card-save-title {
+        color: #334155;
+        font-size: 0.88rem;
+        font-weight: 700;
+    }
+
+    .payment-card-save-description {
+        color: #64748b;
+        font-size: 0.78rem;
+        line-height: 1.45;
+    }
+    
+    /* =========================================================
+       GÜVENLİK NOTU
+       ========================================================= */
+    
+    .payment-card-security-note {
+    
+        display:flex;
+    
+        align-items:flex-start;
+    
+        gap:10px;
+    
+        width:100%;
+    
+        box-sizing:border-box;
+    
+        padding:12px 14px;
+    
+        border:1px solid var(--teal-100);
+    
+        border-radius:var(--radius-sm);
+    
+        background:var(--teal-50);
+    
+        color:var(--gray-600);
+    
         font-size:.78rem;
+    
+        line-height:1.5;
+    }
+    
+    .payment-card-security-note i {
+    
+        flex-shrink:0;
+    
+        margin-top:2px;
+    
+        color:var(--teal-600);
+    
+    }
+    
+    /* =========================================================
+       STORED CARD
+       ========================================================= */
+    
+    .stored-card-payment-box {
+    
+        width:100%;
+        max-width:100%;
+    
+        margin-top:16px;
+    
+        padding:16px;
+    
+        box-sizing:border-box;
+    
+        background:var(--gray-50);
+    
+        border:1px solid var(--gray-200);
+    
+        border-radius:var(--radius-md);
+    
+        overflow:hidden;
+    }
+    
+    .stored-card-list {
+    
+        display:flex;
+    
+        flex-direction:column;
+    
+        gap:10px;
+    
+        width:100%;
+    
+        min-width:0;
+    }
+    
+    .stored-card-option {
+    
+        position:relative;
+    
+        display:grid;
+    
+        grid-template-columns:18px minmax(0, 1fr);
+    
+        align-items:center;
+    
+        gap:12px;
+    
+        width:100%;
+        min-width:0;
+    
+        box-sizing:border-box;
+    
+        padding:14px;
+    
+        border:1px solid var(--gray-200);
+    
+        border-radius:var(--radius-md);
+    
+        background:#fff;
+    
+        cursor:pointer;
+    
+        transition:
+            border-color .2s,
+            background .2s,
+            box-shadow .2s;
+    }
+    
+    .stored-card-option:hover {
+    
+        border-color:var(--teal-300);
+    
+        background:var(--teal-50);
+    }
+    
+    /* =========================================================
+       RADIO
+       ========================================================= */
+    
+    .stored-card-option input[type="radio"] {
+    
+        position:absolute;
+    
+        width:1px;
+        height:1px;
+    
+        margin:-1px;
+        padding:0;
+    
+        overflow:hidden;
+    
+        clip:rect(0,0,0,0);
+    
+        white-space:nowrap;
+    
+        border:0;
+    }
+    
+    .stored-card-radio {
+    
+        width:18px;
+        height:18px;
+    
+        box-sizing:border-box;
+    
+        border:2px solid var(--gray-300);
+    
+        border-radius:50%;
+    
+        background:#fff;
+    
+        position:relative;
+    
+        flex-shrink:0;
+    }
+    
+    .stored-card-option
+    input[type="radio"]:checked
+    ~ .stored-card-radio {
+    
+        border-color:var(--teal-600);
+    }
+    
+    .stored-card-option
+    input[type="radio"]:checked
+    ~ .stored-card-radio::after {
+    
+        content:"";
+    
+        position:absolute;
+    
+        top:50%;
+        left:50%;
+    
+        width:8px;
+        height:8px;
+    
+        border-radius:50%;
+    
+        background:var(--teal-600);
+    
+        transform:translate(-50%, -50%);
+    }
+    
+    .stored-card-option:has(
+        input[type="radio"]:checked
+    ) {
+    
+        border-color:var(--teal-500);
+    
+        background:var(--teal-50);
+    
+        box-shadow:
+            0 0 0 2px
+            rgba(14,165,233,.08);
+    }
+    
+    /* =========================================================
+       CARD CONTENT
+       ========================================================= */
+    
+    .stored-card-option-content {
+    
+        display:grid;
+    
+        grid-template-columns:
+            minmax(0, 1fr)
+            auto;
+    
+        align-items:center;
+    
+        gap:16px;
+    
+        width:100%;
+        min-width:0;
+    }
+    
+    .stored-card-main {
+    
+        display:flex;
+    
+        align-items:center;
+    
+        gap:12px;
+    
+        min-width:0;
+    }
+    
+    .stored-card-icon {
+    
+        width:40px;
+        height:40px;
+    
+        flex-shrink:0;
+    
+        display:flex;
+    
+        align-items:center;
+        justify-content:center;
+    
+        border-radius:var(--radius-sm);
+    
+        background:var(--teal-100);
+    
+        color:var(--teal-700);
+    
+        font-size:1rem;
+    }
+    
+    .stored-card-info {
+    
+        display:flex;
+    
+        flex-direction:column;
+    
+        gap:4px;
+    
+        min-width:0;
+    }
+    
+    .stored-card-alias {
+    
+        display:block;
+        max-width:100%;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+        color:var(--gray-900);
+        font-size:.9rem;
+        font-weight:700;
+    }
+    
+    .stored-card-number {
+    
+        display:block;
+    
         color:var(--gray-500);
+    
+        font-size:.82rem;
+    
+        letter-spacing:.04em;
+    
+        white-space:nowrap;
+    }
+    
+    
+    .stored-card-meta {
+    
+        display:flex;
+    
+        align-items:center;
+    
+        justify-content:flex-end;
+    
+        flex-wrap:wrap;
+    
+        gap:6px;
+    
+        min-width:0;
+    
+        color:var(--gray-500);
+    
+        font-size:.75rem;
+    
+        text-align:right;
+    }
+    
+    
+    .stored-card-meta > span {
+    
+        white-space:nowrap;
+    }
+    
+    
+    .stored-card-default-badge {
+    
+        display:inline-flex;
+    
+        align-items:center;
+    
+        padding:4px 8px;
+    
+        border-radius:999px;
+    
+        background:var(--green-50);
+    
+        color:var(--green-600);
+    
+        font-size:.7rem;
+    
+        font-weight:700;
+    }
+    
+    
+    /* =========================================================
+       ÖDEME FORMU GİZLİLİĞİ
+       ========================================================= */
+    
+    #stored-card-form[hidden],
+    #new-card-form[hidden] {
+    
+        display:none !important;
+    }
+    
+    
+    /* =========================================================
+       RESPONSIVE
+       ========================================================= */
+    
+    @media (max-width:700px) {
+    
+        .payment-card-fields-row {
+        
+            grid-template-columns:1fr;
+        
+        }
+    
+    
+        .stored-card-option-content {
+        
+            grid-template-columns:1fr;
+        
+            gap:8px;
+        
+        }
+    
+    
+        .stored-card-meta {
+        
+            justify-content:flex-start;
+        
+            text-align:left;
+        
+        }
+    
+    }
+    
+    
+    @media (max-width:480px) {
+    
+        .new-card-payment-box {
+        
+            padding:16px;
+        
+        }
+    
+    
+        .stored-card-payment-box {
+        
+            padding:12px;
+        
+        }
+    
+    
+        .stored-card-option {
+        
+            padding:12px;
+        
+            gap:10px;
+        
+        }
+    
     }
 
     /* =========================================================
@@ -1163,7 +1844,7 @@
     /* =========================================================
        RESPONSIVE
        ========================================================= */
-    @media (max-width:1100px) {
+    @media (max-width:900px) {
         .checkout-main-grid {
             grid-template-columns:1fr;
         }
@@ -1546,51 +2227,128 @@
                  2. ÖDEME ARACI
                  ================================================= -->
             <section class="checkout-section-card">
+            
                 <div class="checkout-section-header">
-                    <div class="checkout-section-number">2</div>
+                
+                    <div class="checkout-section-number">
+                        2
+                    </div>
+                
                     <div>
+                    
                         <h2 class="checkout-section-heading">
                             Ödeme Aracı
                         </h2>
+                    
                         <p class="checkout-section-subtitle">
                             Kullanmak istediğiniz ödeme yöntemini seçin.
                         </p>
+                    
                     </div>
+                
                 </div>
+            
+            
                 <div class="checkout-section-body">
+                
+                    <!-- =================================================
+                         ÖDEME YÖNTEMLERİ
+                         ================================================= -->
+
                     <div class="payment-method-list">
+                    
                         <!-- KAYITLI KART -->
-                        <div class="payment-method">
-                            <input
-                                type="radio"
-                                id="payment-saved-card"
-                                name="payment_method"
-                                value="saved_card"
-                            >
-                            <label
-                                for="payment-saved-card"
-                                class="payment-method-label"
-                            >
-                                <span class="payment-method-radio"></span>
-                                <div class="payment-method-icon">
-                                    <i class="fa-solid fa-credit-card"></i>
-                                </div>
-                                <div class="payment-method-content">
-                                    <span class="payment-method-title">
-                                        Kayıtlı kart
+                    
+                        {% if stored_cards %}
+                    
+                            <div class="payment-method">
+                            
+                                <input
+                                    type="radio"
+                                    id="payment-saved-card"
+                                    name="payment_method"
+                                    value="stored_card"
+                                >
+                            
+                                <label
+                                    for="payment-saved-card"
+                                    class="payment-method-label"
+                                >
+                            
+                                    <span class="payment-method-radio"></span>
+                            
+                                    <div class="payment-method-icon">
+                                        <i class="fa-solid fa-credit-card"></i>
+                                    </div>
+                                
+                                    <div class="payment-method-content">
+                                    
+                                        <span class="payment-method-title">
+                                            Kayıtlı kart
+                                        </span>
+                                    
+                                        <span class="payment-method-desc">
+                                            Kayıtlı kartlarınızdan birini seçerek
+                                            ödeme yapabilirsiniz.
+                                        </span>
+                                    
+                                    </div>
+                                
+                                </label>
+                            
+                            </div>
+                        
+                        {% else %}
+                        
+                            <div class="payment-method">
+                            
+                                <input
+                                    type="radio"
+                                    id="payment-saved-card"
+                                    name="payment_method"
+                                    value="stored_card"
+                                    disabled
+                                >
+                            
+                                <label
+                                    for="payment-saved-card"
+                                    class="payment-method-label"
+                                    style="opacity: 0.55; cursor: not-allowed;"
+                                >
+                            
+                                    <span class="payment-method-radio"></span>
+                            
+                                    <div class="payment-method-icon">
+                                        <i class="fa-solid fa-credit-card"></i>
+                                    </div>
+                                
+                                    <div class="payment-method-content">
+                                    
+                                        <span class="payment-method-title">
+                                            Kayıtlı kart
+                                        </span>
+                                    
+                                        <span class="payment-method-desc">
+                                            Henüz kayıtlı kartınız bulunmuyor.
+                                        </span>
+                                    
+                                    </div>
+                                
+                                    <span class="payment-method-badge">
+                                        Kayıt yok
                                     </span>
-                                    <span class="payment-method-desc">
-                                        Daha önce hesabınıza kaydettiğiniz
-                                        kartlardan birini kullanın.
-                                    </span>
-                                </div>
-                                <span class="payment-method-badge">
-                                    Güvenli
-                                </span>
-                            </label>
-                        </div>
+                                
+                                </label>
+                            
+                            </div>
+                        
+                        {% endif %}
+                        
+                        
                         <!-- YENİ KART -->
+                        
                         <div class="payment-method">
+                        
                             <input
                                 type="radio"
                                 id="payment-new-card"
@@ -1598,51 +2356,368 @@
                                 value="new_card"
                                 checked
                             >
+                        
                             <label
                                 for="payment-new-card"
                                 class="payment-method-label"
                             >
+                        
                                 <span class="payment-method-radio"></span>
+                        
                                 <div class="payment-method-icon">
                                     <i class="fa-solid fa-plus"></i>
                                 </div>
+                            
                                 <div class="payment-method-content">
+                                
                                     <span class="payment-method-title">
                                         Yeni kart kullan
                                     </span>
+                                
                                     <span class="payment-method-desc">
-                                        Yeni kart bilgilerinizi güvenli ödeme
-                                        ekranında girebilirsiniz.
+                                        Kart bilgilerinizi güvenli ödeme
+                                        aşamasında kullanabilirsiniz.
                                     </span>
+                                
                                 </div>
+                            
                             </label>
+                        
                         </div>
+                    
                     </div>
-                    <!--
-                        KAYITLI KARTLAR
-                        Şimdilik placeholder.
-                        StoredCard sistemi bağlandığında JS/backend
-                        tarafından doldurulacak.
-                    -->
-                    <div class="saved-cards-box">
-                        <h3 class="saved-cards-title">
-                            Kayıtlı Kartlarınız
-                        </h3>
-                        <div class="saved-card-placeholder">
-                            <i class="fa-regular fa-credit-card"></i>
-                            <div class="saved-card-placeholder-text">
-                                <strong>
-                                    Henüz kayıtlı kart bulunmuyor.
-                                </strong>
-                                <span>
-                                    Ödeme sırasında yeni kart ekleyebilir veya
-                                    hesabınızdan kart yönetebilirsiniz.
-                                </span>
+                
+                
+                    <!-- =================================================
+                         KAYITLI KARTLAR
+                         ================================================= -->
+                
+                    {% if stored_cards %}
+                        <div
+                            id="stored-card-form"
+                            class="stored-card-payment-box"
+                            hidden
+                        >
+
+                            <div class="stored-card-list">
+                            
+                                {% for card in stored_cards %}
+                            
+                                    <label
+                                        class="stored-card-option"
+                                        for="stored-card-{{ card.id }}"
+                                    >
+                            
+                                        <input
+                                            type="radio"
+                                            id="stored-card-{{ card.id }}"
+                                            name="stored_card_id"
+                                            value="{{ card.id }}"
+                                            {% if card.is_default %}
+                                                checked
+                                            {% endif %}
+                                        >
+                            
+                                        <span class="stored-card-radio"></span>
+                            
+                            
+                                        <div class="stored-card-option-content">
+                                        
+                                            <div class="stored-card-main">
+                                            
+                                                <div class="stored-card-icon">
+                                                    <i class="fa-solid fa-credit-card"></i>
+                                                </div>
+                                            
+                                                <div class="stored-card-info">
+                                                
+                                                    <span class="stored-card-alias">
+                                                        {{ card.card_alias|default:"Kayıtlı kart" }}
+                                                    </span>
+                                                
+                                                    <span class="stored-card-number">
+                                                        **** **** **** {{ card.last_four_digits }}
+                                                    </span>
+                                                
+                                                </div>
+                                            
+                                            </div>
+                                        
+                                        
+                                            <div class="stored-card-meta">
+                                            
+                                                {% if card.card_association %}
+                                            
+                                                    <span>
+                                                        {{ card.card_association }}
+                                                    </span>
+                                                
+                                                {% endif %}
+                                                
+                                                
+                                                {% if card.expire_month and card.expire_year %}
+                                                
+                                                    <span>
+                                                        {{ card.expire_month }}/{{ card.expire_year }}
+                                                    </span>
+                                                
+                                                {% endif %}
+                                                
+                                                
+                                                {% if card.is_default %}
+                                                
+                                                    <span class="stored-card-default-badge">
+                                                        Varsayılan
+                                                    </span>
+                                                
+                                                {% endif %}
+                                                
+                                            </div>
+                                        
+                                        </div>
+                                    
+                                    </label>
+                                
+                                {% endfor %}
+                                
                             </div>
+                        
                         </div>
+                    
+                    {% endif %}
+                    
+                    
+                    <!-- =================================================
+                         YENİ KART FORMU
+                         ================================================= -->
+                    
+                    <div
+                        id="new-card-form"
+                        class="new-card-payment-box"
+                    >
+                    
+                        <div class="payment-card-fields">
+                        
+                            <!-- KART ÜZERİNDEKİ AD -->
+                        
+                            <div class="payment-card-field">
+                            
+                                <label
+                                    for="card-holder-name"
+                                >
+                                    Kart üzerindeki ad soyad
+                                </label>
+                            
+                                <input
+                                    type="text"
+                                    id="card-holder-name"
+                                    autocomplete="cc-name"
+                                    inputmode="text"
+                                    placeholder="Ad Soyad"
+                                    maxlength="255"
+                                >
+                            
+                            </div>
+                        
+                        
+                            <!-- KART NUMARASI -->
+                        
+                            <div class="payment-card-field">
+                            
+                                <label
+                                    for="card-number"
+                                >
+                                    Kart numarası
+                                </label>
+                            
+                                <input
+                                    type="text"
+                                    id="card-number"
+                                    autocomplete="cc-number"
+                                    inputmode="numeric"
+                                    placeholder="5528 7900 0000 0008"
+                                    maxlength="19"
+                                >
+                            
+                            </div>
+                        
+                        
+                            <div
+                                class="payment-card-fields-row"
+                            >
+                        
+                                <!-- AY -->
+                        
+                                <div class="payment-card-field">
+                                
+                                    <label
+                                        for="card-expire-month"
+                                    >
+                                        Ay
+                                    </label>
+                                
+                                    <input
+                                        type="text"
+                                        id="card-expire-month"
+                                        autocomplete="cc-exp-month"
+                                        inputmode="numeric"
+                                        placeholder="12"
+                                        maxlength="2"
+                                    >
+                                
+                                </div>
+                            
+                            
+                                <!-- YIL -->
+                            
+                                <div class="payment-card-field">
+                                
+                                    <label
+                                        for="card-expire-year"
+                                    >
+                                        Yıl
+                                    </label>
+                                
+                                    <input
+                                        type="text"
+                                        id="card-expire-year"
+                                        autocomplete="cc-exp-year"
+                                        inputmode="numeric"
+                                        placeholder="2030"
+                                        maxlength="4"
+                                    >
+                                
+                                </div>
+                            
+                            
+                                <!-- CVC -->
+                            
+                                <div class="payment-card-field">
+                                
+                                    <label
+                                        for="card-cvc"
+                                    >
+                                        CVC
+                                    </label>
+                                
+                                    <input
+                                        type="text"
+                                        id="card-cvc"
+                                        autocomplete="cc-csc"
+                                        inputmode="numeric"
+                                        placeholder="123"
+                                        maxlength="4"
+                                        aria-describedby="card-cvc-error"
+                                    >
+                                    <div
+                                        id="card-cvc-error"
+                                        class="payment-field-error"
+                                        hidden
+                                    ></div>
+                                
+                                </div>
+                            
+                            </div>
+                        
+                        
+                            <!-- TAKSİT -->
+                        
+                            <div class="payment-card-field">
+                            
+                                <label
+                                    for="payment-installment"
+                                >
+                                    Taksit
+                                </label>
+                            
+                                <select
+                                    id="payment-installment"
+                                >
+                            
+                                    <option value="1">
+                                        Tek çekim
+                                    </option>
+                                
+                                    <option value="2">
+                                        2 taksit
+                                    </option>
+                                
+                                    <option value="3">
+                                        3 taksit
+                                    </option>
+                                
+                                    <option value="6">
+                                        6 taksit
+                                    </option>
+                                
+                                    <option value="9">
+                                        9 taksit
+                                    </option>
+                                
+                                    <option value="12">
+                                        12 taksit
+                                    </option>
+                                
+                                </select>
+                            
+                            </div>
+
+                            <!-- =========================================================
+                                 SAVE CARD
+                                 ========================================================= -->
+
+                            {% if user.is_authenticated %}
+
+                                <label
+                                    class="payment-card-save-option"
+                                    for="save-new-card"
+                                >
+
+                                    <input
+                                        type="checkbox"
+                                        id="save-new-card"
+                                    >
+
+                                    <span class="payment-card-save-content">
+                                    
+                                        <span class="payment-card-save-title">
+                                            Bu kartı kaydet
+                                        </span>
+                                    
+                                        <span class="payment-card-save-description">
+                                            Sonraki alışverişlerinizde kart bilgilerini
+                                            tekrar girmek zorunda kalmadan kullanabilirsiniz.
+                                        </span>
+                                    
+                                    </span>
+                                
+                                </label>
+                            
+                            {% endif %}
+                        
+                        
+                            <!-- GÜVENLİK NOTU -->
+                        
+                            <div
+                                class="payment-card-security-note"
+                            >
+                        
+                                <i class="fa-solid fa-lock"></i>
+                        
+                                <span>
+                                    Kart bilgileriniz sistemimizde
+                                    saklanmaz. Ödeme güvenli ödeme
+                                    altyapısı üzerinden gerçekleştirilir.
+                                </span>
+                            
+                            </div>
+                        
+                        </div>
+                    
                     </div>
                 </div>
             </section>
+                
             <!-- =================================================
                  3. TESLİMAT İÇERİĞİ VE KARGO
                  ================================================= -->
@@ -1883,6 +2958,9 @@
                     type="button"
                     id="checkout-payment-button"
                     class="checkout-btn-payment"
+                    data-create-order-url="{% url 'orders:checkout_create' %}"
+                    data-payment-url-template="{% url 'orders:checkout_payment' order_number='__ORDER_NUMBER__' %}"
+                    data-save-card-url="{% url 'accounts:stored_card_create' %}"
                     disabled
                 >
                     <span>Ödemeye Geç</span>
@@ -1923,6 +3001,83 @@
     </div>
 </div>
 
+
+<!-- =========================================================
+     WIZARD UI
+     ========================================================= -->
+
+<div id="wizard-toast-container"></div>
+
+<div
+    id="wizard-confirm-modal"
+    class="wizard-modal-overlay"
+    hidden
+>
+    <div class="wizard-modal-box">
+
+        <h3
+            data-modal-title
+            class="wizard-modal-title"
+        >
+            Emin misiniz?
+        </h3>
+
+        <p
+            data-modal-message
+            class="wizard-modal-text"
+        >
+            Bu işlem geri alınamaz.
+        </p>
+
+        <div class="wizard-modal-actions">
+
+            <button
+                type="button"
+                data-modal-cancel
+                class="wizard-btn-cancel"
+            >
+                Vazgeç
+            </button>
+
+            <button
+                type="button"
+                data-modal-confirm
+                class="wizard-btn-confirm"
+            >
+                Onayla
+            </button>
+
+        </div>
+
+    </div>
+</div>
+<style>
+  /* DOM içindeki modal için css */
+  .wizard-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100000; display: flex; align-items: center; justify-content: center; }
+  .wizard-modal-overlay[hidden] { display: none !important; }
+  .wizard-modal-box { background: #fff; padding: 24px; border-radius: 8px; width: 100%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+  .wizard-modal-title { margin-top: 0; color: #1e293b; font-size: 1.25rem; }
+  .wizard-modal-text { color: #475569; margin-bottom: 24px; font-size: 1rem;}
+  .wizard-modal-actions { display: flex; justify-content: flex-end; gap: 12px; }
+  .wizard-btn-cancel { background: transparent; border: 1px solid #cbd5e1; padding: 8px 16px; border-radius: 6px; cursor: pointer; color: #475569; font-weight: 600; font-size: 0.95rem; }
+  .wizard-btn-cancel:hover { background: #f8f9fa; }
+  .wizard-btn-confirm { background: #ef4444; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; color: #fff; font-weight: 600; font-size: 0.95rem; }
+  .wizard-btn-confirm:hover { background: #dc2626; }
+  body.modal-open { overflow: hidden; }
+  #wizard-toast-container { position: fixed; top: 80px; right: 20px; z-index: 100000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+  .wizard-toast { background: #fff; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); padding: 16px 20px; display: flex; align-items: center; gap: 12px; transform: translateX(120%); opacity: 0; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); pointer-events: auto; min-width: 250px; border-left: 4px solid #cbd5e1; }
+  .wizard-toast.show { transform: translateX(0); opacity: 1; }
+  .wizard-toast-success { border-left-color: #10b981; }
+  .wizard-toast-success i { color: #10b981; font-size: 1.2rem; }
+  .wizard-toast-error { border-left-color: #ef4444; }
+  .wizard-toast-error i { color: #ef4444; font-size: 1.2rem; }
+  .wizard-toast-warning { border-left-color: #f59e0b; }
+  .wizard-toast-warning i { color: #f59e0b; font-size: 1.2rem; }
+  .wizard-toast-close { margin-left: auto; background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; transition: 0.2s; }
+  .wizard-toast-close:hover { color: #1e293b; }
+</style>
+
+<script src="{% static 'products/js/wizard_ui.js' %}"></script>
 <script src="{% static 'orders/js/checkout.js' %}"></script>
 
 
