@@ -2,7 +2,9 @@ from django.urls import path
 from .views import (
     StoreCreateView, MyStoresListView, StoreUpdateView, 
     StoreDashboardView, StorePublicDetailView, StoreArchiveView,
-    StoreQuestionsListView, StoreAnswerQuestionAPIView
+    StoreQuestionsListView, StoreAnswerQuestionAPIView,
+    StoreOrderListView, StoreOrderDetailView, StoreOrderStatusUpdateView,
+    StoreOrderCancellationView,
     )
 from products.views.api import ProductQAAnswerDeleteAPIView
 
@@ -24,6 +26,13 @@ urlpatterns = [
 
     # Mağaza dashboard/detail
     path('<slug:slug>/dashboard/', StoreDashboardView.as_view(), name='store_dashboard'),
+
+    # Siparişlerim
+    path('<slug:store_slug>/orders/', StoreOrderListView.as_view(), name="store_orders",),
+    path('<slug:store_slug>/orders/<str:suborder_number>/', StoreOrderDetailView.as_view(), name="store_order_detail",),
+    path("stores/<slug:store_slug>/orders/<str:suborder_number>/status/", StoreOrderStatusUpdateView.as_view(), name="store_order_status_update",),
+
+    path("stores/<slug:store_slug>/orders/<str:suborder_number>/cancel/", StoreOrderCancellationView.as_view(), name="store_order_cancel",),
 
     # PUBLIC VİTRİN
     path('<slug:slug>/', StorePublicDetailView.as_view(), name='store_detail'),

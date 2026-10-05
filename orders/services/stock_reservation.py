@@ -40,6 +40,8 @@ class StockReservationService:
           ├──> RELEASED
           ├──> EXPIRED
           └──> CONSUMED
+           │
+           └──> RELEASED   # sipariş iptali
 
     Temel kurallar:
 
@@ -875,6 +877,194 @@ class StockReservationService:
             )
 
         return reservations
+
+    @classmethod
+    def restore_consumed_suborder(
+        cls,
+        *,
+        suborder,
+    ) -> list[StockReservation]:
+        """
+        İptal edilen SubOrder'a ait CONSUMED reservation'ları
+        geri alır.
+    
+        CONSUMED:
+            -> RELEASED
+    
+        Aynı zamanda:
+    
+            physical stock += quantity
+            sold_count -= quantity
+    
+        Yalnızca verilen SubOrder'ın ürünlerini etkiler.
+    
+        Lock sırası:
+    
+            Order
+              ↓
+            StoreProduct ASC
+              ↓
+            StockReservation
+        """
+    
+        with transaction.atomic():
+            locked_order = cls._lock_order(
+                order_id=suborder.order_id,
+            )
+    
+            order_items = list(
+                OrderItem.objects
+                .select_related(
+                    "sub_order",
+                    "store_product",
+                )
+                .filter(
+                    sub_order_id=suborder.pk,
+                )
+                .order_by(
+                    "store_product_id",
+                    "id",
+                )
+            )
+    
+            if not order_items:
+                raise ReservationError(
+                    "İptal edilen siparişte ürün bulunamadı."
+                )
+    
+            store_products = cls._lock_store_products(
+                order_items=order_items,
+            )
+    
+            order_item_ids = [
+                item.pk
+                for item in order_items
+            ]
+    
+            reservations = list(
+                StockReservation.objects
+                .select_for_update()
+                .select_related(
+                    "order_item",
+                )
+                .filter(
+                    order_item_id__in=order_item_ids,
+                )
+                .order_by(
+                    "order_item_id",
+                    "-created_at",
+                    "-id",
+                )
+            )
+    
+            latest_by_item = {}
+    
+            for reservation in reservations:
+                if reservation.order_item_id in latest_by_item:
+                    continue
+                
+                latest_by_item[
+                    reservation.order_item_id
+                ] = reservation
+    
+            to_restore = []
+    
+            for order_item in order_items:
+                reservation = latest_by_item.get(
+                    order_item.pk,
+                )
+    
+                if reservation is None:
+                    raise ReservationError(
+                        f"OrderItem #{order_item.pk} "
+                        "için reservation bulunamadı."
+                    )
+    
+                if reservation.status == ReservationStatus.RELEASED:
+                    continue
+                
+                if reservation.status != ReservationStatus.CONSUMED:
+                    raise ReservationError(
+                        f"OrderItem #{order_item.pk} "
+                        "için reservation stok iadesine "
+                        "uygun durumda değil."
+                    )
+    
+                if reservation.quantity != order_item.quantity:
+                    raise ReservationError(
+                        f"OrderItem #{order_item.pk} ile "
+                        "reservation miktarı eşleşmiyor."
+                    )
+    
+                to_restore.append(reservation)
+    
+            if not to_restore:
+                return []
+    
+            quantity_by_store_product = defaultdict(int)
+    
+            for reservation in to_restore:
+                quantity_by_store_product[
+                    reservation.order_item.store_product_id
+                ] += reservation.quantity
+    
+            # --------------------------------------------------------------
+            # sold_count invariant
+            # --------------------------------------------------------------
+    
+            for store_product_id, quantity in (
+                quantity_by_store_product.items()
+            ):
+                store_product = store_products[
+                    store_product_id
+                ]
+    
+                if store_product.sold_count < quantity:
+                    raise ReservationError(
+                        "Ürünün satılmış adet bilgisi "
+                        "stok iadesi için geçersiz."
+                    )
+    
+            # --------------------------------------------------------------
+            # Restore physical stock
+            # --------------------------------------------------------------
+    
+            for store_product_id, quantity in (
+                quantity_by_store_product.items()
+            ):
+                store_product = store_products[
+                    store_product_id
+                ]
+    
+                store_product.stock += quantity
+                store_product.sold_count -= quantity
+    
+                store_product.save(
+                    update_fields=[
+                        "stock",
+                        "sold_count",
+                        "status",
+                        "updated_at",
+                    ]
+                )
+    
+            # --------------------------------------------------------------
+            # Reservation finalization
+            # --------------------------------------------------------------
+    
+            for reservation in to_restore:
+                reservation.status = (
+                    ReservationStatus.RELEASED
+                )
+    
+                reservation.save(
+                    update_fields=[
+                        "status",
+                        "updated_at",
+                    ]
+                )
+    
+            return to_restore
 
     # ======================================================================
     # RELEASE SINGLE RESERVATION

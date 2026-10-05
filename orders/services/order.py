@@ -1,8 +1,11 @@
+import os
+from django.core.files.base import ContentFile
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Iterable, Sequence
 
 from django.db import transaction
+from django.db.models import Prefetch
 
 from accounts.models import Address
 from cart.models import Cart, CartItem
@@ -10,16 +13,13 @@ from products.models import (
     ProductStatus,
     StoreProduct,
     StoreProductStatus,
+    ProductImage,
+    ProductImageGroup,
 )
 
-from ..exceptions import (
-    CartAccessError,
-    CartItemSelectionError,
-    EmptyOrderError,
-    InvalidAddressError,
-    InvalidCurrencyError,
-    OrderNotFoundError,
-    ProductUnavailableError,
+from orders.exceptions import (
+    CartAccessError, CartItemSelectionError, EmptyOrderError, ProductUnavailableError,
+    InvalidAddressError, InvalidCurrencyError, OrderNotFoundError, InvalidSubOrderStatusTransitionError,
 )
 from ..models import (
     Order,
@@ -27,10 +27,12 @@ from ..models import (
     OrderStatus,
     SubOrder,
     SubOrderStatus,
+    InvoiceItem,
 )
 
 from ..services.stock_reservation import StockReservationService
 from ..services.shipping import ShippingService
+from ..services.invoice import InvoiceService
 
 
 @dataclass(frozen=True)
@@ -305,6 +307,7 @@ class OrderService:
         cls._create_suborders(
             order=order,
             grouped_items=grouped_items,
+            suborder_totals=order_totals["suborders"],
         )
 
         # ------------------------------------------------------------------
@@ -629,6 +632,34 @@ class OrderService:
         if not store_product_ids:
             return {}
 
+        image_qs = (
+            ProductImage.objects
+            .order_by(
+                "-is_main",
+                "sort_order",
+                "id",
+            )
+        )
+
+        image_group_qs = (
+            ProductImageGroup.objects
+            .filter(
+                is_active=True,
+            )
+            .order_by(
+                "sort_order",
+                "id",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "images",
+                    queryset=image_qs,
+                    to_attr="snapshot_images",
+                ),
+                "visual_attribute_values",
+            )
+        )
+
         store_products = list(
             StoreProduct.objects
             .select_for_update()
@@ -638,7 +669,12 @@ class OrderService:
                 "variant__product",
             )
             .prefetch_related(
-                "variant__attribute_values__attribute",
+                "variant__attribute_values__attribute__category_attributes",
+                Prefetch(
+                    "variant__product__image_groups",
+                    queryset=image_group_qs,
+                    to_attr="snapshot_image_groups",
+                ),
             )
             .filter(
                 id__in=store_product_ids,
@@ -785,86 +821,141 @@ class OrderService:
             int,
             list[tuple[CartItem, StoreProduct]]
         ],
-    ) -> dict[str, Decimal]:
+    ) -> dict:
         """
-        Sipariş finansal toplamlarını hesaplar.
+        Sipariş ve mağaza bazlı finansal toplamları hesaplar.
 
-        Mevcut kurallar:
-
-            discount = 0
-            tax = 0
-
-        ShippingService:
-
-            subtotal >= 750.00 TL
-                -> ücretsiz kargo
-
-            subtotal < 750.00 TL
-                -> 99.99 TL kargo
-
-        Toplam:
+        Her Store bağımsız olarak hesaplanır:
 
             subtotal
             - discount
             + shipping
             + tax
             = total
+
+        Daha sonra tüm SubOrder finansalları toplanarak
+        ana Order finansalları oluşturulur.
+
+        Shipping mağaza bazında hesaplanır.
+
+        Örnek:
+
+            Store A:
+                subtotal = 850.00
+                shipping = 0.00
+                total = 850.00
+
+            Store B:
+                subtotal = 100.00
+                shipping = 99.99
+                total = 199.99
+
+            Order:
+                subtotal = 950.00
+                shipping = 99.99
+                total = 1049.99
         """
 
-        subtotal = Decimal("0.00")
+        suborder_totals = {}
 
-        for items in grouped_items.values():
+        order_subtotal = Decimal("0.00")
+        order_discount = Decimal("0.00")
+        order_shipping = Decimal("0.00")
+        order_tax = Decimal("0.00")
+
+        # ------------------------------------------------------------------
+        # STORE-BY-STORE CALCULATION
+        # ------------------------------------------------------------------
+
+        for store_id in sorted(grouped_items):
+            items = grouped_items[store_id]
+
+            subtotal = Decimal("0.00")
+
             for cart_item, store_product in items:
                 line_total = cls._money(
-                    store_product.price
-                    * cart_item.quantity
+                    store_product.price * cart_item.quantity
                 )
 
                 subtotal += line_total
 
-        subtotal = cls._money(subtotal)
+            subtotal = cls._money(subtotal)
+
+            # --------------------------------------------------------------
+            # DISCOUNT
+            # --------------------------------------------------------------
+
+            discount_amount = Decimal("0.00")
+
+            # --------------------------------------------------------------
+            # SHIPPING
+            # --------------------------------------------------------------
+
+            shipping_amount = ShippingService.calculate_shipping(
+                subtotal=subtotal,
+            )
+
+            shipping_amount = cls._money(
+                shipping_amount
+            )
+
+            # --------------------------------------------------------------
+            # TAX
+            # --------------------------------------------------------------
+
+            tax_amount = Decimal("0.00")
+
+            # --------------------------------------------------------------
+            # SUBORDER TOTAL
+            # --------------------------------------------------------------
+
+            total_amount = cls._money(
+                subtotal
+                - discount_amount
+                + shipping_amount
+                + tax_amount
+            )
+
+            suborder_totals[store_id] = {
+                "subtotal": subtotal,
+                "discount_amount": discount_amount,
+                "shipping_amount": shipping_amount,
+                "tax_amount": tax_amount,
+                "total_amount": total_amount,
+            }
+
+            # --------------------------------------------------------------
+            # ORDER TOTALS
+            # --------------------------------------------------------------
+
+            order_subtotal += subtotal
+            order_discount += discount_amount
+            order_shipping += shipping_amount
+            order_tax += tax_amount
 
         # ------------------------------------------------------------------
-        # DISCOUNT
+        # MONEY NORMALIZATION
         # ------------------------------------------------------------------
 
-        discount_amount = Decimal("0.00")
+        order_subtotal = cls._money(order_subtotal)
+        order_discount = cls._money(order_discount)
+        order_shipping = cls._money(order_shipping)
+        order_tax = cls._money(order_tax)
 
-        # ------------------------------------------------------------------
-        # SHIPPING
-        # ------------------------------------------------------------------
-
-        shipping_amount = ShippingService.calculate_shipping(
-            subtotal=subtotal,
-        )
-
-        shipping_amount = cls._money(
-            shipping_amount
-        )
-
-        # ------------------------------------------------------------------
-        # TAX
-        # ------------------------------------------------------------------
-
-        tax_amount = Decimal("0.00")
-
-        # ------------------------------------------------------------------
-        # TOTAL
-        # ------------------------------------------------------------------
-
-        total_amount = cls._money(
-            subtotal
-            - discount_amount
-            + shipping_amount
-            + tax_amount
+        order_total = cls._money(
+            order_subtotal
+            - order_discount
+            + order_shipping
+            + order_tax
         )
 
         return {
-            "subtotal": subtotal,
-            "discount_amount": discount_amount,
-            "shipping_amount": shipping_amount,
-            "tax_amount": tax_amount,
-            "total_amount": total_amount,
+            "subtotal": order_subtotal,
+            "discount_amount": order_discount,
+            "shipping_amount": order_shipping,
+            "tax_amount": order_tax,
+            "total_amount": order_total,
+            "suborders": suborder_totals,
         }
 
     # ======================================================================
@@ -880,10 +971,14 @@ class OrderService:
             int,
             list[tuple[CartItem, StoreProduct]]
         ],
+        suborder_totals: dict[
+            int,
+            dict[str, Decimal]
+        ],
     ) -> None:
         """
         Her Store için bir SubOrder oluşturur.
-
+    
         Order
             ├── SubOrder A
             │     ├── OrderItem
@@ -891,38 +986,42 @@ class OrderService:
             │
             └── SubOrder B
                   └── OrderItem
+    
+        SubOrder finansal değerleri daha önce
+        _calculate_order_totals() tarafından hesaplanmıştır.
+    
+        Bu method finansal değerleri yeniden hesaplamaz;
+        kendisine verilen snapshot değerlerini kullanır.
         """
-
+    
         # Store ID'leri deterministic sırada işlenir.
         for store_id in sorted(grouped_items):
             grouped_store_items = grouped_items[store_id]
-
+    
             store = grouped_store_items[0][1].store
-
-            subtotal = Decimal("0.00")
-
+    
             line_data = []
-
+    
             # ----------------------------------------------------------
-            # Line calculations
+            # OrderItem line calculations
             # ----------------------------------------------------------
-
+    
             for cart_item, store_product in grouped_store_items:
                 unit_price = cls._money(
                     store_product.price
                 )
-
+    
                 line_total = cls._money(
                     unit_price * cart_item.quantity
                 )
-
+    
                 (
                     variant_snapshot,
                     variant_display,
                 ) = cls._build_variant_snapshot(
                     store_product=store_product,
                 )
-
+    
                 line_data.append(
                     {
                         "cart_item": cart_item,
@@ -933,61 +1032,71 @@ class OrderService:
                         "variant_display": variant_display,
                     }
                 )
-
-                subtotal += line_total
-
-            subtotal = cls._money(subtotal)
-
+    
             # ----------------------------------------------------------
-            # SubOrder
+            # SubOrder financial snapshot
             # ----------------------------------------------------------
-
+    
+            financials = suborder_totals[store_id]
+    
             suborder = SubOrder.objects.create(
                 order=order,
                 store=store,
                 store_name_snapshot=store.store_name,
-
-                subtotal=subtotal,
-                discount_amount=Decimal("0.00"),
-                shipping_amount=Decimal("0.00"),
-                tax_amount=Decimal("0.00"),
-                total_amount=subtotal,
-
+    
+                subtotal=financials["subtotal"],
+                discount_amount=financials["discount_amount"],
+                shipping_amount=financials["shipping_amount"],
+                tax_amount=financials["tax_amount"],
+                total_amount=financials["total_amount"],
+    
                 status=SubOrderStatus.PENDING,
             )
-
+    
             # ----------------------------------------------------------
             # Order Items
             # ----------------------------------------------------------
-
+    
             for data in line_data:
                 cart_item = data["cart_item"]
                 store_product = data["store_product"]
-
-                OrderItem.objects.create(
+    
+                image_source = (
+                    cls._get_order_item_image_source(
+                        store_product=store_product,
+                    )
+                )
+    
+                order_item = OrderItem.objects.create(
                     sub_order=suborder,
                     store_product=store_product,
-
+                    source_cart_item=cart_item,
+                    source_cart_item_updated_at=cart_item.updated_at,
+    
                     product_name_snapshot=(
                         store_product.variant.product.name
                     ),
-
+    
                     variant_snapshot=data["variant_snapshot"],
                     variant_display=data["variant_display"],
-
+    
                     sku_snapshot=store_product.sku or "",
                     barcode_snapshot=(
                         store_product.variant.barcode or ""
                     ),
-
+    
                     quantity=cart_item.quantity,
-
+    
                     unit_price=data["unit_price"],
                     discount_amount=Decimal("0.00"),
                     tax_amount=Decimal("0.00"),
                     total_amount=data["total_amount"],
                 )
-
+    
+                cls._save_order_item_image_snapshot(
+                    order_item=order_item,
+                    source_image=image_source,
+                )
     # ======================================================================
     # VARIANT SNAPSHOT
     # ======================================================================
@@ -1264,16 +1373,28 @@ class OrderService:
             .select_related(
                 "order",
                 "store",
+                "invoice",
             )
             .prefetch_related(
                 "items",
                 "items__store_product",
                 "items__store_product__variant",
                 "items__store_product__variant__product",
+                Prefetch(
+                    "invoice__items",
+                    queryset=InvoiceItem.objects.order_by("pk"),
+                    to_attr="invoice_items",
+                ),
             )
             .filter(
                 suborder_number=suborder_number,
                 store=store,
+            )
+            .exclude(
+                order__status__in=[
+                    OrderStatus.PENDING_PAYMENT,
+                    OrderStatus.EXPIRED,
+                ]
             )
             .first()
         )
@@ -1282,5 +1403,277 @@ class OrderService:
             raise OrderNotFoundError(
                 "Sipariş bulunamadı."
             )
+
+        return suborder
+
+    @classmethod
+    @transaction.atomic
+    def start_suborder_preparation(
+        cls,
+        *,
+        suborder,
+    ):
+        suborder = (
+            SubOrder.objects
+            .select_for_update()
+            .select_related(
+                "order",
+                "store",
+                "store__seller",
+            )
+            .get(pk=suborder.pk)
+        )
+
+        if suborder.status != SubOrderStatus.PENDING:
+            raise InvalidSubOrderStatusTransitionError(
+                "Sipariş hazırlanma durumuna geçirilemez."
+            )
+
+        InvoiceService.create_for_suborder(
+            suborder=suborder,
+        )
+
+        suborder.status = SubOrderStatus.PREPARING
+
+        suborder.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+
+        return suborder
+
+    #  IMAGE
+    @staticmethod
+    def _get_order_item_image_source(
+        *,
+        store_product: StoreProduct,
+    ) -> ProductImage | None:
+        """
+        Sipariş anındaki ürün görselinin kaynak ProductImage kaydını bulur.
+
+        Öncelik:
+
+            1. Varyantın görsel attribute'larıyla TAM eşleşen image group
+            2. Eşleşen grubun is_main görseli
+            3. Eşleşen grubun ilk görseli
+            4. Ortak image group'un is_main görseli
+            5. Ortak image group'un ilk görseli
+            6. None
+        """
+
+        variant = store_product.variant
+        product = variant.product
+
+        # ------------------------------------------------------------------
+        # VARYANTIN GÖRSEL ATTRIBUTE VALUE'LARI
+        # ------------------------------------------------------------------
+
+        visual_value_ids = set()
+
+        for attribute_value in variant.attribute_values.all():
+
+            is_visual = any(
+                category_attribute.category_id == product.category_id
+                and category_attribute.is_visual
+                for category_attribute
+                in attribute_value.attribute.category_attributes.all()
+            )
+
+            if is_visual:
+                visual_value_ids.add(
+                    attribute_value.pk
+                )
+
+        # ------------------------------------------------------------------
+        # IMAGE GROUP'LARI
+        # ------------------------------------------------------------------
+
+        image_groups = getattr(
+            product,
+            "snapshot_image_groups",
+            None,
+        )
+
+        if image_groups is None:
+            image_groups = (
+                product.image_groups
+                .filter(
+                    is_active=True,
+                )
+                .order_by(
+                    "sort_order",
+                    "id",
+                )
+                .prefetch_related(
+                    "visual_attribute_values",
+                    Prefetch(
+                        "images",
+                        queryset=(
+                            ProductImage.objects
+                            .order_by(
+                                "-is_main",
+                                "sort_order",
+                                "id",
+                            )
+                        ),
+                        to_attr="snapshot_images",
+                    ),
+                )
+            )
+
+        # ------------------------------------------------------------------
+        # 1. VARYANTA ÖZEL IMAGE GROUP
+        # ------------------------------------------------------------------
+
+        if visual_value_ids:
+
+            for group in image_groups:
+
+                group_value_ids = {
+                    value.pk
+                    for value
+                    in group.visual_attribute_values.all()
+                }
+
+                if group_value_ids != visual_value_ids:
+                    continue
+
+                images = getattr(
+                    group,
+                    "snapshot_images",
+                    [],
+                )
+
+                image = (
+                    images[0]
+                    if images
+                    else None
+                )
+
+                if image and image.image:
+                    return image
+
+        # ------------------------------------------------------------------
+        # 2. ORTAK IMAGE GROUP
+        # ------------------------------------------------------------------
+
+        for group in image_groups:
+
+            group_value_ids = {
+                value.pk
+                for value
+                in group.visual_attribute_values.all()
+            }
+
+            if group_value_ids:
+                continue
+
+            images = getattr(
+                group,
+                "snapshot_images",
+                [],
+            )
+
+            image = (
+                images[0]
+                if images
+                else None
+            )
+
+            if image and image.image:
+                return image
+
+        # ------------------------------------------------------------------
+        # 3. IMAGE YOK
+        # ------------------------------------------------------------------
+
+        return None
+
+    @staticmethod
+    def _save_order_item_image_snapshot(
+        *,
+        order_item: OrderItem,
+        source_image: ProductImage | None,
+    ) -> None:
+        """
+        ProductImage dosyasını OrderItem'a fiziksel snapshot olarak kopyalar.
+        """
+
+        if not source_image:
+            return
+
+        if not source_image.image:
+            return
+
+        source_file = source_image.image
+
+        source_file.open("rb")
+
+        try:
+            content = ContentFile(
+                source_file.read()
+            )
+
+            filename = os.path.basename(
+                source_file.name
+            )
+
+        finally:
+            source_file.close()
+
+        order_item.image_snapshot.save(
+            filename,
+            content,
+            save=True,
+        )
+
+    SUBORDER_STATUS_TRANSITIONS = {
+        SubOrderStatus.PENDING: {
+            SubOrderStatus.PREPARING,
+        },
+        SubOrderStatus.PREPARING: {
+            SubOrderStatus.SHIPPED,
+        },
+        SubOrderStatus.SHIPPED: {
+            SubOrderStatus.DELIVERED,
+        },
+        SubOrderStatus.DELIVERED: set(),
+    }
+
+    @staticmethod
+    def transition_suborder_status(
+        *,
+        suborder,
+        target_status,
+    ):
+        current_status = suborder.status
+
+        if current_status == target_status:
+            raise InvalidSubOrderStatusTransitionError(
+                "Sipariş zaten bu durumda."
+            )
+
+        allowed_statuses = (
+            OrderService.SUBORDER_STATUS_TRANSITIONS.get(
+                current_status,
+                set(),
+            )
+        )
+
+        if target_status not in allowed_statuses:
+            raise InvalidSubOrderStatusTransitionError(
+                "Sipariş bu duruma geçirilemez."
+            )
+
+        suborder.status = target_status
+
+        suborder.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
 
         return suborder

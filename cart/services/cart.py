@@ -2,13 +2,14 @@ from decimal import Decimal
 
 from django.db import IntegrityError, transaction
 
+from orders.models import OrderItem
 from cart.models import Cart, CartItem
 from products.models import (
     ProductStatus,
     StoreProduct,
     StoreProductStatus,
 )
-# from orders.services import StockReservationService
+from orders.services.stock_reservation import StockReservationService
 
 
 # ============================================================================
@@ -250,6 +251,39 @@ class CartService:
             and store_product.variant.product.status
             == ProductStatus.ACTIVE
         )
+
+    @staticmethod
+    def _is_cart_item_selectable(store_product):
+        """
+        CartItem'ın kullanıcı tarafından seçilebilir olup olmadığını
+        belirler.
+
+        Bir ürün:
+
+            - StoreProduct aktif değilse
+            - Store aktif değilse
+            - Variant aktif değilse
+            - Product aktif değilse
+            - fiziksel stok 0 ise
+
+        seçilebilir değildir.
+
+        ÖNEMLİ:
+            Bu method DB mutation yapmaz.
+        """
+
+        if not store_product:
+            return False
+
+        if not CartService._is_store_product_active(
+            store_product
+        ):
+            return False
+
+        if store_product.stock <= 0:
+            return False
+
+        return True
 
     # ========================================================================
     # CART
@@ -575,11 +609,17 @@ class CartService:
         is_selected,
     ):
         """
-        Checkout için item seçimini değiştirir.
+        Checkout için CartItem selection state'ini değiştirir.
 
-        Stock-sensitive olmadığı için:
+        Kullanıcı bir ürünü seçmek istediğinde ürün:
 
-            Cart → CartItem
+            - aktif olmalı
+            - mağaza aktif olmalı
+            - variant aktif olmalı
+            - product aktif olmalı
+            - stok > 0 olmalı
+
+        olmalıdır.
         """
 
         if not isinstance(is_selected, bool):
@@ -593,6 +633,29 @@ class CartService:
             cart,
             item_id,
         )
+
+        store_product = cart_item.store_product
+
+        # --------------------------------------------------------------
+        # SELECT
+        # --------------------------------------------------------------
+
+        if is_selected:
+            if not cls._is_cart_item_selectable(
+                store_product
+            ):
+                if store_product.stock <= 0:
+                    raise InsufficientStockError(
+                        "Bu ürünün stoğu tükenmiş."
+                    )
+
+                raise ProductUnavailableError(
+                    "Bu ürün artık satın alınabilir durumda değil."
+                )
+
+        # --------------------------------------------------------------
+        # SAVE
+        # --------------------------------------------------------------
 
         cart_item.is_selected = is_selected
 
@@ -1011,55 +1074,39 @@ class CartService:
     @transaction.atomic
     def validate_cart_for_checkout(cls, cart):
         """
-        Checkout öncesi selected item'ları kontrol eder.
+        Checkout öncesi selected CartItem'ları kontrol eder.
 
         Kontroller:
-
+            - StoreProduct mevcut mu?
             - StoreProduct aktif mi?
             - Store aktif mi?
             - Variant aktif mi?
             - Product aktif mi?
-            - Stock yeterli mi?
+            - O anki alınabilir stok yeterli mi?
             - Price değişmiş mi?
-
-        Stok yetersizse:
-
-            quantity mevcut stoğa düşürülür.
-
-            Ancak is_valid=False yapılır.
-
-        Böylece kullanıcıya yeni stok miktarı gösterilip tekrar
-        checkout onayı alınabilir.
-
-        Fiyat değişikliği:
-
-            checkout'u otomatik olarak engellemez.
 
         ÖNEMLİ:
 
-            Bu method final checkout garantisi vermez.
+            Bu method CartItem.quantity değerini değiştirmez.
 
-            Transaction bittiğinde lock'lar bırakılır.
+            Çünkü CartItem müşterinin satın almak istediği miktarı temsil eder.
+            Stok üzerindeki geçici kontrol StockReservation üzerinden yapılır.
 
-            Gerçek checkout transaction'ında mutlaka:
+            Final checkout garantisi değildir.
 
+            Gerçek checkout transaction'ında:
                 lock_stock_for_checkout()
-
             tekrar çağrılmalıdır.
-
-        Lock sırası:
-
-            Cart → StoreProduct → CartItem
         """
 
         # --------------------------------------------------------------------
-        # LOCK CART FIRST
+        # LOCK CART
         # --------------------------------------------------------------------
 
         cart = cls._get_locked_cart(cart)
 
         # --------------------------------------------------------------------
-        # GET SELECTED ITEM IDS
+        # SELECTED ITEM IDS
         # --------------------------------------------------------------------
 
         selected_item_data = list(
@@ -1094,7 +1141,7 @@ class CartService:
         })
 
         # --------------------------------------------------------------------
-        # LOCK STORE PRODUCTS SECOND
+        # LOCK STORE PRODUCTS
         # --------------------------------------------------------------------
 
         locked_products = {
@@ -1115,7 +1162,7 @@ class CartService:
         }
 
         # --------------------------------------------------------------------
-        # LOCK CART ITEMS THIRD
+        # LOCK CART ITEMS
         # --------------------------------------------------------------------
 
         selected_items = list(
@@ -1143,13 +1190,13 @@ class CartService:
                 "Checkout için seçili ürün bulunmuyor."
             )
 
-        # --------------------------------------------------------------------
-        # VALIDATE
-        # --------------------------------------------------------------------
-
         warnings = []
         price_changes = []
         is_valid = True
+
+        # --------------------------------------------------------------------
+        # VALIDATION
+        # --------------------------------------------------------------------
 
         for item in selected_items:
 
@@ -1157,9 +1204,9 @@ class CartService:
                 item.store_product_id
             )
 
-            # ----------------------------------------------------------------
+            # ---------------------------------------------------------------
             # STORE PRODUCT NOT FOUND
-            # ----------------------------------------------------------------
+            # ---------------------------------------------------------------
 
             if not store_product:
 
@@ -1188,9 +1235,9 @@ class CartService:
             product = variant.product
             product_name = product.name
 
-            # ----------------------------------------------------------------
-            # PRODUCT UNAVAILABLE
-            # ----------------------------------------------------------------
+            # ---------------------------------------------------------------
+            # PRODUCT ACTIVE
+            # ---------------------------------------------------------------
 
             if not cls._is_store_product_active(store_product):
 
@@ -1215,49 +1262,72 @@ class CartService:
                 is_valid = False
                 continue
 
-            # ----------------------------------------------------------------
+            # ---------------------------------------------------------------
+            # AVAILABLE STOCK
+            # ---------------------------------------------------------------
+
+            available_stock = (
+                StockReservationService.get_available_stock(
+                    store_product=store_product,
+                )
+            )
+
+            # ---------------------------------------------------------------
             # OUT OF STOCK
-            # ----------------------------------------------------------------
+            # ---------------------------------------------------------------
 
-            available_stock = 2 #StockReservationService.get_available_stock(store_product)
-
-            # 1. OUT OF STOCK KONTROLÜ
             if available_stock <= 0:
+
                 item.is_selected = False
-                item.save(update_fields=["is_selected", "updated_at"])
+
+                item.save(
+                    update_fields=[
+                        "is_selected",
+                        "updated_at",
+                    ]
+                )
+
                 warnings.append({
                     "code": "OUT_OF_STOCK",
                     "item_id": item.id,
                     "product_name": product_name,
-                    "message": f"'{product_name}' ürününün stoğu tükendi (veya başka bir müşteri tarafından rezerve edildi) ve seçimden çıkarıldı.",
+                    "requested_quantity": item.quantity,
+                    "available_quantity": 0,
+                    "message": (
+                        f"'{product_name}' şu anda satın alınabilir "
+                        "stokta bulunmuyor."
+                    ),
                 })
+
                 is_valid = False
                 continue
 
-            # ----------------------------------------------------------------
-            # INSUFFICIENT STOCK
-            # ----------------------------------------------------------------
+            # ---------------------------------------------------------------
+            # INSUFFICIENT AVAILABLE STOCK
+            # ---------------------------------------------------------------
 
-            # 2. INSUFFICIENT STOCK KONTROLÜ
             if item.quantity > available_stock:
-                requested_quantity = item.quantity
-                
-                item.quantity = available_stock
-                item.save(update_fields=["quantity", "updated_at"])
-                
+
                 warnings.append({
                     "code": "INSUFFICIENT_STOCK",
                     "item_id": item.id,
                     "product_name": product_name,
-                    "requested_quantity": requested_quantity,
+                    "requested_quantity": item.quantity,
                     "available_quantity": available_stock,
-                    "message": f"'{product_name}' için stok azaldı. Miktar {available_stock} adede düşürüldü.",
+                    "message": (
+                        f"'{product_name}' için yeterli "
+                        f"satın alınabilir stok bulunmuyor. "
+                        f"Mevcut alınabilir stok: "
+                        f"{available_stock}, "
+                        f"istenen: {item.quantity}."
+                    ),
                 })
+
                 is_valid = False
 
-            # ----------------------------------------------------------------
+            # ---------------------------------------------------------------
             # PRICE CHANGE
-            # ----------------------------------------------------------------
+            # ---------------------------------------------------------------
 
             if item.price_changed:
 
@@ -1294,10 +1364,16 @@ class CartService:
                 "total_price": Decimal("0.00"),
             }
 
+        context = cls.get_cart_context_data(
+            cart
+        )
+
         return {
-            "total_items": cart.total_items_count,
-            "selected_items_count": cart.selected_items_count,
-            "total_price": cart.total_cart_price,
+            "total_items": context["total_items"],
+            "selected_items_count": (
+                context["selected_items_count"]
+            ),
+            "total_price": context["total_price"],
         }
 
     # ========================================================================
@@ -1352,8 +1428,38 @@ class CartService:
 
         grouped_data = {}
         price_changes = []
+        effective_selected_items_count = 0
+        effective_total_price = Decimal("0.00")
 
         for item in items:
+
+            # ----------------------------------------------------------
+            # EFFECTIVE SELECTION
+            # ----------------------------------------------------------
+            #
+            # DB'deki is_selected eski durumda True kalmış olabilir.
+            #
+            # Ancak ürün artık satın alınabilir değilse kullanıcıya
+            # selected olarak gösterilmemeli ve toplam fiyata
+            # dahil edilmemeli.
+            #
+            # Burada DB mutation yapılmaz.
+            #
+
+            effective_selected = item.is_selected
+
+            if effective_selected:
+                effective_selected = cls._is_cart_item_selectable(
+                    item.store_product
+                )
+
+            # Template mevcut item.is_selected alanını kullanıyorsa
+            # render sürecinde de doğru görünmesi için instance
+            # üzerindeki değeri yalnızca memory'de güncelliyoruz.
+            #
+            # DB'ye save yapılmadığı için GET request mutation yapmaz.
+
+            item.is_selected = effective_selected
 
             store = item.store_product.store
 
@@ -1389,21 +1495,91 @@ class CartService:
 
             grouped_data[store.id]["items"].append(item)
 
-            if item.is_selected:
+            if effective_selected:
+                line_total = item.total_price
+
                 grouped_data[store.id][
                     "store_total_price"
-                ] += item.total_price
+                ] += line_total
+
+                effective_selected_items_count += (
+                    item.quantity
+                )
+
+                effective_total_price += line_total
 
         return {
             "cart": cart,
-            "total_price": cart.total_cart_price,
+            "total_price": effective_total_price,
             "total_items": cart.total_items_count,
-            "selected_items_count": cart.selected_items_count,
+            "selected_items_count": effective_selected_items_count,
             "grouped_items": list(
                 grouped_data.values()
             ),
             "price_changes": price_changes,
         }
+
+
+    @classmethod
+    @transaction.atomic
+    def clear_order_items(cls, *, order):
+        """
+        Başarılı ödeme sonrası yalnızca checkout sırasında
+        satın alınan ve checkout'tan sonra değiştirilmemiş
+        CartItem kayıtlarını temizler.
+    
+        Güvenlik kuralı:
+    
+            source_cart_item_updated_at
+                ==
+            current CartItem.updated_at
+    
+        ise CartItem checkout snapshot'ı ile hâlâ aynıdır
+        ve silinebilir.
+    
+        Değişmişse dokunulmaz.
+    
+        Return:
+            int -> silinen CartItem sayısı
+        """
+    
+        order_items = (
+            OrderItem.objects
+            .select_related("source_cart_item")
+            .filter(
+                sub_order__order_id=order.pk,
+                source_cart_item__isnull=False,
+            )
+            .order_by(
+                "source_cart_item_id",
+                "id",
+            )
+        )
+    
+        deleted_count = 0
+    
+        for order_item in order_items:
+            cart_item = order_item.source_cart_item
+    
+            if cart_item is None:
+                continue
+            
+            # Checkout sırasında alınan snapshot yoksa
+            # güvenli tarafta kalıp silme.
+            if order_item.source_cart_item_updated_at is None:
+                continue
+            
+            # CartItem checkout'tan sonra değiştirilmiş.
+            if (
+                cart_item.updated_at
+                != order_item.source_cart_item_updated_at
+            ):
+                continue
+            
+            cart_item.delete()
+            deleted_count += 1
+    
+        return deleted_count
 
     # ========================================================================
     # LOCK STOCK FOR CHECKOUT
@@ -1576,7 +1752,11 @@ class CartService:
             # STOCK
             # ----------------------------------------------------------------
 
-            available_stock = 2 # StockReservationService.get_available_stock(store_product)
+            available_stock = (
+                StockReservationService.get_available_stock(
+                    store_product=store_product,
+                )
+            )
 
             if available_stock < item.quantity:
                 raise InsufficientStockError(

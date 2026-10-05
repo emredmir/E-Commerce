@@ -15,12 +15,16 @@ from django.template.loader import render_to_string
 import json
 import logging
 
+from datetime import timedelta
+
+from django.utils import timezone
+
 from products.services.storefront_offers import StorefrontOfferService
 from products.services.storefront import ProductQAService
 from django.db.models.functions import Coalesce
 
 
-from django.db.models import Count, F, Prefetch, Window, Subquery, DecimalField, IntegerField, OuterRef, Exists, Q, Max
+from django.db.models import Count, F, Prefetch, Window, Sum, Subquery, DecimalField, IntegerField, OuterRef, Exists, Q, Max
 from django.db.models.functions import RowNumber
 
 from products.models import ProductCollection, ProductCollectionItem, ProductQuestion, ProductAnswer
@@ -38,7 +42,11 @@ from orders.exceptions import (
     StoredCardNotFoundError,
 )
 
+from orders.models import Order, SubOrder, OrderItem, PaymentStatus, PaymentTransaction, SubOrderStatus
+
 logger = logging.getLogger(__name__)
+
+#TODO: view fazla büyüdü ayırabilirsin.
 
 def register_view(request):
     if request.method == 'POST':
@@ -183,6 +191,370 @@ class AddressDeleteView(LoginRequiredMixin, View):
             other.save()
         address.delete()
         return JsonResponse({'success': True})
+
+
+
+# CUSTOMER ORDER LIST
+class CustomerOrderListView(LoginRequiredMixin, ListView):
+    """
+    Giriş yapmış müşterinin kendi siparişlerini listeler.
+
+    Filtreler:
+
+        period=all
+        period=3m
+        period=<year>
+
+    Pagination:
+
+        page_size=10
+        page_size=20
+        page_size=30
+
+    Her sipariş kartında en fazla 4 ürün önizlenir.
+    """
+
+    model = Order
+
+    template_name = "accounts/orders/orders.html"
+    context_object_name = "orders"
+
+    default_page_size = 10
+    allowed_page_sizes = (5, 10, 20, 30)
+
+    preview_item_limit = 4
+
+    def get_page_size(self):
+        value = self.request.GET.get(
+            "page_size",
+            str(self.default_page_size),
+        )
+
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            return self.default_page_size
+
+        if value not in self.allowed_page_sizes:
+            return self.default_page_size
+
+        return value
+
+    def get_paginate_by(self, queryset):
+        return self.get_page_size()
+
+    def get_queryset(self):
+
+        period = self.request.GET.get(
+            "period",
+            "all",
+        )
+
+        queryset = (
+            Order.objects
+            .filter(
+                user=self.request.user,
+            )
+        )
+
+        # ---------------------------------------------------------
+        # DATE FILTER
+        # ---------------------------------------------------------
+
+        if period == "3m":
+
+            start_date = (
+                timezone.now()
+                - timedelta(days=90)
+            )
+
+            queryset = queryset.filter(
+                created_at__gte=start_date,
+            )
+
+        elif period.isdigit():
+
+            year = int(period)
+
+            queryset = queryset.filter(
+                created_at__year=year,
+            )
+
+        # ---------------------------------------------------------
+        # COUNTS
+        # ---------------------------------------------------------
+
+        queryset = queryset.annotate(
+            store_count=Count(
+                "sub_orders__store",
+                distinct=True,
+            ),
+            item_count=Sum(
+                "sub_orders__items__quantity",
+            ),
+        )
+
+        # ---------------------------------------------------------
+        # ORDER ITEMS
+        # ---------------------------------------------------------
+
+        order_item_qs = (
+            OrderItem.objects
+            .order_by(
+                "id",
+            )
+        )
+
+        sub_order_qs = (
+            SubOrder.objects
+            .prefetch_related(
+                Prefetch(
+                    "items",
+                    queryset=order_item_qs,
+                    to_attr="prefetched_items",
+                ),
+            )
+            .order_by(
+                "id",
+            )
+        )
+
+        queryset = queryset.prefetch_related(
+            Prefetch(
+                "sub_orders",
+                queryset=sub_order_qs,
+                to_attr="prefetched_sub_orders",
+            ),
+        )
+
+        return queryset.order_by(
+            "-created_at",
+            "-id",
+        )
+
+    def get_context_data(self, **kwargs):
+
+        context = super().get_context_data(
+            **kwargs
+        )
+
+        # ---------------------------------------------------------
+        # AVAILABLE YEARS
+        # ---------------------------------------------------------
+
+        available_years = [
+            value.year
+            for value in (
+                Order.objects
+                .filter(
+                    user=self.request.user,
+                )
+                .dates(
+                    "created_at",
+                    "year",
+                    order="DESC",
+                )
+            )
+        ]
+
+        # ---------------------------------------------------------
+        # FILTER STATE
+        # ---------------------------------------------------------
+
+        period = self.request.GET.get(
+            "period",
+            "all",
+        )
+
+        if (
+            period != "all"
+            and period != "3m"
+            and not period.isdigit()
+        ):
+            period = "all"
+
+        context["period"] = period
+
+        context["available_years"] = (
+            available_years
+        )
+
+        context["page_size"] = (
+            self.get_page_size()
+        )
+
+        # ---------------------------------------------------------
+        # FLATTEN ORDER ITEMS
+        # ---------------------------------------------------------
+
+        for order in context["orders"]:
+
+            all_items = []
+
+            for sub_order in getattr(
+                order,
+                "prefetched_sub_orders",
+                [],
+            ):
+
+                all_items.extend(
+                    getattr(
+                        sub_order,
+                        "prefetched_items",
+                        [],
+                    )
+                )
+
+            order.total_item_count = len(all_items)
+
+            # Kartta gösterilecek ürünler.
+            order.preview_items = all_items[
+                :self.preview_item_limit
+            ]
+
+            order.remaining_item_count = max(
+                len(all_items) - len(order.preview_items),
+                0,
+            )
+
+        # ---------------------------------------------------------
+        # PAGINATION QUERY
+        # ---------------------------------------------------------
+
+        query_params = (
+            self.request.GET.copy()
+        )
+
+        query_params.pop(
+            "page",
+            None,
+        )
+
+        context["pagination_query"] = (
+            query_params.urlencode()
+        )
+
+        return context
+
+# =============================================================================
+# CUSTOMER ORDER DETAIL
+# =============================================================================
+
+
+class CustomerOrderDetailView(LoginRequiredMixin, DetailView):
+    """
+    Müşterinin kendi siparişinin tüm detaylarını gösterir.
+
+    GET:
+        /accounts/orders/<order_number>/
+
+    Hiyerarşi:
+
+        Order
+            ├── SubOrder (Store A)
+            │      ├── OrderItem
+            │      └── OrderItem
+            │
+            └── SubOrder (Store B)
+                   └── OrderItem
+
+    Sorumlulukları:
+        - Yalnızca mevcut kullanıcıya ait Order'ı getirmek
+        - SubOrder ve OrderItem ilişkilerini optimize şekilde yüklemek
+        - Detay template'i için gerekli context'i hazırlamak
+
+    Business logic içermez.
+    """
+
+    model = Order
+    template_name = "accounts/orders/order_detail.html"
+    context_object_name = "order"
+    slug_field = "order_number"
+    slug_url_kwarg = "order_number"
+
+    def get_queryset(self):
+        """
+        Ownership kontrolü queryset seviyesinde yapılır.
+
+        Böylece başka bir kullanıcının order_number değeri URL üzerinden
+        bilinse bile ilgili Order queryset içerisinde bulunamaz ve
+        DetailView otomatik olarak 404 döndürür.
+        """
+
+        order_items = (
+            OrderItem.objects
+            .select_related(
+                "store_product__variant__product",
+            )
+            .order_by(
+                "id",
+            )
+        )
+
+        sub_orders = (
+            SubOrder.objects
+            .select_related(
+                "store",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "items",
+                    queryset=order_items,
+                ),
+            )
+            .order_by(
+                "id",
+            )
+        )
+
+        return (
+            Order.objects
+            .filter(
+                user=self.request.user,
+            )
+            .annotate(
+                total_quantity=Sum(
+                    "sub_orders__items__quantity",
+                ),
+            )
+            .prefetch_related(
+                Prefetch(
+                    "sub_orders",
+                    queryset=sub_orders,
+                ),
+            )
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        payment_transaction = (
+            PaymentTransaction.objects
+            .filter(
+                order=self.object,
+                status=PaymentStatus.SUCCESS,
+            )
+            .order_by(
+                "-succeeded_at",
+                "-id",
+            )
+            .first()
+        )
+
+        sub_orders = list(
+            self.object.sub_orders.all()
+        )
+
+        for sub_order in sub_orders:
+            sub_order.is_delivered = (
+                sub_order.status == SubOrderStatus.DELIVERED
+            )
+
+        context["payment_transaction"] = payment_transaction
+
+        context["sub_orders"] = sub_orders
+
+        return context
 
 class StoredCardListView(LoginRequiredMixin, TemplateView):
     """ 
@@ -1115,7 +1487,7 @@ class CollectionDetailView(LoginRequiredMixin, DetailView):
             .select_related(
                 "variant__product__brand", 
                 "variant__product__category",
-                "offer", # YENİ: Teklifi ve mağazayı peşin çekiyoruz
+                "offer",
                 "offer__store"
             )
             .prefetch_related(

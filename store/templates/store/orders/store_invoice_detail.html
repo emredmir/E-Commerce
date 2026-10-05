@@ -1,0 +1,616 @@
+{% extends "store/store_dashboard_base.html" %}
+
+{% block title %}
+    {{ invoice.invoice_number }} — Fatura
+{% endblock %}
+
+{% block content %}
+
+<style>
+    .invoice-detail-page {
+        max-width: 1100px;
+        margin: 0 auto;
+    }
+
+    .invoice-detail-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 22px;
+    }
+
+    .invoice-detail-title {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 800;
+    }
+
+    .invoice-detail-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        margin-top: 6px;
+        color: #64748b;
+        font-size: 0.82rem;
+    }
+
+    .invoice-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .invoice-action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        padding: 9px 13px;
+        border: 1px solid #cbd5e1;
+        border-radius: 9px;
+        background: #fff;
+        color: #334155;
+        text-decoration: none;
+        font-size: 0.8rem;
+        font-weight: 700;
+        transition: .2s;
+        white-space: nowrap;
+    }
+
+    .invoice-action-btn:hover {
+        background: #f8fafc;
+        border-color: #94a3b8;
+    }
+
+    .invoice-document {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 30px;
+    }
+
+    .invoice-parties {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        margin-bottom: 28px;
+    }
+
+    .invoice-party-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 18px;
+    }
+
+    .invoice-party-title {
+        margin: 0 0 12px;
+        color: #334155;
+        font-size: 0.75rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .invoice-party-name {
+        color: #0f172a;
+        font-size: 0.95rem;
+        font-weight: 800;
+        margin-bottom: 7px;
+    }
+
+    .invoice-party-line {
+        color: #475569;
+        font-size: 0.82rem;
+        line-height: 1.6;
+    }
+
+    .invoice-items-wrapper {
+        overflow-x: auto;
+        margin-bottom: 28px;
+    }
+
+    .invoice-items-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 700px;
+    }
+
+    .invoice-items-table th {
+        padding: 11px 10px;
+        border-bottom: 2px solid #e2e8f0;
+        color: #475569;
+        font-size: 0.74rem;
+        font-weight: 800;
+        text-align: left;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .invoice-items-table td {
+        padding: 13px 10px;
+        border-bottom: 1px solid #f1f5f9;
+        color: #334155;
+        font-size: 0.82rem;
+        vertical-align: top;
+    }
+
+    .invoice-item-product {
+        color: #0f172a;
+        font-weight: 700;
+    }
+
+    .invoice-item-variant {
+        margin-top: 4px;
+        color: #64748b;
+        font-size: 0.76rem;
+    }
+
+    .invoice-number-cell {
+        color: #64748b;
+        font-size: 0.76rem;
+    }
+
+    .invoice-money {
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .invoice-summary {
+        width: min(100%, 420px);
+        margin-left: auto;
+    }
+
+    .invoice-summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 8px 0;
+        color: #475569;
+        font-size: 0.84rem;
+    }
+
+    .invoice-summary-row.total {
+        margin-top: 8px;
+        padding-top: 14px;
+        border-top: 2px solid #e2e8f0;
+        color: #0f172a;
+        font-size: 1rem;
+        font-weight: 800;
+    }
+
+    .invoice-summary-value {
+        white-space: nowrap;
+    }
+
+    .invoice-reference-section {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        margin-top: 28px;
+        padding-top: 22px;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    .invoice-reference-card {
+        color: #475569;
+        font-size: 0.82rem;
+        line-height: 1.7;
+    }
+
+    .invoice-reference-label {
+        display: block;
+        margin-bottom: 3px;
+        color: #64748b;
+        font-size: 0.74rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .invoice-reference-value {
+        color: #0f172a;
+        font-weight: 700;
+    }
+
+    @media (max-width: 768px) {
+        .invoice-detail-header {
+            flex-direction: column;
+        }
+
+        .invoice-actions {
+            width: 100%;
+        }
+
+        .invoice-action-btn {
+            flex: 1;
+        }
+
+        .invoice-document {
+            padding: 18px;
+        }
+
+        .invoice-parties,
+        .invoice-reference-section {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+
+<div class="invoice-detail-page">
+
+    <!-- ==============================================================
+         HEADER
+         ============================================================== -->
+
+    <div class="invoice-detail-header">
+
+        <div>
+
+            <h1 class="invoice-detail-title">
+                Fatura
+            </h1>
+
+            <div class="invoice-detail-meta">
+
+                <span>
+                    <i class="fa-solid fa-file-invoice"></i>
+                    {{ invoice.invoice_number }}
+                </span>
+
+                <span>
+                    <i class="fa-regular fa-calendar"></i>
+                    {{ invoice.issued_at|date:"d.m.Y H:i" }}
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="invoice-actions">
+
+            <a
+                href="{% url 'store:store_invoices' store.slug %}"
+                class="invoice-action-btn"
+            >
+                <i class="fa-solid fa-arrow-left"></i>
+                Faturalara Dön
+            </a>
+
+        </div>
+
+    </div>
+
+
+    <!-- ==============================================================
+         INVOICE DOCUMENT
+         ============================================================== -->
+
+    <div class="invoice-document">
+
+        <!-- ==========================================================
+             SELLER / BUYER
+             ========================================================== -->
+
+        <div class="invoice-parties">
+
+            <!-- SELLER -->
+
+            <section class="invoice-party-card">
+
+                <h2 class="invoice-party-title">
+                    Satıcı
+                </h2>
+
+                <div class="invoice-party-name">
+                    {{ invoice.seller_display_name }}
+                </div>
+
+                {% if invoice.seller_legal_company_title %}
+                    <div class="invoice-party-line">
+                        {{ invoice.seller_legal_company_title }}
+                    </div>
+                {% endif %}
+
+                <div class="invoice-party-line">
+                    {{ invoice.seller_address|linebreaksbr }}
+                </div>
+
+                {% if invoice.seller_phone %}
+                    <div class="invoice-party-line">
+                        Tel:
+                        {{ invoice.seller_phone }}
+                    </div>
+                {% endif %}
+
+                {% if invoice.seller_tax_office %}
+                    <div class="invoice-party-line">
+                        Vergi Dairesi:
+                        {{ invoice.seller_tax_office }}
+                    </div>
+                {% endif %}
+
+                {% if invoice.seller_tax_number %}
+                    <div class="invoice-party-line">
+                        Vergi No:
+                        {{ invoice.seller_tax_number }}
+                    </div>
+                {% endif %}
+
+                {% if invoice.seller_identity_number %}
+                    <div class="invoice-party-line">
+                        T.C. Kimlik No:
+                        {{ invoice.seller_identity_number }}
+                    </div>
+                {% endif %}
+
+            </section>
+
+
+            <!-- BUYER -->
+
+            <section class="invoice-party-card">
+
+                <h2 class="invoice-party-title">
+                    Fatura Bilgileri
+                </h2>
+
+                <div class="invoice-party-name">
+                    {{ invoice.buyer_full_name }}
+                </div>
+
+                {% if invoice.buyer_email %}
+                    <div class="invoice-party-line">
+                        {{ invoice.buyer_email }}
+                    </div>
+                {% endif %}
+
+                {% if invoice.buyer_phone %}
+                    <div class="invoice-party-line">
+                        Tel:
+                        {{ invoice.buyer_phone }}
+                    </div>
+                {% endif %}
+
+                {% if invoice.buyer_identity_number %}
+                    <div class="invoice-party-line">
+                        T.C. Kimlik / Vergi No:
+                        {{ invoice.buyer_identity_number }}
+                    </div>
+                {% endif %}
+
+                <div class="invoice-party-line">
+                    {{ invoice.buyer_billing_address_line1 }}
+                </div>
+
+                {% if invoice.buyer_billing_address_line2 %}
+                    <div class="invoice-party-line">
+                        {{ invoice.buyer_billing_address_line2 }}
+                    </div>
+                {% endif %}
+
+                <div class="invoice-party-line">
+                    {{ invoice.buyer_billing_postal_code }}
+                    {{ invoice.buyer_billing_city }}
+                    {{ invoice.buyer_billing_state }}
+                </div>
+
+            </section>
+
+        </div>
+
+
+        <!-- ==========================================================
+             ITEMS
+             ========================================================== -->
+
+        <div class="invoice-items-wrapper">
+
+            <table class="invoice-items-table">
+
+                <thead>
+
+                    <tr>
+                        <th>Ürün</th>
+                        <th>SKU</th>
+                        <th>Miktar</th>
+                        <th>Birim Fiyat</th>
+                        <th>İndirim</th>
+                        <th>Vergi</th>
+                        <th>Toplam</th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    {% for item in items %}
+
+                        <tr>
+
+                            <td>
+
+                                <div class="invoice-item-product">
+                                    {{ item.product_name }}
+                                </div>
+
+                                {% if item.variant_display %}
+                                    <div class="invoice-item-variant">
+                                        {{ item.variant_display }}
+                                    </div>
+                                {% endif %}
+
+                                {% if item.barcode %}
+                                    <div class="invoice-number-cell">
+                                        Barkod: {{ item.barcode }}
+                                    </div>
+                                {% endif %}
+
+                            </td>
+
+                            <td>
+                                {{ item.sku|default:"-" }}
+                            </td>
+
+                            <td>
+                                {{ item.quantity }}
+                            </td>
+
+                            <td class="invoice-money">
+                                {{ item.unit_price|floatformat:2 }}
+                                {{ invoice.currency }}
+                            </td>
+
+                            <td class="invoice-money">
+                                {{ item.discount_amount|floatformat:2 }}
+                                {{ invoice.currency }}
+                            </td>
+
+                            <td class="invoice-money">
+                                {{ item.tax_amount|floatformat:2 }}
+                                {{ invoice.currency }}
+                            </td>
+
+                            <td class="invoice-money">
+                                <strong>
+                                    {{ item.total_amount|floatformat:2 }}
+                                    {{ invoice.currency }}
+                                </strong>
+                            </td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+
+        <!-- ==========================================================
+             TOTALS
+             ========================================================== -->
+
+        <div class="invoice-summary">
+
+            <div class="invoice-summary-row">
+
+                <span>
+                    Ara Toplam
+                </span>
+
+                <span class="invoice-summary-value">
+                    {{ invoice.subtotal|floatformat:2 }}
+                    {{ invoice.currency }}
+                </span>
+
+            </div>
+
+
+            {% if invoice.discount_amount %}
+                <div class="invoice-summary-row">
+
+                    <span>
+                        İndirim
+                    </span>
+
+                    <span class="invoice-summary-value">
+                        -{{ invoice.discount_amount|floatformat:2 }}
+                        {{ invoice.currency }}
+                    </span>
+
+                </div>
+            {% endif %}
+
+
+            {% if invoice.shipping_amount %}
+                <div class="invoice-summary-row">
+
+                    <span>
+                        Kargo
+                    </span>
+
+                    <span class="invoice-summary-value">
+                        {{ invoice.shipping_amount|floatformat:2 }}
+                        {{ invoice.currency }}
+                    </span>
+
+                </div>
+            {% endif %}
+
+
+            {% if invoice.tax_amount %}
+                <div class="invoice-summary-row">
+
+                    <span>
+                        Vergi
+                    </span>
+
+                    <span class="invoice-summary-value">
+                        {{ invoice.tax_amount|floatformat:2 }}
+                        {{ invoice.currency }}
+                    </span>
+
+                </div>
+            {% endif %}
+
+
+            <div class="invoice-summary-row total">
+
+                <span>
+                    Genel Toplam
+                </span>
+
+                <span class="invoice-summary-value">
+                    {{ invoice.total_amount|floatformat:2 }}
+                    {{ invoice.currency }}
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <!-- ==========================================================
+             REFERENCES
+             ========================================================== -->
+
+        <div class="invoice-reference-section">
+
+            <div class="invoice-reference-card">
+
+                <span class="invoice-reference-label">
+                    Alt Sipariş
+                </span>
+
+                <span class="invoice-reference-value">
+                    {{ suborder.suborder_number }}
+                </span>
+
+            </div>
+
+
+            <div class="invoice-reference-card">
+
+                <span class="invoice-reference-label">
+                    Ana Sipariş
+                </span>
+
+                <span class="invoice-reference-value">
+                    {{ main_order.order_number }}
+                </span>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

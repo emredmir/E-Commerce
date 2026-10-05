@@ -2,7 +2,7 @@ import json
 import logging
 from decimal import Decimal
 from django.db import transaction
-from django.http import JsonResponse
+from django.http import JsonResponse, Http404
 from django.shortcuts import redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
@@ -50,6 +50,7 @@ from .services.card_storage import CardStorageService, StoredCardCreateData
 
 logger = logging.getLogger(__name__)
 
+#TODO: view sayfası çok büyüdü. düzenlemede ayır.
 
 # =============================================================================
 # CHECKOUT PAGE
@@ -123,8 +124,11 @@ class CheckoutPageView(TemplateView):
         # ------------------------------------------------------------------
 
         self.selected_items_count = sum(
-            len(group["items"])
-            for group in self.selected_grouped_items
+            (
+                item.quantity
+                for group in self.selected_grouped_items
+                for item in group["items"]
+            )
         )
 
         self.selected_total_price = sum(
@@ -139,10 +143,16 @@ class CheckoutPageView(TemplateView):
         # SHIPPING
         # ------------------------------------------------------------------
 
-        self.shipping_total = (
-            ShippingService.calculate_shipping(
-                subtotal=self.selected_total_price,
-            )
+        self.shipping_total = sum(
+            (
+                group["shipping_total"]
+                for group in self.selected_grouped_items
+            ),
+            Decimal("0.00"),
+        )
+
+        self.shipping_total = self.shipping_total.quantize(
+            Decimal("0.01"),
         )
 
         self.is_free_shipping = (
@@ -157,6 +167,10 @@ class CheckoutPageView(TemplateView):
         self.checkout_total = (
             self.selected_total_price
             + self.shipping_total
+        )
+
+        self.checkout_total = self.checkout_total.quantize(
+            Decimal("0.01"),
         )
 
 
@@ -239,17 +253,24 @@ class CheckoutPageView(TemplateView):
         """
         Checkout ekranında gösterilecek ürünleri hazırlar.
 
-        Cart context içerisindeki grouped_items'dan yalnızca:
+        Her mağaza için:
 
-            item.is_selected == True
+            - seçili ürünler
+            - mağaza ara toplamı
+            - mağaza kargo ücreti
+            - mağaza toplamı
+            - ücretsiz kargo durumu
 
-        olan CartItem'lar alınır.
+        hazırlanır.
 
-        Ardından mağaza bazında tekrar gruplanır ve her mağazanın
-        seçili ürünlerden oluşan ara toplamı hesaplanır.
+        Bu method yalnızca checkout ekranı için presentation/context
+        verisi üretir.
 
-        Bu yalnızca presentation/context hazırlığıdır.
-        Sipariş oluşturma ve fiyat doğrulama OrderService tarafındadır.
+        Gerçek sipariş finansalları:
+
+            OrderService._calculate_order_totals()
+
+        tarafından yeniden hesaplanır.
         """
 
         grouped_items = self.cart_context.get(
@@ -282,16 +303,193 @@ class CheckoutPageView(TemplateView):
                 Decimal("0.00"),
             )
 
+            store_total_price = store_total_price.quantize(
+                Decimal("0.01")
+            )
+
+            # --------------------------------------------------------------
+            # STORE SHIPPING
+            # --------------------------------------------------------------
+    
+            shipping_total = (
+                ShippingService.calculate_shipping(
+                    subtotal=store_total_price,
+                )
+            )
+    
+            shipping_total = shipping_total.quantize(
+                Decimal("0.01")
+            )
+    
+            # --------------------------------------------------------------
+            # STORE TOTAL
+            # --------------------------------------------------------------
+    
+            store_checkout_total = (
+                store_total_price
+                + shipping_total
+            )
+    
+            store_checkout_total = (
+                store_checkout_total.quantize(
+                    Decimal("0.01")
+                )
+            )
+    
+            # --------------------------------------------------------------
+            # GROUP
+            # --------------------------------------------------------------
+    
             selected_groups.append(
                 {
                     "store": group.get("store"),
                     "items": selected_items,
-                    "store_total_price": store_total_price,
+
+                    "store_item_count": sum(
+                        item.quantity
+                        for item in selected_items
+                    ),
+    
+                    "store_total_price": (
+                        store_total_price
+                    ),
+    
+                    "shipping_total": (
+                        shipping_total
+                    ),
+    
+                    "store_checkout_total": (
+                        store_checkout_total
+                    ),
+    
+                    "is_free_shipping": (
+                        shipping_total == Decimal("0.00")
+                        and store_total_price > Decimal("0.00")
+                    ),
                 }
             )
-
+    
         return selected_groups
 
+# =============================================================================
+# ORDER SUCCESS PAGE
+# =============================================================================
+
+class OrderSuccessView(TemplateView):
+    """
+    Başarılı ödeme sonrasında gösterilen sipariş onay sayfası.
+
+    GET:
+        /orders/checkout/<order_number>/success/
+
+    Sorumlulukları:
+        - Order erişimini doğrulamak
+        - Kullanıcının / guest session'ın sipariş sahibi olduğunu kontrol etmek
+        - Sipariş için gerçekten başarılı PaymentTransaction bulunduğunu kontrol etmek
+        - Başarı sayfasını render etmek
+
+    Business logic içermez.
+    """
+
+    template_name = "orders/order_success.html"
+
+    def get(
+        self,
+        request,
+        order_number,
+        *args,
+        **kwargs,
+    ):
+        self.order = self._get_order(
+            request=request,
+            order_number=order_number,
+        )
+
+        self.payment_transaction = self._get_successful_payment(
+            order=self.order,
+        )
+
+        return super().get(
+            request,
+            *args,
+            **kwargs,
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(
+            **kwargs,
+        )
+
+        context["order"] = self.order
+        context["payment_transaction"] = (
+            self.payment_transaction
+        )
+
+        return context
+
+    # =========================================================================
+    # ORDER ACCESS
+    # =========================================================================
+
+    @staticmethod
+    def _get_order(
+        *,
+        request,
+        order_number,
+    ):
+        order = get_object_or_404(
+            Order.objects.select_related("user"),
+            order_number=order_number,
+        )
+
+        # ---------------------------------------------------------------------
+        # AUTHENTICATED USER
+        # ---------------------------------------------------------------------
+
+        if request.user.is_authenticated:
+            if order.user_id != request.user.id:
+                raise Http404
+
+            return order
+
+        # ---------------------------------------------------------------------
+        # GUEST
+        # ---------------------------------------------------------------------
+
+        guest_order_number = (
+            request.session.get(
+                "checkout_order_number",
+            )
+        )
+
+        if guest_order_number != order.order_number:
+            raise Http404
+
+        return order
+
+    # =========================================================================
+    # PAYMENT
+    # =========================================================================
+
+    @staticmethod
+    def _get_successful_payment(
+        *,
+        order,
+    ):
+        payment_transaction = (
+            PaymentTransaction.objects
+            .filter(
+                order=order,
+                status=PaymentStatus.SUCCESS,
+            )
+            .order_by("-id")
+            .first()
+        )
+
+        if not payment_transaction:
+            raise Http404
+
+        return payment_transaction
 
 # =============================================================================
 # BASE ORDER API VIEW
@@ -2277,18 +2475,256 @@ class Iyzico3DSCallbackAPIView(View):
         # SUCCESS
         # ==================================================================
 
+        return redirect(
+            "orders:order_success",
+            order_number=result.order_number,
+        )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class IyzicoPaymentWebhookAPIView(View):
+    """
+    iyzico Direct Format webhook endpoint.
+
+    Bu endpoint:
+        - kullanıcı/session/auth gerektirmez.
+        - CSRF token gerektirmez.
+        - yalnızca X-IYZ-SIGNATURE-V3 doğrulanmış bildirimleri işler.
+        - webhook SUCCESS için ikinci kez 3DS completion çağırmaz.
+        - doğrulanmış SUCCESS sonucunu PaymentService üzerinden finalize eder.
+        - webhook FAILURE'i local PaymentTransaction üzerinde FAILED yapar.
+    """
+
+    http_method_names = [
+        "post",
+        "options",
+    ]
+
+    MAX_BODY_BYTES = 64 * 1024
+
+    def post(self, request, *args, **kwargs):
+        # ------------------------------------------------------------------
+        # BODY SIZE
+        # ------------------------------------------------------------------
+
+        content_length = request.META.get(
+            "CONTENT_LENGTH"
+        )
+
+        if content_length:
+            try:
+                if int(content_length) > self.MAX_BODY_BYTES:
+                    return JsonResponse(
+                        {
+                            "success": False,
+                            "error": "Webhook payload too large.",
+                        },
+                        status=413,
+                    )
+            except (TypeError, ValueError):
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": "Invalid Content-Length.",
+                    },
+                    status=400,
+                )
+
+        # ------------------------------------------------------------------
+        # JSON
+        # ------------------------------------------------------------------
+
+        try:
+            payload = json.loads(
+                request.body.decode("utf-8")
+            )
+        except (
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+        ):
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "Invalid JSON payload.",
+                },
+                status=400,
+            )
+
+        if not isinstance(payload, dict):
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "Webhook payload must be a JSON object.",
+                },
+                status=400,
+            )
+
+        # Django request.META header mapping:
+        # X-IYZ-SIGNATURE-V3 -> HTTP_X_IYZ_SIGNATURE_V3
+        signature = str(
+            request.META.get(
+                "HTTP_X_IYZ_SIGNATURE_V3",
+                "",
+            )
+            or ""
+        ).strip()
+
+        payment_id = str(
+            payload.get(
+                "paymentId",
+                "",
+            )
+            or ""
+        ).strip()
+
+        conversation_id = str(
+            payload.get(
+                "paymentConversationId",
+                "",
+            )
+            or ""
+        ).strip()
+
+        event_type = str(
+            payload.get(
+                "iyziEventType",
+                "",
+            )
+            or ""
+        ).strip()
+
+        status = str(
+            payload.get(
+                "status",
+                "",
+            )
+            or ""
+        ).strip().upper()
+
+        # ------------------------------------------------------------------
+        # SAFE LOGGING
+        # ------------------------------------------------------------------
+
+        logger.info(
+            "iyzico webhook received. "
+            "event_type=%s payment_id=%s conversation_id=%s status=%s "
+            "iyzi_reference_code=%s",
+            event_type,
+            payment_id,
+            conversation_id,
+            status,
+            str(
+                payload.get(
+                    "iyziReferenceCode",
+                    "",
+                )
+                or ""
+            ).strip(),
+        )
+
+        # ------------------------------------------------------------------
+        # SERVICE
+        # ------------------------------------------------------------------
+
+        try:
+            result = PaymentService.handle_webhook(
+                payload=payload,
+                signature=signature,
+            )
+
+        except PaymentVerificationError as exc:
+            logger.warning(
+                "iyzico webhook verification failed. "
+                "event_type=%s payment_id=%s conversation_id=%s status=%s "
+                "error=%s",
+                event_type,
+                payment_id,
+                conversation_id,
+                status,
+                exc,
+            )
+
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "Webhook verification failed.",
+                },
+                status=400,
+            )
+
+        except PaymentValidationError as exc:
+            logger.warning(
+                "iyzico webhook validation failed. "
+                "event_type=%s payment_id=%s conversation_id=%s status=%s "
+                "error=%s",
+                event_type,
+                payment_id,
+                conversation_id,
+                status,
+                exc,
+            )
+
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "Invalid webhook payload.",
+                },
+                status=400,
+            )
+
+        except PaymentGatewayError as exc:
+            # 5xx => provider retry mekanizmasının çalışabilmesi için.
+            logger.exception(
+                "iyzico webhook provider/reconciliation error. "
+                "event_type=%s payment_id=%s conversation_id=%s status=%s "
+                "error=%s",
+                event_type,
+                payment_id,
+                conversation_id,
+                status,
+                exc,
+            )
+
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "Webhook temporarily unavailable.",
+                },
+                status=502,
+            )
+
+        except Exception:
+            # Beklenmeyen exception -> 5xx.
+            # Böylece başarılı bir webhook'u sessizce kaybetmeyiz.
+            logger.exception(
+                "Unexpected iyzico webhook error. "
+                "event_type=%s payment_id=%s conversation_id=%s status=%s",
+                event_type,
+                payment_id,
+                conversation_id,
+                status,
+            )
+
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "Webhook processing failed.",
+                },
+                status=500,
+            )
+
+        # ------------------------------------------------------------------
+        # ALWAYS 2xx AFTER SUCCESSFUL PROCESSING
+        # ------------------------------------------------------------------
+
         return JsonResponse(
             {
-                "message": "Ödeme başarıyla tamamlandı.",
-                "payment_transaction_id": (
-                    result.payment_transaction_id
-                ),
-                "order_id": result.order_id,
-                "order_number": result.order_number,
-                "payment_id": result.payment_id,
-                "conversation_id": result.conversation_id,
-                "paid_price": str(
-                    result.paid_price
+                "success": True,
+                "handled": bool(
+                    result.get(
+                        "handled",
+                        True,
+                    )
                 ),
             },
             status=200,

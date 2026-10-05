@@ -60,6 +60,17 @@ class OrderCreationError(OrderDomainError):
     """Sipariş oluşturulması sırasında domain seviyesinde hata oluştu."""
     pass
 
+class InvalidSubOrderStatusTransitionError(Exception):
+    """SubOrder için geçersiz bir durum geçişi istendiğinde oluşur."""
+
+class InvoiceAlreadyExistsError(Exception):
+    """SubOrder için zaten invoice mevcut."""
+
+class InvoiceNotFoundError(Exception):
+    """Invoice bulunamadığında fırlatılır."""
+
+class InvoiceCreationError(Exception):
+    """Invoice oluşturulurken gerekli veri bulunamadığında fırlatılır."""
 
 # ============================================================================
 # STOCK
@@ -173,3 +184,14 @@ class RefundError(OrderDomainError):
 class InvalidRefundAmountError(RefundError):
     """İade tutarı geçersiz."""
     pass
+
+
+# SHIPPING
+
+class ShippingOperationError(Exception):
+    """Kargo işlemi gerçekleştirilemedi."""
+
+# Cancellation
+
+class CancellationError(Exception):
+    """Alt sipariş iptal işlemi gerçekleştirilemedi."""

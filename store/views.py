@@ -9,9 +9,32 @@ from django.urls import reverse_lazy
 from .forms import StoreForm
 
 import json
-from django.db.models import Exists, OuterRef, Prefetch, Q
-from django.http import JsonResponse
+from urllib.parse import urlencode
+from django.db.models import Exists, OuterRef, Prefetch, Q, Count
+from django.http import JsonResponse, Http404
 
+from orders.models import (
+    OrderItem,
+    OrderStatus,
+    SubOrder,
+    SubOrderStatus,
+    Invoice,
+    InvoiceItem,
+    CargoCompany,
+    RefundStatus,
+)
+from orders.services.order import OrderService
+from orders.services.cancellation import CancellationService
+from orders.services.shipping import ShippingService
+from orders.services.refund import RefundService, RefundError
+from orders.exceptions import (
+    OrderNotFoundError, InvalidSubOrderStatusTransitionError, InvoiceAlreadyExistsError, InvoiceCreationError,
+    ShippingOperationError, CancellationError
+)
+
+from products.mixins import (
+    StoreOwnerMixin
+)
 
 from products.models import ProductQuestion, ProductAnswer
 from products.services.storefront import ProductQAService
@@ -468,3 +491,782 @@ class StoreAnswerQuestionAPIView(SellerRequiredMixin, View):
             status=201,
         )
 
+class StoreOrderListView(
+    SellerRequiredMixin,
+    StoreOwnerMixin,
+    ListView,
+):
+    """
+    Satıcının kendi mağazasına ait siparişlerini listeler.
+
+    Seller tarafında ana Order yerine SubOrder temel alınır.
+
+    URL:
+        /stores/<store_slug>/orders/
+
+    Özellikler:
+        - Mağaza ownership kontrolü
+        - Durum filtreleme
+        - Sipariş / müşteri / ürün araması
+        - Pagination
+        - OrderItem prefetch
+        - Durum bazlı toplam sayılar
+    """
+
+    model = SubOrder
+    template_name = "store/orders/store_orders.html"
+    context_object_name = "orders"
+    paginate_by = 20
+
+    # ------------------------------------------------------------------
+    # ANA ORDER DURUMLARI
+    # ------------------------------------------------------------------
+    #
+    # Sipariş checkout sırasında oluşturulduğu için Order başlangıçta
+    # PENDING_PAYMENT olabilir.
+    #
+    # Satıcının işleme alabileceği siparişler ödeme süreci dışında
+    # kalanlardır.
+    #
+    # EXPIRED da satıcı panelinde aktif sipariş olarak görünmemeli.
+    # ------------------------------------------------------------------
+
+    excluded_order_statuses = (
+        OrderStatus.PENDING_PAYMENT,
+        OrderStatus.EXPIRED,
+    )
+
+    # ------------------------------------------------------------------
+    # QUERYSET
+    # ------------------------------------------------------------------
+
+    def get_queryset(self):
+        store = self.get_store()
+
+        # --------------------------------------------------------------
+        # OrderItem'ların tekrar tekrar sorgulanmasını engelle.
+        #
+        # Template tarafında:
+        #
+        #     order.order_items
+        #
+        # şeklinde kullanacağız.
+        # --------------------------------------------------------------
+
+        order_items_prefetch = Prefetch(
+            "items",
+            queryset=(
+                OrderItem.objects
+                .order_by("pk")
+            ),
+            to_attr="order_items",
+        )
+
+        qs = (
+            SubOrder.objects
+            .filter(
+                store=store,
+            )
+            .exclude(
+                order__status__in=self.excluded_order_statuses,
+            )
+            .select_related(
+                "order",
+                "store",
+            )
+            .prefetch_related(
+                order_items_prefetch,
+            )
+            .order_by(
+                "-created_at",
+                "-pk",
+            )
+        )
+
+        # --------------------------------------------------------------
+        # STATUS FILTER
+        # --------------------------------------------------------------
+
+        status = self.request.GET.get(
+            "status",
+            "",
+        ).strip()
+
+        if status in SubOrderStatus.values:
+            qs = qs.filter(
+                status=status,
+            )
+
+        # --------------------------------------------------------------
+        # SEARCH
+        # --------------------------------------------------------------
+
+        query = self.request.GET.get(
+            "q",
+            "",
+        ).strip()
+
+        if query:
+            # OrderItem tarafındaki aramayı Exists ile yapıyoruz.
+            #
+            # Böylece:
+            #
+            # SubOrder
+            #   ├── Item A
+            #   ├── Item B
+            #   └── Item C
+            #
+            # gibi bir sipariş aynı sorguda 3 kere çoğalmaz.
+            item_match = OrderItem.objects.filter(
+                sub_order_id=OuterRef("pk"),
+            ).filter(
+                Q(
+                    product_name_snapshot__icontains=query,
+                )
+                | Q(
+                    sku_snapshot__icontains=query,
+                )
+                | Q(
+                    barcode_snapshot__icontains=query,
+                )
+            )
+
+            qs = qs.filter(
+                Q(
+                    suborder_number__icontains=query,
+                )
+                | Q(
+                    order__order_number__icontains=query,
+                )
+                | Q(
+                    order__shipping_full_name__icontains=query,
+                )
+                | Q(
+                    order__customer_email__icontains=query,
+                )
+                | Q(
+                    order__customer_phone__icontains=query,
+                )
+                | Exists(item_match)
+            )
+
+        return qs
+
+    # ------------------------------------------------------------------
+    # CONTEXT
+    # ------------------------------------------------------------------
+
+    def get_context_data(
+        self,
+        **kwargs,
+    ):
+        context = super().get_context_data(
+            **kwargs,
+        )
+
+        store = self.get_store()
+
+        # --------------------------------------------------------------
+        # STATUS COUNTS
+        # --------------------------------------------------------------
+        #
+        # Bunlar search sonucuna göre değil, mağazanın toplam
+        # görüntülenebilir siparişlerine göre hesaplanır.
+        #
+        # Örneğin:
+        #
+        # Tümü       120
+        # Bekliyor    18
+        # Hazırlanan  24
+        # Kargoda     31
+        # Teslim      42
+        # İptal        5
+        #
+        # --------------------------------------------------------------
+
+        status_counts_db = (
+            SubOrder.objects
+            .filter(
+                store=store,
+            )
+            .exclude(
+                order__status__in=self.excluded_order_statuses,
+            )
+            .order_by()
+            .values(
+                "status",
+            )
+            .annotate(
+                count=Count("pk"),
+            )
+        )
+
+        status_counts = {
+            value: 0
+            for value, _label in SubOrderStatus.choices
+        }
+
+        for row in status_counts_db:
+            status_counts[row["status"]] = row["count"]
+
+        status_counts["all"] = sum(
+            status_counts.values(),
+        )
+
+        # --------------------------------------------------------------
+        # CURRENT FILTERS
+        # --------------------------------------------------------------
+
+        current_status = self.request.GET.get(
+            "status",
+            "",
+        ).strip()
+
+        if current_status not in SubOrderStatus.values:
+            current_status = ""
+
+        current_q = self.request.GET.get(
+            "q",
+            "",
+        ).strip()
+
+        # --------------------------------------------------------------
+        # PAGINATION QUERYSTRING
+        # --------------------------------------------------------------
+        #
+        # page parametresi çıkarılır.
+        #
+        # Böylece:
+        #
+        # ?status=pending&q=telefon&page=2
+        #
+        # yerine pagination linkleri:
+        #
+        # ?status=pending&q=telefon&page=3
+        #
+        # şeklinde üretilebilir.
+        # --------------------------------------------------------------
+
+        query_params = self.request.GET.copy()
+
+        query_params.pop(
+            "page",
+            None,
+        )
+
+        context["pagination_query"] = urlencode(
+            query_params,
+        )
+
+        # --------------------------------------------------------------
+        # TEMPLATE CONTEXT
+        # --------------------------------------------------------------
+
+        context.update(
+            {
+                "store": store,
+                "status_counts": status_counts,
+                "status_choices": SubOrderStatus.choices,
+                "current_status": current_status,
+                "current_q": current_q,
+            }
+        )
+
+        return context
+
+
+class StoreOrderDetailView(
+    SellerRequiredMixin,
+    StoreOwnerMixin,
+    View,
+):
+    """
+    Satıcının kendi mağazasına ait tek bir SubOrder'ı
+    detaylı şekilde görüntülemesini sağlar.
+
+    URL:
+        /stores/<store_slug>/orders/<suborder_number>/
+
+    Bu view:
+        - Seller authorization yapmaz.
+          SellerRequiredMixin + StoreOwnerMixin bunu yapar.
+        - SubOrder ownership kontrolünü doğrudan yapmaz.
+          OrderService.get_suborder_for_store() bunu yapar.
+        - Business logic içermez.
+        - Sipariş durumunu değiştirmez.
+    """
+
+    template_name = "store/orders/store_order_detail.html"
+
+    http_method_names = [
+        "get",
+    ]
+
+    def get_suborder(self):
+        """
+        Seller'ın erişebildiği SubOrder'ı getirir.
+
+        Aynı request içerisinde tekrar çağrılırsa
+        tekrar database sorgusu yapılmaz.
+        """
+
+        if not hasattr(self, "_suborder"):
+            try:
+                self._suborder = (
+                    OrderService.get_suborder_for_store(
+                        store=self.get_store(),
+                        suborder_number=self.kwargs["suborder_number"],
+                    )
+                )
+
+            except OrderNotFoundError as exc:
+                raise Http404(str(exc)) from exc
+
+        return self._suborder
+
+    def get(
+        self,
+        request,
+        *args,
+        **kwargs,
+    ):
+        store = self.get_store()
+        suborder = self.get_suborder()
+
+        try:
+            invoice = suborder.invoice
+        except Invoice.DoesNotExist:
+            invoice = None
+
+        can_cancel = suborder.status in {
+            SubOrderStatus.PENDING,
+            SubOrderStatus.PREPARING,
+        }
+
+        context = {
+            "store": store,
+            "suborder": suborder,
+            "main_order": suborder.order,
+            "items": list(suborder.items.all()),
+            "invoice": invoice,
+            "cargo_company_choices": CargoCompany.choices,
+            "can_cancel": can_cancel,
+        }
+
+        return render(
+            request,
+            self.template_name,
+            context,
+        )
+
+class StoreOrderCancellationView(
+    SellerRequiredMixin,
+    StoreOwnerMixin,
+    View,
+):
+    """
+    Satıcının kendi mağazasına ait SubOrder'ı iptal etmesini sağlar.
+
+    URL:
+        /stores/<store_slug>/orders/<suborder_number>/cancel/
+
+    Sadece POST kabul edilir.
+
+    Authorization:
+        SellerRequiredMixin
+            +
+        StoreOwnerMixin
+            +
+        OrderService.get_suborder_for_store()
+
+    Business logic:
+        CancellationService.cancel_suborder()
+    """
+
+    http_method_names = ["post"]
+
+    def post(
+        self,
+        request,
+        *args,
+        **kwargs,
+    ):
+        store = self.get_store()
+        print("CANCEL POST:", request.POST)
+
+        suborder_number = kwargs["suborder_number"]
+
+        # --------------------------------------------------------------
+        # SUBORDER
+        # --------------------------------------------------------------
+
+        try:
+            suborder = OrderService.get_suborder_for_store(
+                store=store,
+                suborder_number=suborder_number,
+            )
+
+        except OrderNotFoundError as exc:
+            raise Http404(str(exc)) from exc
+
+        # --------------------------------------------------------------
+        # REASON
+        # --------------------------------------------------------------
+
+        reason = request.POST.get(
+            "reason",
+            "",
+        ).strip()
+
+        print("CANCEL REASON:", repr(reason))
+
+        if not reason:
+            messages.error(
+                request,
+                "İptal nedeni belirtilmelidir.",
+            )
+
+            return redirect(
+                "store:store_order_detail",
+                store_slug=store.slug,
+                suborder_number=suborder.suborder_number,
+            )
+
+        # --------------------------------------------------------------
+        # CANCELLATION SERVICE
+        # --------------------------------------------------------------
+        print(
+            "CALLING CANCELLATION SERVICE:",
+            suborder_number,
+            reason,
+        )
+        try:
+            cancellation = (
+                CancellationService.cancel_suborder(
+                    suborder=suborder,
+                    cancelled_by=request.user,
+                    reason=reason,
+                )
+            )
+
+        except CancellationError as exc:
+            messages.error(
+                request,
+                str(exc),
+            )
+
+            return redirect(
+                "store:store_order_detail",
+                store_slug=store.slug,
+                suborder_number=suborder.suborder_number,
+            )
+
+        # --------------------------------------------------------------
+        # Cancellation transaction burada commit edilmiştir.
+        #
+        # Artık provider refund işlenebilir.
+        # --------------------------------------------------------------
+
+        payment_refund = cancellation.payment_refund
+
+        if payment_refund is None:
+            messages.success(
+                request,
+                "Sipariş başarıyla iptal edildi.",
+            )
+
+            return redirect(
+                "store:store_order_detail",
+                store_slug=store.slug,
+                suborder_number=suborder.suborder_number,
+            )
+
+        try:
+            refund = RefundService.process_refund(
+                payment_refund_id=payment_refund.pk,
+            )
+
+        except RefundError as exc:
+            messages.warning(
+                request,
+                (
+                    "Sipariş iptal edildi ancak "
+                    f"iade işlemi tamamlanamadı: {exc}"
+                ),
+            )
+
+        else:
+            if refund.status == RefundStatus.SUCCESS:
+                messages.success(
+                    request,
+                    "Sipariş iptal edildi ve ücret başarıyla iade edildi.",
+                )
+
+            elif refund.status == RefundStatus.RECONCILIATION_REQUIRED:
+                messages.warning(
+                    request,
+                    (
+                        "Sipariş iptal edildi ancak iade sonucu "
+                        "doğrulanamadı. İade kontrolü gerekiyor."
+                    ),
+                )
+
+            elif refund.status == RefundStatus.PENDING:
+                messages.info(
+                    request,
+                    (
+                        "Sipariş iptal edildi. "
+                        "İade işlemi başlatıldı ve işleniyor."
+                    ),
+                )
+
+            elif refund.status == RefundStatus.FAILED:
+                messages.error(
+                    request,
+                    (
+                        "Sipariş iptal edildi ancak ödeme iadesi "
+                        "başarısız oldu."
+                    ),
+                )
+
+        return redirect(
+            "store:store_order_detail",
+            store_slug=store.slug,
+            suborder_number=suborder.suborder_number,
+        )
+
+class StoreOrderStatusUpdateView(
+    SellerRequiredMixin,
+    StoreOwnerMixin,
+    View,
+):
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        store = self.get_store()
+        suborder_number = kwargs["suborder_number"]
+
+        try:
+            suborder = OrderService.get_suborder_for_store(
+                store=store,
+                suborder_number=suborder_number,
+            )
+        except OrderNotFoundError as exc:
+            raise Http404(str(exc)) from exc
+
+        target_status = request.POST.get("status", "").strip()
+
+        if target_status not in SubOrderStatus.values:
+            messages.error(
+                request,
+                "Geçersiz sipariş durumu.",
+            )
+        else:
+            try:
+                if target_status == SubOrderStatus.PREPARING:
+                    OrderService.start_suborder_preparation(
+                        suborder=suborder,
+                    )
+
+                elif target_status == SubOrderStatus.SHIPPED:
+                    ShippingService.ship_suborder(
+                        suborder=suborder,
+                        cargo_company=request.POST.get(
+                            "cargo_company",
+                            "",
+                        ),
+                        cargo_tracking_number=request.POST.get(
+                            "cargo_tracking_number",
+                            "",
+                        ),
+                    )
+
+                elif target_status == SubOrderStatus.DELIVERED:
+                    ShippingService.mark_suborder_delivered(
+                        suborder=suborder,
+                    )
+
+                else:
+                    OrderService.transition_suborder_status(
+                        suborder=suborder,
+                        target_status=target_status,
+                    )
+
+            except InvalidSubOrderStatusTransitionError as exc:
+                messages.error(
+                    request,
+                    str(exc),
+                )
+
+            except InvoiceAlreadyExistsError as exc:
+                messages.error(
+                    request,
+                    str(exc),
+                )
+
+            except InvoiceCreationError as exc:
+                messages.error(
+                    request,
+                    str(exc),
+                )
+
+            except ShippingOperationError as exc:
+                messages.error(
+                    request,
+                    str(exc),
+                )
+
+            else:
+                messages.success(
+                    request,
+                    "Sipariş durumu başarıyla güncellendi.",
+                )
+
+        return redirect(
+            "store:store_order_detail",
+            store_slug=store.slug,
+            suborder_number=suborder.suborder_number,
+        )
+
+# class StoreInvoiceListView(
+#     SellerRequiredMixin,
+#     StoreOwnerMixin,
+#     ListView,
+# ):
+#     model = Invoice
+#     template_name = "store/orders/store_invoice_list.html"
+#     context_object_name = "invoices"
+#     paginate_by = 20
+
+#     def get_queryset(self):
+#         store = self.get_store()
+
+#         invoice_items_prefetch = Prefetch(
+#             "items",
+#             queryset=InvoiceItem.objects.order_by("pk"),
+#             to_attr="invoice_items",
+#         )
+
+#         qs = (
+#             Invoice.objects
+#             .filter(
+#                 suborder__store=store,
+#             )
+#             .select_related(
+#                 "suborder",
+#                 "suborder__order",
+#                 "suborder__store",
+#             )
+#             .prefetch_related(
+#                 invoice_items_prefetch,
+#             )
+#             .order_by(
+#                 "-issued_at",
+#                 "-pk",
+#             )
+#         )
+
+#         query = self.request.GET.get(
+#             "q",
+#             "",
+#         ).strip()
+
+#         if query:
+#             item_match = (
+#                 InvoiceItem.objects
+#                 .filter(
+#                     invoice_id=OuterRef("pk"),
+#                 )
+#                 .filter(
+#                     Q(product_name__icontains=query)
+#                     | Q(sku__icontains=query)
+#                     | Q(barcode__icontains=query)
+#                     | Q(variant_display__icontains=query)
+#                 )
+#             )
+
+#             qs = qs.filter(
+#                 Q(invoice_number__icontains=query)
+#                 | Q(
+#                     suborder__suborder_number__icontains=query
+#                 )
+#                 | Q(
+#                     suborder__order__order_number__icontains=query
+#                 )
+#                 | Q(
+#                     buyer_full_name__icontains=query
+#                 )
+#                 | Q(
+#                     buyer_email__icontains=query
+#                 )
+#                 | Q(
+#                     buyer_phone__icontains=query
+#                 )
+#                 | Exists(item_match)
+#             )
+
+#         return qs
+
+#     def get_context_data(self, **kwargs):
+#         context = super().get_context_data(**kwargs)
+
+#         store = self.get_store()
+
+#         current_q = self.request.GET.get(
+#             "q",
+#             "",
+#         ).strip()
+
+#         query_params = self.request.GET.copy()
+#         query_params.pop("page", None)
+
+#         context.update({
+#             "store": store,
+#             "current_q": current_q,
+#             "pagination_query": query_params.urlencode(),
+#         })
+
+#         return context
+
+# class StoreInvoiceDetailView(
+#     SellerRequiredMixin,
+#     StoreOwnerMixin,
+#     View,
+# ):
+#     template_name = "store/orders/store_invoice_detail.html"
+
+#     http_method_names = [
+#         "get",
+#     ]
+
+#     def get_invoice(self):
+#         if not hasattr(self, "_invoice"):
+#             try:
+#                 self._invoice = (
+#                     InvoiceService.get_invoice_for_store(
+#                         store=self.get_store(),
+#                         invoice_number=self.kwargs["invoice_number"],
+#                     )
+#                 )
+#             except InvoiceNotFoundError as exc:
+#                 raise Http404(str(exc)) from exc
+
+#         return self._invoice
+
+#     def get(self, request, *args, **kwargs):
+#         store = self.get_store()
+#         invoice = self.get_invoice()
+
+#         context = {
+#             "store": store,
+#             "invoice": invoice,
+#             "suborder": invoice.suborder,
+#             "main_order": invoice.suborder.order,
+#             "items": list(invoice.items.all()),
+#         }
+
+#         return render(
+#             request,
+#             self.template_name,
+#             context,
+#         )

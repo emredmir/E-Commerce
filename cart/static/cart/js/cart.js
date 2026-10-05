@@ -2,6 +2,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // --- AYARLAR ---
     const FREE_SHIPPING_LIMIT = 750; // Kargo bedava limitini buradan ayarlayabilirsin (TL)
+    const SHIPPING_FEE = 99.99;
 
     // 1. ÖNCEKİ YARDIMCI FONKSİYONLAR (Para Formatı ve Kargo Sayacı)
 
@@ -43,63 +44,208 @@ document.addEventListener("DOMContentLoaded", function() {
             el.setAttribute('data-raw', raw); 
             el.innerText = formatMoneyTR(raw) + (el.id === 'summary-total-price' ? ' TL' : el.classList.contains('js-format-money') ? '' : ' TL');
         });
+        // Mağaza bazlı subtotal + shipping hesaplanır.
+        const storeTotals = updateStoreTotals();
 
-        // Sayfa ilk yüklendiğinde mağaza ara toplamlarını hesapla!
-        updateStoreTotals();
-
-        // Kargo sayacını ilk kez çalıştırıyoruz.
-        // NOT: rawTotal'i ana fiyattan (kargo eklenmemiş) alıyoruz.
-        const rawTotal = document.getElementById('summary-total-price').getAttribute('data-raw') || document.getElementById('summary-total-price').innerText;
-        updateShippingProgress(rawTotal);
+        // Kargo sayacını ilk kez çalıştırıyoruz. subtotal + mağaza bazlı shipping toplamı.
+        updateShippingProgress(storeTotals);
     }
 
-    function updateShippingProgress(totalPriceRaw) {
-        if(totalPriceRaw === null || totalPriceRaw === undefined) return;
-        
-        let total = parsePriceToFloat(totalPriceRaw);
-        const SHIPPING_FEE = 99.99; // <--- KARGO ÜCRETİ
-        
-        const feeDisplay = document.getElementById('shipping-fee-display');
-        const progressText = document.getElementById('shipping-progress-text');
-        const barEl = document.getElementById('shipping-bar');
-        const finalPriceEl = document.getElementById('summary-final-price');
-        
-        if (!feeDisplay) return;
+    function updateShippingProgress(storeTotals) {
+        const feeDisplay =
+            document.getElementById('shipping-fee-display');
 
-        let finalTotal = total; // Kargo dahil genel toplam
+        const progressText =
+            document.getElementById('shipping-progress-text');
 
-        if (total >= FREE_SHIPPING_LIMIT) {
-            // BEDAVA KARGO
-            feeDisplay.innerHTML = `<span style="color: var(--green-600); font-weight:700;"><i class="fa-solid fa-truck-fast"></i> Bedava</span>`;
+        const barEl =
+            document.getElementById('shipping-bar');
 
-            if(progressText) {
-                progressText.innerHTML = `<span class="success-msg"><i class="fa-solid fa-gift"></i> Kargo Bedava!</span>`;
+        const finalPriceEl =
+            document.getElementById('summary-final-price');
+
+        if (!feeDisplay) {
+            return;
+        }
+
+        /*
+         * ---------------------------------------------------------------
+         * STORE TOTALS
+         * ---------------------------------------------------------------
+         *
+         * Beklenen yapı:
+         *
+         * [
+         *     {
+         *         storeId: 1,
+         *         subtotal: 850.00,
+         *         shipping: 0.00,
+         *         total: 850.00
+         *     },
+         *     {
+         *         storeId: 2,
+         *         subtotal: 100.00,
+         *         shipping: 99.99,
+         *         total: 199.99
+         *     }
+         * ]
+         */
+
+        if (!Array.isArray(storeTotals)) {
+            storeTotals = [];
+        }
+
+        let subtotal = 0;
+        let shippingTotal = 0;
+
+        storeTotals.forEach(store => {
+            subtotal += Number(store.subtotal) || 0;
+            shippingTotal += Number(store.shipping) || 0;
+        });
+
+        subtotal = Number(subtotal.toFixed(2));
+        shippingTotal = Number(shippingTotal.toFixed(2));
+
+        /*
+         * ---------------------------------------------------------------
+         * EMPTY CART / NO SELECTED ITEMS
+         * ---------------------------------------------------------------
+         */
+
+        if (subtotal <= 0) {
+            feeDisplay.innerHTML = '0,00 TL';
+
+            if (progressText) {
+                progressText.innerHTML =
+                    'Ödeme yapmak için ürün seçin.';
             }
-            if(barEl) {
-                barEl.style.width = '100%';
-                barEl.classList.add('success');
-            }
-        } else {
-            // ÜCRETLİ KARGO (99.99 TL)
-            feeDisplay.innerHTML = `${formatMoneyTR(SHIPPING_FEE)} TL`;
-            finalTotal = total + SHIPPING_FEE; // Kargo ücretini genel toplama ekle
 
-            // KALAN MİKTAR
-            let diff = FREE_SHIPPING_LIMIT - total;
-            if(progressText) {
-                progressText.innerHTML = `Bedava kargo için <strong>${formatMoneyTR(diff)} TL</strong> kaldı`;
-            }
-            
-            if(barEl) {
-                let percent = (total / FREE_SHIPPING_LIMIT) * 100;
-                barEl.style.width = `${percent}%`;
+            if (barEl) {
+                barEl.style.width = '0%';
                 barEl.classList.remove('success');
+            }
+
+            if (finalPriceEl) {
+                finalPriceEl.innerHTML =
+                    '<span class="js-format-money" data-raw="0">0,00</span> TL';
+            }
+
+            return;
+        }
+
+        /*
+         * ---------------------------------------------------------------
+         * SHIPPING DISPLAY
+         * ---------------------------------------------------------------
+         *
+         * Buradaki shippingTotal:
+         *
+         * Store A shipping
+         * + Store B shipping
+         * + Store C shipping
+         *
+         * toplamıdır.
+         */
+
+        if (shippingTotal <= 0) {
+            feeDisplay.innerHTML = `
+                <span style="color: var(--green-600); font-weight:700;">
+                    <i class="fa-solid fa-truck-fast"></i>
+                    Bedava
+                </span>
+            `;
+        } else {
+            feeDisplay.innerHTML =
+                `${formatMoneyTR(shippingTotal)} TL`;
+        }
+
+        /*
+         * ---------------------------------------------------------------
+         * PROGRESS MESSAGE
+         * ---------------------------------------------------------------
+         *
+         * Artık tek bir global "Bedava kargoya X TL kaldı"
+         * göstermek doğru değil.
+         *
+         * Çünkü ücretsiz kargo Store bazında hesaplanıyor.
+         */
+
+        if (progressText) {
+
+            const paidShippingStores =
+                storeTotals.filter(
+                    store => store.shipping > 0
+                );
+            
+            const freeShippingStores =
+                storeTotals.filter(
+                    store =>
+                        store.subtotal >= FREE_SHIPPING_LIMIT
+                );
+            
+            /*
+             * Bütün aktif mağazalarda kargo bedavaysa
+             */
+            if (
+                freeShippingStores.length > 0
+                && paidShippingStores.length === 0
+            ) {
+            
+                progressText.innerHTML = `
+                    <span class="success-msg">
+                        <i class="fa-solid fa-gift"></i>
+                        Tüm mağazalarda kargo bedava!
+                    </span>
+                `;
+            
+                if (barEl) {
+                    barEl.style.width = '100%';
+                    barEl.classList.add('success');
+                }
+            
+            } else {
+            
+                /*
+                 * Tek global progress artık yanıltıcı olacağı için
+                 * sadece mağaza bazlı hesaplama yapıldığını belirtiyoruz.
+                 */
+                progressText.innerHTML =
+                    'Kargo ücretleri mağaza bazında hesaplanır.';
+            
+                if (barEl) {
+                    barEl.style.width = '0%';
+                    barEl.classList.remove('success');
+                }
             }
         }
 
-        // Kargo ücreti dahil son toplamı güncelle
+        /*
+         * ---------------------------------------------------------------
+         * FINAL TOTAL
+         * ---------------------------------------------------------------
+         *
+         * Order toplamı:
+         *
+         * subtotal + toplam mağaza kargoları
+         */
+
+        const finalTotal =
+            Number(
+                (
+                    subtotal + shippingTotal
+                ).toFixed(2)
+            );
+
         if (finalPriceEl) {
-            finalPriceEl.innerHTML = `<span class="js-format-money" data-raw="${finalTotal}">${formatMoneyTR(finalTotal)}</span> TL`;
+            finalPriceEl.innerHTML = `
+                <span
+                    class="js-format-money"
+                    data-raw="${finalTotal}"
+                >
+                    ${formatMoneyTR(finalTotal)}
+                </span>
+                TL
+            `;
         }
     }
 
@@ -150,42 +296,194 @@ document.addEventListener("DOMContentLoaded", function() {
         }
 
         // Toplam fiyatlar güncellendikten sonra mağaza ara toplamlarını da yeniden hesapla!
-        updateStoreTotals();
+        const storeTotals = updateStoreTotals();
 
-        // KARGO SAYACINI GÜNCELLE
-        updateShippingProgress(data.total_price);
+        // Mağaza bazlı kargo toplamını güncelle
+        updateShippingProgress(storeTotals);
     }
 
     // MAĞAZA BAZLI ARA TOPLAM HESAPLAYICI
     function updateStoreTotals() {
-        document.querySelectorAll('.cart-store-card').forEach(card => {
-            let storeTotalPrice = 0;
-            let storeItemCount = 0;
-            
-            card.querySelectorAll('.cart-item-row').forEach(row => {
-                const checkbox = row.querySelector('.js-item-checkbox');
-                
-                // Eğer ürün checkbox'ı işaretliyse ve ürün "unavailable/disabled" değilse hesaba kat
-                if (checkbox && checkbox.checked && !checkbox.disabled) {
-                    const qtyInput = row.querySelector('.js-qty-input');
-                    const qty = parseInt(qtyInput.value) || 0;
-                    
-                    // Django'dan virgüllü (örn: 12,50) veya noktalı gelebilir, güvenli parse edelim
-                    let rawPrice = row.getAttribute('data-unit-price') || "0";
-                    const unitPrice = parsePriceToFloat(rawPrice);
-                    
-                    storeTotalPrice += (qty * unitPrice);
-                    storeItemCount += qty;
+        const storeTotals = [];
+
+        document
+            .querySelectorAll('.cart-store-card')
+            .forEach(card => {
+
+                const storeId = card.dataset.storeId;
+
+                let storeSubtotal = 0;
+                let storeItemCount = 0;
+
+                card
+                    .querySelectorAll('.cart-item-row')
+                    .forEach(row => {
+
+                        const checkbox =
+                            row.querySelector('.js-item-checkbox');
+
+                        /*
+                         * Yalnızca:
+                         *
+                         * - seçili
+                         * - kullanılabilir
+                         *
+                         * ürünler hesaplamaya girer.
+                         */
+                        if (
+                            checkbox
+                            && checkbox.checked
+                            && !checkbox.disabled
+                        ) {
+                            const qtyInput =
+                                row.querySelector('.js-qty-input');
+
+                            const quantity =
+                                parseInt(qtyInput?.value, 10) || 0;
+
+                            const rawPrice =
+                                row.getAttribute('data-unit-price') || '0';
+
+                            const unitPrice =
+                                parsePriceToFloat(rawPrice);
+
+                            storeSubtotal +=
+                                quantity * unitPrice;
+
+                            storeItemCount += quantity;
+                        }
+                    });
+
+                /*
+                 * Para değerini JS floating point hatalarından
+                 * mümkün olduğunca uzak tutuyoruz.
+                 */
+                storeSubtotal =
+                    Number(storeSubtotal.toFixed(2));
+
+                /*
+                 * ----------------------------------------------------------
+                 * STORE SHIPPING
+                 * ----------------------------------------------------------
+                 *
+                 * Backend ShippingService ile aynı kurallar:
+                 *
+                 * subtotal <= 0
+                 *      => 0
+                 *
+                 * subtotal >= 750
+                 *      => 0
+                 *
+                 * subtotal < 750
+                 *      => 99.99
+                 */
+                let shipping = 0;
+
+                if (storeSubtotal > 0) {
+                    if (storeSubtotal < FREE_SHIPPING_LIMIT) {
+                        shipping = SHIPPING_FEE;
+                    }
                 }
+
+                shipping =
+                    Number(shipping.toFixed(2));
+
+                const storeTotal =
+                    Number(
+                        (
+                            storeSubtotal + shipping
+                        ).toFixed(2)
+                    );
+
+                /*
+                 * ----------------------------------------------------------
+                 * STORE HEADER UI
+                 * ----------------------------------------------------------
+                 */
+
+                const countEl =
+                    card.querySelector(
+                        '.js-store-item-count'
+                    );
+
+                if (countEl) {
+                    countEl.textContent =
+                        storeItemCount;
+                }
+
+                const priceEl =
+                    card.querySelector(
+                        '.js-store-price-display'
+                    );
+
+                if (priceEl) {
+                    priceEl.textContent =
+                        `${formatMoneyTR(storeSubtotal)} TL`;
+                }
+
+                /*
+                 * ----------------------------------------------------------
+                 * STORE SHIPPING UI
+                 * ----------------------------------------------------------
+                 */
+
+                const shippingEl =
+                    card.querySelector(
+                        '.js-store-shipping-display'
+                    );
+
+                if (shippingEl) {
+
+                    if (storeSubtotal <= 0) {
+
+                        shippingEl.innerHTML =
+                            'Kargo: —';
+
+                    } else if (shipping <= 0) {
+
+                        shippingEl.innerHTML = `
+                            <span
+                                style="
+                                    color:var(--green-600);
+                                    font-weight:700;
+                                "
+                            >
+                                <i class="fa-solid fa-truck-fast"></i>
+                                Kargo: Bedava
+                            </span>
+                        `;
+
+                    } else {
+
+                        shippingEl.innerHTML = `
+                            Kargo:
+                            <span
+                                style="
+                                    color:var(--teal-700);
+                                    font-weight:700;
+                                "
+                            >
+                                ${formatMoneyTR(shipping)} TL
+                            </span>
+                        `;
+                    }
+                }
+
+                /*
+                 * ----------------------------------------------------------
+                 * RETURN DATA
+                 * ----------------------------------------------------------
+                 */
+
+                storeTotals.push({
+                    storeId: storeId,
+                    subtotal: storeSubtotal,
+                    shipping: shipping,
+                    total: storeTotal,
+                });
             });
-            
-            // HTML tarafındaki değerleri güncelle
-            const countEl = card.querySelector('.js-store-item-count');
-            if (countEl) countEl.textContent = storeItemCount;
-            
-            const priceEl = card.querySelector('.js-store-price-display');
-            if (priceEl) priceEl.textContent = formatMoneyTR(storeTotalPrice) + ' TL';
-        });
+
+        return storeTotals;
     }
 
 

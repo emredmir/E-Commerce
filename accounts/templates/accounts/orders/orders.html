@@ -1,0 +1,1258 @@
+{% extends "accounts/profile.html" %}
+
+{% load static %}
+
+
+{% block title %}
+    Siparişlerim
+{% endblock %}
+
+
+{% block main_content %}
+
+
+<style>
+
+    .customer-orders-page {
+        width: 100%;
+        max-width: 900px;
+        color: #1e293b;
+    }
+
+
+    /* =========================================================
+       HEADER
+       ========================================================= */
+
+    .customer-orders-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 20px;
+        margin-bottom: 28px;
+    }
+
+
+    .customer-orders-header h2 {
+        margin: 0 0 6px;
+        font-size: 1.65rem;
+        color: #0f172a;
+    }
+
+
+    .customer-orders-header p {
+        margin: 0;
+        color: #64748b;
+        font-size: 0.95rem;
+    }
+
+
+    .customer-orders-filter-box {
+        margin-bottom: 18px;
+
+        padding: 14px;
+
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+
+        background: #f8fafc;
+    }
+
+
+    .customer-orders-filter-form {
+        display: flex;
+
+        align-items: flex-end;
+
+        flex-wrap: wrap;
+
+        gap: 12px;
+    }
+
+
+    .customer-orders-filter-field {
+        display: flex;
+        flex-direction: column;
+
+        gap: 6px;
+    }
+
+
+    .customer-orders-filter-field label {
+        color: #64748b;
+
+        font-size: 0.76rem;
+        font-weight: 600;
+    }
+
+
+    .customer-orders-filter-field select {
+        min-width: 170px;
+
+        height: 40px;
+
+        padding: 0 11px;
+
+        border: 1px solid #dbe3ea;
+        border-radius: 8px;
+
+        background: #ffffff;
+        color: #334155;
+
+        font-size: 0.84rem;
+
+        outline: none;
+    }
+
+
+    .customer-orders-filter-field select:focus {
+        border-color: #00b4d8;
+
+        box-shadow:
+            0 0 0 3px
+            rgba(0, 180, 216, 0.10);
+    }
+
+    /* =========================================================
+       ORDER LIST
+       ========================================================= */
+
+    .customer-order-list {
+        display: grid;
+        gap: 14px;
+        margin-bottom: 30px;
+    }
+
+
+    /* =========================================================
+       ORDER CARD
+       ========================================================= */
+
+    .customer-order-item {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 20px;
+
+        transition:
+            border-color 0.2s ease,
+            box-shadow 0.2s ease,
+            transform 0.2s ease;
+    }
+
+
+    .customer-order-item:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+        transform: translateY(-1px);
+    }
+
+
+    /* =========================================================
+       TOP
+       ========================================================= */
+
+    .customer-order-top {
+        display: flex;
+        flex-direction: column;
+
+        gap: 18px;
+
+        margin-bottom: 18px;
+    }
+
+    .customer-order-header-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+
+        gap: 16px;
+
+        padding-bottom: 14px;
+
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+
+    .customer-order-header-info {
+        display: flex;
+        align-items: center;
+
+        gap: 10px;
+
+        min-width: 0;
+    }
+
+
+    .customer-order-header-label {
+        color: #0f172a;
+
+        font-size: 0.88rem;
+        font-weight: 700;
+    }
+
+
+    .customer-order-header-date {
+        color: #64748b;
+
+        font-size: 0.8rem;
+    }
+
+
+
+    .customer-order-products {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 0;
+    }
+
+
+    .customer-order-product {
+        display: grid;
+
+        grid-template-columns:
+            64px
+            minmax(0, 1fr)
+            auto;
+
+        align-items: center;
+
+        gap: 14px;
+
+        min-width: 0;
+
+        padding: 4px 0;
+    }
+
+
+    .customer-order-product-image-wrapper {
+        position: relative;
+
+        width: 64px;
+        height: 64px;
+
+        flex: 0 0 64px;
+    }
+
+
+    .customer-order-product-image {
+        width: 64px;
+        height: 64px;
+
+        display: block;
+
+        object-fit: contain;
+
+        border-radius: 10px;
+
+        border: 1px solid #e2e8f0;
+
+        background: #f8fafc;
+    }
+
+
+    .customer-order-product-image-empty {
+        display: flex;
+
+        align-items: center;
+        justify-content: center;
+
+        color: #94a3b8;
+
+        font-size: 1.05rem;
+    }
+
+
+    .customer-order-product-quantity {
+        position: absolute;
+
+        right: -5px;
+        bottom: -5px;
+
+        width: 24px;
+        height: 24px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        border-radius: 50%;
+
+        background: #0f172a;
+        color: #ffffff;
+
+        border: 2px solid #ffffff;
+
+        font-size: 0.72rem;
+        font-weight: 700;
+    }
+
+
+    .customer-order-product-info {
+        min-width: 0;
+        flex: 1;
+
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+
+        gap: 16px;
+    }
+
+
+    .customer-order-product-main {
+        min-width: 0;
+
+        display: flex;
+        flex-direction: column;
+
+        gap: 4px;
+    }
+
+
+    .customer-order-review-button {
+        display: inline-flex;
+
+        align-items: center;
+        justify-content: center;
+
+        gap: 6px;
+
+        min-height: 34px;
+
+        padding: 0 11px;
+
+        flex: 0 0 auto;
+
+        border: 1px solid #dbe3ea;
+        border-radius: 8px;
+
+        background: #ffffff;
+        color: #475569;
+
+        font-size: 0.76rem;
+        font-weight: 600;
+
+        text-decoration: none;
+
+        white-space: nowrap;
+
+        transition:
+            background-color 0.15s ease,
+            border-color 0.15s ease,
+            color 0.15s ease;
+    }
+
+
+    .customer-order-review-button:hover {
+        background: #f8fafc;
+
+        border-color: #cbd5e1;
+
+        color: #0f172a;
+    }
+
+
+    .customer-order-product-name {
+        color: #0f172a;
+
+        font-size: 0.92rem;
+        font-weight: 700;
+
+        line-height: 1.35;
+
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+
+        overflow: hidden;
+    }
+
+
+    .customer-order-product-variant {
+        color: #64748b;
+
+        font-size: 0.79rem;
+
+        line-height: 1.35;
+
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        line-clamp: 1;
+        -webkit-box-orient: vertical;
+
+        overflow: hidden;
+    }
+
+
+    .customer-order-more {
+        margin-left: 76px;
+
+        color: #64748b;
+
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+
+    .customer-order-info {
+        min-width: 0;
+    }
+
+
+    .customer-order-number {
+        display: block;
+
+        margin-bottom: 4px;
+
+        font-size: 0.98rem;
+        font-weight: 700;
+
+        color: #0f172a;
+
+        word-break: break-word;
+    }
+
+
+    .customer-order-date {
+        display: block;
+
+        color: #64748b;
+        font-size: 0.84rem;
+    }
+
+
+    /* =========================================================
+       STATUS
+       ========================================================= */
+
+    .customer-order-status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+
+        padding: 6px 10px;
+
+        border-radius: 999px;
+
+        background: #f1f5f9;
+        color: #475569;
+
+        font-size: 0.76rem;
+        font-weight: 700;
+
+        white-space: nowrap;
+
+        flex: 0 0 auto;
+    }
+
+
+    /* =========================================================
+       META
+       ========================================================= */
+
+    .customer-order-meta {
+        display: grid;
+
+        grid-template-columns:
+            repeat(4, minmax(0, 1fr));
+
+        gap: 1px;
+        border-radius: 12px;
+        overflow: hidden;
+
+        border-top: 1px solid #e2e8f0;
+        border-bottom: 1px solid #e2e8f0;
+        background: #e2e8f0;
+    }
+
+
+    .customer-order-meta-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+    }
+
+
+    .customer-order-meta-label {
+        color: #94a3b8;
+        font-size: 0.76rem;
+    }
+
+
+    .customer-order-meta-value {
+        color: #334155;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+
+    .customer-order-total {
+        color: #0f172a;
+        font-weight: 700;
+    }
+
+
+    /* =========================================================
+       FOOTER
+       ========================================================= */
+
+    .customer-order-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+
+        gap: 16px;
+
+        margin-top: 18px;
+    }
+
+
+    .customer-order-footer-info {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+
+        gap: 8px;
+
+        color: #64748b;
+        font-size: 0.82rem;
+    }
+
+
+    .customer-order-footer-separator {
+        color: #cbd5e1;
+    }
+
+
+    .customer-order-detail-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+
+        gap: 8px;
+
+        min-height: 40px;
+
+        padding: 0 14px;
+
+        border: 1px solid #dbe3ea;
+        border-radius: 9px;
+
+        background: #ffffff;
+        color: #475569;
+
+        font-size: 0.84rem;
+        font-weight: 600;
+
+        text-decoration: none;
+
+        transition:
+            background-color 0.2s ease,
+            border-color 0.2s ease,
+            color 0.2s ease;
+    }
+
+
+    .customer-order-detail-button:hover {
+        background: #f0fdff;
+        border-color: #9bddec;
+        color: #0096c7;
+    }
+
+
+    /* =========================================================
+       EMPTY STATE
+       ========================================================= */
+
+    .customer-orders-empty {
+        background: #ffffff;
+
+        border: 1px dashed #cbd5e1;
+        border-radius: 14px;
+
+        padding: 42px 24px;
+
+        text-align: center;
+    }
+
+
+    .customer-orders-empty-icon {
+        width: 58px;
+        height: 58px;
+
+        margin: 0 auto 14px;
+
+        border-radius: 50%;
+
+        background: #e0f2fe;
+        color: #0284c7;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        font-size: 1.3rem;
+    }
+
+
+    .customer-orders-empty h3 {
+        margin: 0 0 6px;
+
+        color: #0f172a;
+        font-size: 1.05rem;
+    }
+
+
+    .customer-orders-empty p {
+        margin: 0;
+
+        color: #64748b;
+        font-size: 0.9rem;
+    }
+
+
+    /* =========================================================
+       PAGINATION
+       ========================================================= */
+
+    .customer-orders-pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+
+        gap: 6px;
+
+        margin-top: 24px;
+    }
+
+
+    .customer-orders-page-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+
+        min-width: 36px;
+        height: 36px;
+
+        padding: 0 10px;
+
+        border: 1px solid #dbe3ea;
+        border-radius: 8px;
+
+        background: #ffffff;
+        color: #475569;
+
+        font-size: 0.84rem;
+        font-weight: 600;
+
+        text-decoration: none;
+    }
+
+
+    .customer-orders-page-link:hover {
+        background: #f8fafc;
+        border-color: #cbd5e1;
+    }
+
+
+    .customer-orders-page-link.current {
+        background: #e0f7fb;
+        border-color: #9bddec;
+        color: #0086aa;
+    }
+
+
+    /* =========================================================
+       RESPONSIVE
+       ========================================================= */
+
+    @media (max-width: 640px) {
+
+        .customer-order-product-info {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 8px;
+        }
+    
+    }
+
+    @media (max-width: 700px) {
+
+        .customer-order-header-row {
+            align-items: flex-start;
+        }
+
+
+        .customer-order-product {
+            grid-template-columns:
+                56px
+                minmax(0, 1fr);
+
+            column-gap: 12px;
+
+            row-gap: 8px;
+        }
+
+
+        .customer-order-product-image-wrapper {
+            width: 56px;
+            height: 56px;
+
+            flex-basis: 56px;
+        }
+
+
+        .customer-order-product-image {
+            width: 56px;
+            height: 56px;
+        }
+
+
+        .customer-order-review-button {
+            grid-column: 2;
+
+            justify-self: start;
+        }
+
+
+        .customer-order-more {
+            margin-left: 68px;
+        }
+
+
+        .customer-order-meta {
+            grid-template-columns:
+                repeat(2, minmax(0, 1fr));
+        }
+
+
+        .customer-order-footer {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+
+        .customer-order-detail-button {
+            width: 100%;
+        }
+
+    }
+
+
+    @media (max-width: 480px) {
+
+        .customer-order-item {
+            padding: 16px;
+        }
+
+
+        .customer-order-header-row {
+            flex-direction: column;
+            align-items: flex-start;
+
+            gap: 8px;
+        }
+
+
+        .customer-order-meta {
+            grid-template-columns: 1fr;
+        }
+
+
+        .customer-order-product {
+            grid-template-columns:
+                52px
+                minmax(0, 1fr);
+        }
+
+
+        .customer-order-product-image-wrapper {
+            width: 52px;
+            height: 52px;
+        }
+
+
+        .customer-order-product-image {
+            width: 52px;
+            height: 52px;
+        }
+
+
+        .customer-order-more {
+            margin-left: 64px;
+        }
+
+    }
+
+</style>
+
+
+<div class="customer-orders-page">
+
+
+    <!-- =========================================================
+         HEADER
+         ========================================================= -->
+
+    <div class="customer-orders-header">
+
+        <div>
+
+            <h2>
+                Siparişlerim
+            </h2>
+
+            <p>
+                Verdiğiniz siparişleri ve sipariş durumlarını
+                buradan takip edebilirsiniz.
+            </p>
+
+        </div>
+
+    </div>
+
+    <div class="customer-orders-filter-box">
+
+        <form method="get" class="customer-orders-filter-form">
+
+
+            <div class="customer-orders-filter-field">
+
+                <label for="order-period">
+                    Siparişler
+                </label>
+
+                <select
+                    id="order-period"
+                    name="period"
+                    onchange="this.form.submit()"
+                >
+
+                    <option
+                        value="all"
+                        {% if period == "all" %}selected{% endif %}
+                    >
+                        Tüm siparişler
+                    </option>
+
+
+                    <option
+                        value="3m"
+                        {% if period == "3m" %}selected{% endif %}
+                    >
+                        Son 3 ay
+                    </option>
+
+
+                    {% for year in available_years %}
+
+                        <option
+                            value="{{ year }}"
+                            {% if period == year|stringformat:"s" %}
+                                selected
+                            {% endif %}
+                        >
+                            {{ year }}
+                        </option>
+
+                    {% endfor %}
+
+                </select>
+
+            </div>
+
+
+            <div class="customer-orders-filter-field">
+
+                <label for="order-page-size">
+                    Sayfa başına
+                </label>
+
+                <select
+                    id="order-page-size"
+                    name="page_size"
+                    onchange="this.form.submit()"
+                >
+
+                    <option
+                        value="5"
+                        {% if page_size == 5 %}selected{% endif %}
+                    >
+                        5 sipariş
+                    </option>
+
+                    <option
+                        value="10"
+                        {% if page_size == 10 %}selected{% endif %}
+                    >
+                        10 sipariş
+                    </option>
+
+                    <option
+                        value="20"
+                        {% if page_size == 20 %}selected{% endif %}
+                    >
+                        20 sipariş
+                    </option>
+
+                    <option
+                        value="30"
+                        {% if page_size == 30 %}selected{% endif %}
+                    >
+                        30 sipariş
+                    </option>
+
+                </select>
+
+            </div>
+
+
+        </form>
+
+    </div>
+
+
+    <!-- =========================================================
+         ORDERS
+         ========================================================= -->
+
+    {% if orders %}
+
+        <div class="customer-order-list">
+
+            {% for order in orders %}
+
+                <div class="customer-order-item">
+
+                    <!-- =================================================
+                         ORDER TOP
+                         ================================================= -->
+
+                    <div class="customer-order-top">
+                    
+                        <!-- -------------------------------------------------
+                             ORDER HEADER
+                             ------------------------------------------------- -->
+                    
+                        <div class="customer-order-header-row">
+                        
+                            <div class="customer-order-header-info">
+                            
+                                <span class="customer-order-header-label">
+                                    Sipariş
+                                </span>
+                            
+                                <span class="customer-order-header-date">
+                                    {{ order.created_at|date:"d.m.Y H:i" }}
+                                </span>
+                            
+                            </div>
+                        
+                        
+                            <span class="customer-order-status">
+                                {{ order.get_status_display }}
+                            </span>
+                        
+                        </div>
+                    
+                    
+                        <!-- -------------------------------------------------
+                             PRODUCTS
+                             ------------------------------------------------- -->
+                    
+                        <div class="customer-order-products">
+                        
+                            {% for item in order.preview_items %}
+                        
+                                <div class="customer-order-product">
+                                
+                                    <!-- IMAGE -->
+                                
+                                    <div class="customer-order-product-image-wrapper">
+                                    
+                                        {% if item.image_snapshot %}
+                                    
+                                            <img
+                                                src="{{ item.image_snapshot.url }}"
+                                                alt="{{ item.product_name_snapshot }}"
+                                                class="customer-order-product-image"
+                                            >
+                                    
+                                        {% else %}
+                                    
+                                            <div
+                                                class="
+                                                    customer-order-product-image
+                                                    customer-order-product-image-empty
+                                                "
+                                            >
+                                                <i class="fa-solid fa-box"></i>
+                                            </div>
+                                        
+                                        {% endif %}
+                                        
+                                        
+                                        <span class="customer-order-product-quantity">
+                                            {{ item.quantity }}
+                                        </span>
+                                    
+                                    </div>
+                                
+                                
+                                    <!-- PRODUCT INFO -->
+                                
+                                    <div class="customer-order-product-main">
+                                    
+                                        <span class="customer-order-product-name">
+                                            {{ item.product_name_snapshot }}
+                                        </span>
+                                    
+                                    
+                                        {% if item.variant_display %}
+                                    
+                                            <span class="customer-order-product-variant">
+                                                {{ item.variant_display }}
+                                            </span>
+                                        
+                                        {% endif %}
+                                        
+                                    </div>
+                                
+                                
+                                    <!-- REVIEW -->
+                                
+                                    <a
+                                        href="#"
+                                        class="customer-order-review-button"
+                                        data-order-item-id="{{ item.id }}"
+                                    >
+                                        <i class="fa-regular fa-star"></i>
+                                        <span>Değerlendir</span>
+                                    </a>
+                                
+                                </div>
+                            
+                            {% endfor %}
+                            
+                            
+                            {% if order.remaining_item_count > 0 %}
+                            
+                                <span class="customer-order-more">
+                                    +{{ order.remaining_item_count }} ürün daha
+                                </span>
+                            
+                            {% endif %}
+                            
+                        </div>
+                    
+                    </div>
+
+
+                    <!-- =================================================
+                         META
+                         ================================================= -->
+
+                    <div class="customer-order-meta">
+
+
+                        <div class="customer-order-meta-item">
+
+                            <span class="customer-order-meta-label">
+                                Ürün
+                            </span>
+
+                            <span class="customer-order-meta-value">
+                                {{ order.item_count }} ürün
+                            </span>
+
+                        </div>
+
+
+                        <div class="customer-order-meta-item">
+
+                            <span class="customer-order-meta-label">
+                                Mağaza
+                            </span>
+
+                            <span class="customer-order-meta-value">
+                                {{ order.store_count }} mağaza
+                            </span>
+
+                        </div>
+
+                        <div class="customer-order-meta-item">
+                            
+                            <span class="customer-order-meta-label">
+                                Alıcı
+                            </span>
+                        
+                            <span class="customer-order-meta-value">
+                                {{ order.shipping_full_name }}
+                            </span>
+                        
+                        </div>
+
+
+                        <div class="customer-order-meta-item">
+
+                            <span class="customer-order-meta-label">
+                                Toplam
+                            </span>
+
+                            <span class="customer-order-meta-value customer-order-total">
+                                {{ order.total_amount|floatformat:2 }}
+                                {{ order.currency }}
+                            </span>
+
+                        </div>
+
+
+                    </div>
+
+
+                    <!-- =================================================
+                         FOOTER
+                         ================================================= -->
+
+                    <div class="customer-order-footer">
+
+                        <span class="customer-order-footer-info">
+                            Sipariş No:
+                            {{ order.order_number }}
+                        </span>
+                    
+                        <span class="customer-order-footer-separator">
+                            •
+                        </span>
+
+                        <span class="customer-order-footer-info">
+
+                            {% if order.paid_at %}
+                                Ödeme: {{ order.paid_at|date:"d.m.Y H:i" }}
+                            {% else %}
+                                Sipariş tarihi:
+                                {{ order.created_at|date:"d.m.Y H:i" }}
+                            {% endif %}
+
+                        </span>
+
+
+                        <a
+                            href="{% url 'accounts:order_detail' order.order_number %}"
+                            class="customer-order-detail-button"
+                        >
+                            <i class="fa-solid fa-chevron-right"></i>
+                            Sipariş Detayı
+                        </a>
+
+                    </div>
+
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+
+        <!-- =========================================================
+             PAGINATION
+             ========================================================= -->
+
+        {% if is_paginated %}
+
+            <nav
+                class="customer-orders-pagination"
+                aria-label="Sipariş sayfaları"
+            >
+
+                {% if page_obj.has_previous %}
+
+                    <a
+                        href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.previous_page_number }}"
+                        class="customer-orders-page-link"
+                        aria-label="Önceki sayfa"
+                    >
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </a>
+
+                {% endif %}
+
+
+                {% for page_number in page_obj.paginator.page_range %}
+
+                    {% if page_number == page_obj.number %}
+
+                        <span
+                            class="customer-orders-page-link current"
+                            aria-current="page"
+                        >
+                            {{ page_number }}
+                        </span>
+
+                    {% else %}
+
+                        <a
+                            href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_number }}"
+                            class="customer-orders-page-link"
+                        >
+                            {{ page_number }}
+                        </a>
+
+                    {% endif %}
+
+                {% endfor %}
+
+
+                {% if page_obj.has_next %}
+
+                    <a
+                        href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.next_page_number }}"
+                        class="customer-orders-page-link"
+                        aria-label="Sonraki sayfa"
+                    >
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </a>
+
+                {% endif %}
+
+            </nav>
+
+        {% endif %}
+
+
+    {% else %}
+
+        <!-- =========================================================
+             EMPTY STATE
+             ========================================================= -->
+
+        <div class="customer-orders-empty">
+
+            <div class="customer-orders-empty-icon">
+                <i class="fa-regular fa-folder-open"></i>
+            </div>
+
+
+            <h3>
+                Henüz siparişiniz yok
+            </h3>
+
+
+            <p>
+                Verdiğiniz siparişler burada görüntülenecektir.
+            </p>
+
+        </div>
+
+    {% endif %}
+
+
+</div>
+
+
+{% endblock %}

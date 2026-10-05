@@ -1,0 +1,751 @@
+{% extends "core/home.html" %}
+{% load static %}
+
+{% block title %}Siparişiniz Alındı | E-Ticaret{% endblock %}
+
+{% block content %}
+
+<style>
+    :root {
+        --teal-50:#f0f9ff;
+        --teal-100:#e0f2fe;
+        --teal-300:#7dd3fc;
+        --teal-500:#0ea5e9;
+        --teal-600:#0284c7;
+        --teal-700:#0369a1;
+        --teal-800:#075985;
+
+        --gray-50:#f8f9fa;
+        --gray-100:#f1f5f9;
+        --gray-200:#e2e8f0;
+        --gray-300:#cbd5e1;
+        --gray-400:#94a3b8;
+        --gray-500:#64748b;
+        --gray-600:#475569;
+        --gray-700:#334155;
+        --gray-800:#1e293b;
+        --gray-900:#0f172a;
+
+        --green-500:#22c55e;
+        --green-600:#16a34a;
+        --green-50:#f0fdf4;
+
+        --radius-lg:16px;
+        --radius-md:10px;
+        --radius-sm:6px;
+
+        --shadow-sm:0 2px 8px rgba(0,0,0,.04);
+        --shadow-md:
+            0 4px 6px -1px rgba(0,0,0,.08),
+            0 2px 4px -1px rgba(0,0,0,.05);
+    }
+
+    /* =========================================================
+       ANA CONTAINER
+       ========================================================= */
+
+    .order-success-container {
+        box-sizing:border-box;
+
+        max-width:1440px;
+
+        margin:20px auto 60px;
+
+        padding:0 24px;
+
+        font-family:'Segoe UI',system-ui,sans-serif;
+    }
+
+    /* =========================================================
+       ÜST BAR
+       ========================================================= */
+
+    .order-success-topbar {
+        display:flex;
+
+        align-items:center;
+
+        justify-content:space-between;
+
+        margin-bottom:24px;
+    }
+
+    .order-success-back-link {
+        display:inline-flex;
+
+        align-items:center;
+
+        gap:8px;
+
+        color:var(--gray-600);
+
+        font-size:.95rem;
+
+        font-weight:700;
+
+        text-decoration:none;
+
+        transition:.2s;
+    }
+
+    .order-success-back-link:hover {
+        color:var(--teal-600);
+    }
+
+    .order-success-title {
+        margin:0;
+
+        color:var(--gray-900);
+
+        font-size:1.5rem;
+
+        font-weight:700;
+    }
+
+    .order-success-security {
+        display:flex;
+
+        align-items:center;
+
+        gap:7px;
+
+        color:var(--gray-500);
+
+        font-size:.85rem;
+
+        font-weight:600;
+    }
+
+    .order-success-security i {
+        color:var(--green-600);
+    }
+
+    /* =========================================================
+       ANA ALAN
+       ========================================================= */
+
+    .order-success-main {
+        max-width:900px;
+
+        margin:0 auto;
+
+        display:flex;
+
+        flex-direction:column;
+
+        gap:20px;
+    }
+
+    /* =========================================================
+       BAŞARI KARTI
+       ========================================================= */
+
+    .order-success-card {
+        background:#fff;
+
+        border:1px solid var(--gray-200);
+
+        border-radius:var(--radius-lg);
+
+        box-shadow:var(--shadow-sm);
+
+        overflow:hidden;
+    }
+
+    .order-success-card-header {
+        display:flex;
+
+        align-items:center;
+
+        gap:12px;
+
+        padding:18px 24px;
+
+        background:var(--gray-50);
+
+        border-bottom:1px solid var(--gray-200);
+    }
+
+    .order-success-status {
+        width:32px;
+        height:32px;
+
+        border-radius:50%;
+
+        background:var(--green-50);
+
+        color:var(--green-600);
+
+        display:flex;
+
+        align-items:center;
+
+        justify-content:center;
+
+        flex-shrink:0;
+
+        font-size:.9rem;
+    }
+
+    .order-success-card-heading {
+        margin:0;
+
+        color:var(--gray-900);
+
+        font-size:1.05rem;
+
+        font-weight:700;
+    }
+
+    .order-success-card-subtitle {
+        margin:3px 0 0;
+
+        color:var(--gray-500);
+
+        font-size:.85rem;
+    }
+
+    .order-success-card-body {
+        padding:28px 24px;
+    }
+
+    /* =========================================================
+       BAŞARI MESAJI
+       ========================================================= */
+
+    .order-success-message {
+        padding-bottom:24px;
+
+        border-bottom:1px solid var(--gray-200);
+    }
+
+    .order-success-message-title {
+        margin:0 0 8px;
+
+        color:var(--gray-900);
+
+        font-size:1.35rem;
+
+        font-weight:700;
+    }
+
+    .order-success-message-text {
+        margin:0;
+
+        color:var(--gray-500);
+
+        font-size:.9rem;
+
+        line-height:1.65;
+    }
+
+    /* =========================================================
+       SİPARİŞ BİLGİLERİ
+       ========================================================= */
+
+    .order-success-info-grid {
+        display:grid;
+
+        grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+
+        gap:12px;
+
+        margin-top:24px;
+    }
+
+    .order-success-info-item {
+        padding:16px;
+
+        background:var(--gray-50);
+
+        border:1px solid var(--gray-200);
+
+        border-radius:var(--radius-md);
+    }
+
+    .order-success-info-label {
+        display:block;
+
+        margin-bottom:6px;
+
+        color:var(--gray-500);
+
+        font-size:.78rem;
+
+        font-weight:600;
+    }
+
+    .order-success-info-value {
+        display:block;
+
+        color:var(--gray-900);
+
+        font-size:.95rem;
+
+        font-weight:700;
+
+        word-break:break-word;
+    }
+
+    .order-success-total {
+        color:var(--teal-700);
+    }
+
+    /* =========================================================
+       BİLGİ NOTU
+       ========================================================= */
+
+    .order-success-note {
+        display:flex;
+
+        align-items:flex-start;
+
+        gap:10px;
+
+        margin-top:20px;
+
+        padding:13px 14px;
+
+        background:var(--teal-50);
+
+        border:1px solid var(--teal-100);
+
+        border-radius:var(--radius-md);
+
+        color:var(--gray-600);
+
+        font-size:.8rem;
+
+        line-height:1.55;
+    }
+
+    .order-success-note i {
+        flex-shrink:0;
+
+        margin-top:2px;
+
+        color:var(--teal-600);
+    }
+
+    /* =========================================================
+       BUTONLAR
+       ========================================================= */
+
+    .order-success-actions {
+        display:flex;
+
+        gap:12px;
+
+        margin-top:24px;
+    }
+
+    .order-success-button {
+        display:inline-flex;
+
+        align-items:center;
+
+        justify-content:center;
+
+        gap:8px;
+
+        min-height:46px;
+
+        padding:12px 18px;
+
+        border-radius:var(--radius-md);
+
+        font-size:.9rem;
+
+        font-weight:700;
+
+        text-decoration:none;
+
+        transition:
+            background-color .2s,
+            border-color .2s,
+            color .2s,
+            transform .15s;
+    }
+
+    .order-success-button-primary {
+        background:var(--teal-600);
+
+        border:1px solid var(--teal-600);
+
+        color:#fff;
+
+        box-shadow:0 4px 12px rgba(2,132,199,.18);
+    }
+
+    .order-success-button-primary:hover {
+        background:var(--teal-700);
+
+        border-color:var(--teal-700);
+
+        transform:translateY(-1px);
+    }
+
+    .order-success-button-secondary {
+        background:#fff;
+
+        border:1px solid var(--gray-300);
+
+        color:var(--gray-700);
+    }
+
+    .order-success-button-secondary:hover {
+        border-color:var(--teal-500);
+
+        color:var(--teal-700);
+
+        background:var(--teal-50);
+    }
+
+    /* =========================================================
+       ALT YARDIM KARTI
+       ========================================================= */
+
+    .order-success-help-card {
+        padding:22px 24px;
+
+        background:#fff;
+
+        border:1px solid var(--gray-200);
+
+        border-radius:var(--radius-lg);
+
+        box-shadow:var(--shadow-sm);
+    }
+
+    .order-success-help-title {
+        margin:0 0 8px;
+
+        color:var(--gray-800);
+
+        font-size:.95rem;
+
+        font-weight:700;
+    }
+
+    .order-success-help-text {
+        margin:0;
+
+        color:var(--gray-500);
+
+        font-size:.82rem;
+
+        line-height:1.7;
+    }
+
+    .order-success-help-links {
+        display:flex;
+
+        flex-wrap:wrap;
+
+        gap:8px;
+
+        margin-top:8px;
+    }
+
+    .order-success-help-links a {
+        color:var(--teal-700);
+
+        font-size:.82rem;
+
+        font-weight:700;
+
+        text-decoration:none;
+    }
+
+    .order-success-help-links a:hover {
+        text-decoration:underline;
+    }
+
+    .order-success-help-links span {
+        color:var(--gray-300);
+    }
+
+    /* =========================================================
+       RESPONSIVE
+       ========================================================= */
+
+    @media (max-width:768px) {
+
+        .order-success-container {
+            padding:0 16px;
+
+            margin-top:16px;
+        }
+
+        .order-success-topbar {
+            flex-wrap:wrap;
+
+            gap:12px;
+        }
+
+        .order-success-title {
+            width:100%;
+
+            order:-1;
+
+            font-size:1.35rem;
+        }
+
+        .order-success-security {
+            display:none;
+        }
+
+        .order-success-card-body {
+            padding:22px 16px;
+        }
+
+        .order-success-card-header {
+            padding:16px;
+        }
+
+        .order-success-info-grid {
+            grid-template-columns:1fr;
+        }
+
+        .order-success-actions {
+            flex-direction:column;
+        }
+
+        .order-success-button {
+            width:100%;
+
+            box-sizing:border-box;
+        }
+
+        .order-success-help-card {
+            padding:20px 16px;
+        }
+    }
+
+    @media (max-width:480px) {
+
+        .order-success-back-link {
+            font-size:.85rem;
+        }
+
+        .order-success-card-heading {
+            font-size:.95rem;
+        }
+
+        .order-success-card-subtitle {
+            font-size:.78rem;
+        }
+
+        .order-success-message-title {
+            font-size:1.15rem;
+        }
+    }
+</style>
+
+
+<div class="order-success-container">
+
+
+    <!-- =====================================================
+         ANA ALAN
+         ===================================================== -->
+
+    <main class="order-success-main">
+
+        <!-- =================================================
+             SİPARİŞ ONAY KARTI
+             ================================================= -->
+
+        <section class="order-success-card">
+
+            <div class="order-success-card-header">
+
+                <div class="order-success-status">
+                    <i class="fa-solid fa-check"></i>
+                </div>
+
+                <div>
+
+                    <h2 class="order-success-card-heading">
+                        Ödeme başarıyla tamamlandı
+                    </h2>
+
+                    <p class="order-success-card-subtitle">
+                        Siparişiniz oluşturuldu ve işleme alındı.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="order-success-card-body">
+
+                <div class="order-success-message">
+
+                    <h2 class="order-success-message-title">
+                        Siparişiniz alınmıştır.
+                    </h2>
+
+                    <p class="order-success-message-text">
+                        Ödemeniz başarıyla tamamlandı.
+                        Siparişinizle ilgili güncellemeleri
+                        sipariş detayları üzerinden takip edebilirsiniz.
+                    </p>
+
+                </div>
+
+
+                <!-- =================================================
+                     SİPARİŞ BİLGİLERİ
+                     ================================================= -->
+
+                <div class="order-success-info-grid">
+
+                    <div class="order-success-info-item">
+
+                        <span class="order-success-info-label">
+                            Sipariş Numarası
+                        </span>
+
+                        <span class="order-success-info-value">
+                            {{ order.order_number }}
+                        </span>
+
+                    </div>
+
+
+                    <div class="order-success-info-item">
+
+                        <span class="order-success-info-label">
+                            Sipariş Durumu
+                        </span>
+
+                        <span class="order-success-info-value">
+                            Ödeme Alındı
+                        </span>
+
+                    </div>
+
+
+                    <div class="order-success-info-item">
+
+                        <span class="order-success-info-label">
+                            Sipariş Toplamı
+                        </span>
+
+                        <span class="order-success-info-value order-success-total">
+                            {{ order.total_amount }} {{ order.currency }}
+                        </span>
+
+                    </div>
+
+
+                    <div class="order-success-info-item">
+
+                        <span class="order-success-info-label">
+                            Ödeme Durumu
+                        </span>
+
+                        <span class="order-success-info-value">
+                            Başarılı
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <!-- =================================================
+                     BİLGİ
+                     ================================================= -->
+
+                <div class="order-success-note">
+
+                    <i class="fa-solid fa-circle-info"></i>
+
+                    <span>
+                        Siparişinizin hazırlanma ve teslimat sürecindeki
+                        güncellemeler sipariş detaylarında görüntülenebilir.
+                    </span>
+
+                </div>
+
+
+                <!-- =================================================
+                     AKSİYONLAR
+                     ================================================= -->
+
+                <div class="order-success-actions">
+
+                    <a
+                        href="/orders/"
+                        class="order-success-button order-success-button-primary"
+                    >
+                        <span>
+                            Siparişlerime Git
+                        </span>
+
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </a>
+
+
+                    <a
+                        href="/"
+                        class="order-success-button order-success-button-secondary"
+                    >
+                        <span>
+                            Alışverişe Devam Et
+                        </span>
+                    </a>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             YARDIM
+             ================================================= -->
+
+        <section class="order-success-help-card">
+
+            <h3 class="order-success-help-title">
+                Siparişinizle ilgili yardıma mı ihtiyacınız var?
+            </h3>
+
+            <p class="order-success-help-text">
+                Sipariş, ödeme veya teslimatla ilgili bir sorun yaşarsanız
+                destek kanallarımız üzerinden bizimle iletişime geçebilirsiniz.
+            </p>
+
+            <div class="order-success-help-links">
+
+                <a href="#">
+                    Yardım Merkezi
+                </a>
+
+                <span>•</span>
+
+                <a href="#">
+                    İletişim
+                </a>
+
+                <span>•</span>
+
+                <a href="#">
+                    Kargo ve Teslimat
+                </a>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+{% endblock %}

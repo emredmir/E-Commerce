@@ -1,0 +1,559 @@
+{% extends "store/store_dashboard_base.html" %}
+
+{% block title %}{{ store.store_name }} — Faturalar{% endblock %}
+
+{% block content %}
+
+<style>
+    .invoice-page {
+        width: 100%;
+    }
+
+    .invoice-page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 22px;
+    }
+
+    .invoice-page-title {
+        margin: 0;
+        font-size: 1.45rem;
+        font-weight: 800;
+        color: #0f172a;
+    }
+
+    .invoice-page-subtitle {
+        margin: 5px 0 0;
+        color: #64748b;
+        font-size: 0.88rem;
+    }
+
+    .invoice-search-form {
+        display: flex;
+        gap: 8px;
+        width: 100%;
+        max-width: 440px;
+    }
+
+    .invoice-search-input {
+        flex: 1;
+        min-width: 0;
+        padding: 10px 13px;
+        border: 1px solid #cbd5e1;
+        border-radius: 9px;
+        background: #fff;
+        color: #0f172a;
+        font-size: 0.88rem;
+        outline: none;
+    }
+
+    .invoice-search-input:focus {
+        border-color: #0f766e;
+        box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.10);
+    }
+
+    .invoice-search-btn {
+        border: 1px solid #0f766e;
+        border-radius: 9px;
+        padding: 10px 16px;
+        background: #0f766e;
+        color: #fff;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .invoice-list {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .invoice-card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 18px;
+        transition: border-color .2s, box-shadow .2s;
+    }
+
+    .invoice-card:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, .06);
+    }
+
+    .invoice-card-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 14px;
+    }
+
+    .invoice-number {
+        margin: 0;
+        color: #0f172a;
+        font-size: 0.98rem;
+        font-weight: 800;
+    }
+
+    .invoice-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        margin-top: 6px;
+        color: #64748b;
+        font-size: 0.8rem;
+    }
+
+    .invoice-total {
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .invoice-total-label {
+        display: block;
+        margin-bottom: 3px;
+        color: #64748b;
+        font-size: 0.75rem;
+    }
+
+    .invoice-total-value {
+        color: #0f766e;
+        font-size: 1rem;
+        font-weight: 800;
+    }
+
+    .invoice-card-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(220px, .7fr);
+        gap: 18px;
+        padding-top: 14px;
+        border-top: 1px solid #f1f5f9;
+    }
+
+    .invoice-section-title {
+        margin: 0 0 8px;
+        color: #334155;
+        font-size: 0.76rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .invoice-buyer {
+        color: #0f172a;
+        font-size: 0.9rem;
+        font-weight: 700;
+    }
+
+    .invoice-buyer-meta {
+        margin-top: 4px;
+        color: #64748b;
+        font-size: 0.8rem;
+        line-height: 1.5;
+    }
+
+    .invoice-items {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+    }
+
+    .invoice-item-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 0.82rem;
+    }
+
+    .invoice-item-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #334155;
+    }
+
+    .invoice-item-quantity {
+        color: #64748b;
+        flex-shrink: 0;
+    }
+
+    .invoice-card-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid #f1f5f9;
+    }
+
+    .invoice-order-link {
+        color: #475569;
+        font-size: 0.8rem;
+    }
+
+    .invoice-order-link strong {
+        color: #0f172a;
+    }
+
+    .invoice-detail-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        color: #334155;
+        background: #fff;
+        text-decoration: none;
+        font-size: 0.78rem;
+        font-weight: 700;
+        transition: .2s;
+    }
+
+    .invoice-detail-btn:hover {
+        background: #f8fafc;
+        border-color: #94a3b8;
+    }
+
+    .invoice-empty {
+        padding: 55px 20px;
+        background: #fff;
+        border: 1px dashed #cbd5e1;
+        border-radius: 14px;
+        text-align: center;
+        color: #64748b;
+    }
+
+    .invoice-empty i {
+        margin-bottom: 12px;
+        font-size: 2rem;
+        color: #94a3b8;
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 6px;
+        margin-top: 24px;
+        flex-wrap: wrap;
+    }
+
+    .pagination a,
+    .pagination span {
+        min-width: 36px;
+        padding: 8px 11px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        text-align: center;
+        color: #334155;
+        background: #fff;
+        text-decoration: none;
+        font-size: 0.8rem;
+    }
+
+    .pagination .current {
+        border-color: #0f766e;
+        background: #0f766e;
+        color: #fff;
+        font-weight: 700;
+    }
+
+    @media (max-width: 992px) {
+        .invoice-page-header {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .invoice-search-form {
+            max-width: none;
+        }
+
+        .invoice-card-body {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 600px) {
+        .invoice-card {
+            padding: 14px;
+        }
+
+        .invoice-card-top {
+            flex-direction: column;
+        }
+
+        .invoice-total {
+            text-align: left;
+        }
+
+        .invoice-card-footer {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .invoice-detail-btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+
+<div class="invoice-page">
+
+    <div class="invoice-page-header">
+
+        <div>
+            <h1 class="invoice-page-title">
+                Faturalar
+            </h1>
+
+            <p class="invoice-page-subtitle">
+                Mağazanıza ait oluşturulmuş faturalar.
+            </p>
+        </div>
+
+        <form
+            method="get"
+            class="invoice-search-form"
+        >
+            <input
+                type="search"
+                name="q"
+                value="{{ current_q }}"
+                class="invoice-search-input"
+                placeholder="Fatura no, sipariş no, müşteri veya ürün ara..."
+                autocomplete="off"
+            >
+
+            <button
+                type="submit"
+                class="invoice-search-btn"
+            >
+                <i class="fa-solid fa-magnifying-glass"></i>
+                Ara
+            </button>
+        </form>
+
+    </div>
+
+
+    {% if invoices %}
+
+        <div class="invoice-list">
+
+            {% for invoice in invoices %}
+
+                <article class="invoice-card">
+
+                    <div class="invoice-card-top">
+
+                        <div>
+                            <h2 class="invoice-number">
+                                {{ invoice.invoice_number }}
+                            </h2>
+
+                            <div class="invoice-meta">
+
+                                <span>
+                                    <i class="fa-regular fa-calendar"></i>
+                                    {{ invoice.issued_at|date:"d.m.Y H:i" }}
+                                </span>
+
+                                <span>
+                                    <i class="fa-solid fa-file-lines"></i>
+                                    Alt sipariş:
+                                    {{ invoice.suborder.suborder_number }}
+                                </span>
+
+                            </div>
+                        </div>
+
+                        <div class="invoice-total">
+
+                            <span class="invoice-total-label">
+                                Genel Toplam
+                            </span>
+
+                            <span class="invoice-total-value">
+                                {{ invoice.total_amount|floatformat:2 }}
+                                {{ invoice.currency }}
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="invoice-card-body">
+
+                        <div>
+
+                            <h3 class="invoice-section-title">
+                                Alıcı
+                            </h3>
+
+                            <div class="invoice-buyer">
+                                {{ invoice.buyer_full_name }}
+                            </div>
+
+                            <div class="invoice-buyer-meta">
+
+                                {% if invoice.buyer_email %}
+                                    {{ invoice.buyer_email }}<br>
+                                {% endif %}
+
+                                {% if invoice.buyer_phone %}
+                                    {{ invoice.buyer_phone }}
+                                {% endif %}
+
+                            </div>
+
+                        </div>
+
+
+                        <div>
+
+                            <h3 class="invoice-section-title">
+                                Ürünler
+                            </h3>
+
+                            <div class="invoice-items">
+
+                                {% for item in invoice.invoice_items|slice:":4" %}
+
+                                    <div class="invoice-item-row">
+
+                                        <span class="invoice-item-name">
+                                            {{ item.product_name }}
+
+                                            {% if item.variant_display %}
+                                                — {{ item.variant_display }}
+                                            {% endif %}
+                                        </span>
+
+                                        <span class="invoice-item-quantity">
+                                            × {{ item.quantity }}
+                                        </span>
+
+                                    </div>
+
+                                {% empty %}
+
+                                    <span class="invoice-buyer-meta">
+                                        Ürün satırı bulunamadı.
+                                    </span>
+
+                                {% endfor %}
+
+                                {% if invoice.invoice_items|length > 4 %}
+                                    <span class="invoice-buyer-meta">
+                                        +{{ invoice.invoice_items|length|add:"-4" }}
+                                        ürün daha
+                                    </span>
+                                {% endif %}
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="invoice-card-footer">
+
+                        <div class="invoice-order-link">
+                            Ana sipariş:
+                            <strong>
+                                {{ invoice.suborder.order.order_number }}
+                            </strong>
+                        </div>
+
+                        <a
+                            href="{% url 'store:store_invoice_detail' store.slug invoice.invoice_number %}"
+                            class="invoice-detail-btn"
+                        >
+                            <i class="fa-solid fa-file-invoice"></i>
+                            Faturayı Görüntüle
+                        </a>
+
+                    </div>
+
+                </article>
+
+            {% endfor %}
+
+        </div>
+
+
+        {% if is_paginated %}
+
+            <div class="pagination">
+
+                {% if page_obj.has_previous %}
+                    <a
+                        href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.previous_page_number }}"
+                    >
+                        ‹
+                    </a>
+                {% endif %}
+
+
+                {% for num in page_obj.paginator.page_range %}
+
+                    {% if page_obj.number == num %}
+
+                        <span class="current">
+                            {{ num }}
+                        </span>
+
+                    {% elif num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %}
+
+                        <a
+                            href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ num }}"
+                        >
+                            {{ num }}
+                        </a>
+
+                    {% endif %}
+
+                {% endfor %}
+
+
+                {% if page_obj.has_next %}
+                    <a
+                        href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.next_page_number }}"
+                    >
+                        ›
+                    </a>
+                {% endif %}
+
+            </div>
+
+        {% endif %}
+
+
+    {% else %}
+
+        <div class="invoice-empty">
+
+            <i class="fa-regular fa-file-lines"></i>
+
+            <div>
+                Henüz oluşturulmuş faturanız bulunmuyor.
+            </div>
+
+        </div>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

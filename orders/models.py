@@ -1,4 +1,5 @@
 import uuid
+import os
 from decimal import Decimal
 
 from django.conf import settings
@@ -103,8 +104,13 @@ class RefundStatus(models.TextChoices):
     """
 
     PENDING = "pending", "Bekliyor"
+    PROCESSING = "processing", "İşleniyor"
     SUCCESS = "success", "Başarılı"
     FAILED = "failed", "Başarısız"
+    RECONCILIATION_REQUIRED = (
+        "reconciliation_required",
+        "Mutabakat Gerekiyor",
+    )
 
 
 class ReservationStatus(models.TextChoices):
@@ -246,6 +252,13 @@ class Order(models.Model):
         max_length=3,
         default="TRY",
         verbose_name="Para Birimi",
+    )
+
+    discount_code_snapshot = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="İndirim Kodu Snapshot",
     )
 
     # ==========================================================================
@@ -429,7 +442,14 @@ class Order(models.Model):
 # ==============================================================================
 # 2. SUB ORDER
 # ==============================================================================
-
+class CargoCompany(models.TextChoices):
+    YURTICI = "yurtici", "Yurtiçi Kargo"
+    ARAS = "aras", "Aras Kargo"
+    SURAT = "surat", "Sürat Kargo"
+    PTT = "ptt", "PTT Kargo"
+    UPS = "ups", "UPS"
+    DHL = "dhl", "DHL"
+    KOLAYGELSIN = "kolaygelsin", "Kolay Gelsin"
 
 class SubOrder(models.Model):
     """
@@ -548,9 +568,10 @@ class SubOrder(models.Model):
     # ==========================================================================
 
     cargo_company = models.CharField(
-        max_length=100,
+        max_length=30,
         blank=True,
         default="",
+        choices=CargoCompany.choices,
         verbose_name="Kargo Firması",
     )
 
@@ -572,6 +593,12 @@ class SubOrder(models.Model):
         null=True,
         blank=True,
         verbose_name="Teslim Tarihi",
+    )
+
+    cancelled_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="İptal Tarihi",
     )
 
     # ==========================================================================
@@ -655,7 +682,26 @@ class SubOrder(models.Model):
 # ==============================================================================
 # 3. ORDER ITEM
 # ==============================================================================
+def order_item_image_snapshot_upload_to(instance, filename):
+    """
+    Sipariş kaleminin sipariş anındaki ürün görseli snapshot'ı.
 
+    Orijinal ürün görselinden bağımsız fiziksel dosya olarak saklanır.
+    """
+
+    ext = os.path.splitext(filename)[1].lower()
+
+    filename = (
+        f"{uuid.uuid4().hex}"
+        f"{ext}"
+    )
+
+    return (
+        "orders/"
+        "item-image-snapshots/"
+        f"{instance.sub_order.order.order_number}/"
+        f"{filename}"
+    )
 
 class OrderItem(models.Model):
     """
@@ -687,9 +733,31 @@ class OrderItem(models.Model):
         verbose_name="Mağaza Ürünü",
     )
 
+    source_cart_item = models.ForeignKey(
+        "cart.CartItem",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Kaynak Sepet Ürünü",
+    )
+
+    source_cart_item_updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Checkout Anındaki Sepet Ürünü Güncellenme Tarihi",
+    )
+
     # ==========================================================================
     # PRODUCT SNAPSHOT
     # ==========================================================================
+
+    image_snapshot = models.ImageField(
+        upload_to=order_item_image_snapshot_upload_to,
+        null=True,
+        blank=True,
+        verbose_name="Ürün Görseli Snapshot",
+    )
 
     product_name_snapshot = models.CharField(
         max_length=255,
@@ -967,6 +1035,351 @@ class StockReservation(models.Model):
         )
 
 
+# INVOICE
+
+class Invoice(models.Model):
+    """
+    Seller tarafından SubOrder için oluşturulan fatura kaydı.
+
+    Invoice, oluşturulduğu andaki:
+        - seller legal bilgilerini,
+        - buyer billing bilgilerini,
+        - SubOrder finansal değerlerini
+
+    snapshot olarak saklar.
+
+    Invoice oluşturulduktan sonra kaynak modellerdeki değişiklikler
+    mevcut invoice kaydını değiştirmemelidir.
+    """
+
+    suborder = models.OneToOneField(
+        SubOrder,
+        on_delete=models.PROTECT,
+        related_name="invoice",
+        verbose_name="Alt Sipariş",
+    )
+
+    # ==================================================================
+    # INVOICE IDENTITY
+    # ==================================================================
+
+    invoice_number = models.CharField(
+        max_length=50,
+        unique=True,
+        db_index=True,
+        verbose_name="Fatura Numarası",
+    )
+
+    issued_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Düzenlenme Tarihi",
+    )
+
+    # ==================================================================
+    # SELLER LEGAL SNAPSHOT
+    # ==================================================================
+
+
+    seller_display_name = models.CharField(
+        max_length=255,
+        verbose_name="Satıcı Görünen Adı",
+    )
+
+    seller_legal_company_title = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Satıcı Yasal Unvanı",
+    )
+
+    seller_address = models.TextField(
+        verbose_name="Satıcı Adresi",
+    )
+
+    seller_phone = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name="Satıcı Telefonu",
+    )
+
+    seller_tax_office = models.CharField(
+        max_length=150,
+        blank=True,
+        verbose_name="Vergi Dairesi",
+    )
+
+    seller_tax_number = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name="Vergi Numarası",
+    )
+
+    seller_identity_number = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name="Satıcı T.C. Kimlik Numarası",
+    )
+
+    # ==================================================================
+    # BUYER BILLING SNAPSHOT
+    # ==================================================================
+
+    buyer_full_name = models.CharField(
+        max_length=255,
+        verbose_name="Alıcı Adı Soyadı",
+    )
+
+    buyer_phone = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name="Alıcı Telefonu",
+    )
+
+    buyer_email = models.EmailField(
+        blank=True,
+        verbose_name="Alıcı E-posta",
+    )
+
+    buyer_identity_number = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name="Alıcı T.C. Kimlik / Vergi Numarası",
+    )
+
+    buyer_billing_address_line1 = models.CharField(
+        max_length=255,
+        verbose_name="Fatura Adresi",
+    )
+
+    buyer_billing_address_line2 = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Fatura Adresi 2",
+    )
+
+    buyer_billing_city = models.CharField(
+        max_length=100,
+        verbose_name="Fatura Şehri",
+    )
+
+    buyer_billing_state = models.CharField(
+        max_length=100,
+        verbose_name="Fatura İlçesi",
+    )
+
+    buyer_billing_postal_code = models.CharField(
+        max_length=20,
+        verbose_name="Fatura Posta Kodu",
+    )
+
+    # ==================================================================
+    # FINANCIAL SNAPSHOT
+    # ==================================================================
+
+    subtotal = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="Ara Toplam",
+    )
+
+    discount_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        verbose_name="İndirim Tutarı",
+    )
+
+    shipping_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        verbose_name="Kargo Tutarı",
+    )
+
+    tax_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        verbose_name="Vergi Tutarı",
+    )
+
+    total_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="Genel Toplam",
+    )
+
+    currency = models.CharField(
+        max_length=3,
+        verbose_name="Para Birimi",
+    )
+
+    # ==================================================================
+    # META
+    # ==================================================================
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Oluşturulma Tarihi",
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Güncellenme Tarihi",
+    )
+
+    class Meta:
+        ordering = [
+            "-issued_at",
+            "-pk",
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(subtotal__gte=0),
+                name="invoice_subtotal_gte_0",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(discount_amount__gte=0),
+                name="invoice_discount_gte_0",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(shipping_amount__gte=0),
+                name="invoice_shipping_gte_0",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(tax_amount__gte=0),
+                name="invoice_tax_gte_0",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(total_amount__gte=0),
+                name="invoice_total_gte_0",
+            ),
+        ]
+
+    def __str__(self):
+        return self.invoice_number
+
+class InvoiceItem(models.Model):
+    """
+    Invoice üzerinde yer alan ürün satırı.
+
+    InvoiceItem, Invoice oluşturulduğu andaki OrderItem bilgilerinin
+    immutable snapshot'ını temsil eder.
+
+    Kaynak OrderItem sonradan değişse veya silinse bile
+    InvoiceItem kendi tarihsel verisini korur.
+    """
+
+    invoice = models.ForeignKey(
+        Invoice,
+        on_delete=models.PROTECT,
+        related_name="items",
+        verbose_name="Fatura",
+    )
+
+    # ==================================================================
+    # PRODUCT SNAPSHOT
+    # ==================================================================
+
+    product_name = models.CharField(
+        max_length=255,
+        verbose_name="Ürün Adı",
+    )
+
+    variant_display = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name="Varyant",
+    )
+
+    sku = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="SKU",
+    )
+
+    barcode = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="Barkod",
+    )
+
+    # ==================================================================
+    # QUANTITY
+    # ==================================================================
+
+    quantity = models.PositiveIntegerField(
+        verbose_name="Miktar",
+    )
+
+    # ==================================================================
+    # FINANCIAL SNAPSHOT
+    # ==================================================================
+
+    unit_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="Birim Fiyat",
+    )
+
+    discount_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        verbose_name="İndirim Tutarı",
+    )
+
+    tax_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        verbose_name="Vergi Tutarı",
+    )
+
+    total_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="Toplam Tutar",
+    )
+
+    # ==================================================================
+    # META
+    # ==================================================================
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Oluşturulma Tarihi",
+    )
+
+    class Meta:
+        ordering = [
+            "pk",
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name="invoice_item_quantity_gt_0",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(unit_price__gte=0),
+                name="invoice_item_unit_price_gte_0",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(discount_amount__gte=0),
+                name="invoice_item_discount_gte_0",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(tax_amount__gte=0),
+                name="invoice_item_tax_gte_0",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(total_amount__gte=0),
+                name="invoice_item_total_gte_0",
+            ),
+        ]
+
+    def __str__(self):
+        return self.product_name
+
 # ==============================================================================
 # 5. PAYMENT TRANSACTION
 # ==============================================================================
@@ -1066,6 +1479,11 @@ class PaymentTransaction(models.Model):
         max_length=3,
         default="TRY",
         verbose_name="Para Birimi",
+    )
+
+    installment_count = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name="Taksit Sayısı",
     )
 
     # ==========================================================================
@@ -1173,6 +1591,181 @@ class PaymentTransaction(models.Model):
         return (
             f"{self.order.order_number} - "
             f"{self.get_status_display()}"
+        )
+
+class PaymentTransactionItemType(models.TextChoices):
+    PRODUCT = "product", "Ürün"
+    SHIPPING = "shipping", "Kargo"
+
+
+class PaymentTransactionItem(models.Model):
+    """
+    Bir PaymentTransaction içindeki iyzico basket/payment split'ini temsil eder.
+
+    Örnek:
+
+        PaymentTransaction
+            ├── OrderItem #15 → iyzico transaction 12345
+            ├── OrderItem #16 → iyzico transaction 12346
+            └── OrderItem #17 → iyzico transaction 12347
+
+    iyzico marketplace refund işlemi paymentTransactionId
+    üzerinden yapıldığı için bu ilişki localde saklanmalıdır.
+    """
+
+    payment_transaction = models.ForeignKey(
+        PaymentTransaction,
+        on_delete=models.PROTECT,
+        related_name="items",
+        verbose_name="Ödeme İşlemi",
+    )
+
+    suborder = models.ForeignKey(
+        SubOrder,
+        on_delete=models.PROTECT,
+        related_name="payment_transaction_items",
+    )
+
+    order_item = models.ForeignKey(
+        OrderItem,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="payment_transaction_items",
+        verbose_name="Sipariş Kalemi",
+    )
+
+    item_type = models.CharField(
+        max_length=20,
+        choices=PaymentTransactionItemType.choices,
+    )
+
+    provider_item_id = models.CharField(
+        max_length=100,
+        verbose_name="Provider Item ID",
+    )
+
+    provider_transaction_id = models.CharField(
+        max_length=100,
+        verbose_name="Provider Payment Transaction ID",
+    )
+
+    price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[
+            MinValueValidator(Decimal("0.00")),
+        ],
+        verbose_name="Provider Kalem Tutarı",
+    )
+
+    paid_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[
+            MinValueValidator(Decimal("0.00")),
+        ],
+        verbose_name="Tahsil Edilen Kalem Tutarı",
+    )
+
+    transaction_status = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Provider Transaction Status",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        verbose_name = "Ödeme İşlem Kalemi"
+        verbose_name_plural = "Ödeme İşlem Kalemleri"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "payment_transaction",
+                    "provider_item_id",
+                ],
+                name="unique_payment_provider_item",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "payment_transaction",
+                    "provider_transaction_id",
+                ],
+                name="unique_payment_provider_tx",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "provider_transaction_id",
+                ],
+                name="unique_provider_transaction_id",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "payment_transaction",
+                    "order_item",
+                ],
+                condition=models.Q(
+                    order_item__isnull=False,
+                ),
+                name="unique_payment_order_item",
+            ),
+
+            models.UniqueConstraint(
+                fields=[
+                    "payment_transaction",
+                    "suborder",
+                ],
+                condition=models.Q(
+                    item_type="shipping",
+                ),
+                name="unique_payment_shipping_suborder",
+            ),
+
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        item_type="product",
+                        order_item__isnull=False,
+                    )
+                    |
+                    models.Q(
+                        item_type="shipping",
+                        order_item__isnull=True,
+                    )
+                ),
+                name="payment_item_type_shape",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "payment_transaction",
+                    "suborder",
+                ],
+                name="ptxitem_pay_sub_idx",
+            ),
+            models.Index(
+                fields=[
+                    "payment_transaction",
+                    "order_item",
+                ],
+                name="ptxitem_pay_ord_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.payment_transaction_id} - "
+            f"{self.provider_transaction_id}"
         )
 
 # ==============================================================================
@@ -1650,6 +2243,20 @@ class StoredCardOperation(models.Model):
 # 8. PAYMENT REFUND
 # ==============================================================================
 
+class RefundType(models.TextChoices):
+    SUBORDER_CANCELLATION = (
+        "suborder_cancellation",
+        "Alt Sipariş İptali",
+    )
+    CUSTOMER_REQUEST = (
+        "customer_request",
+        "Müşteri Talebi",
+    )
+    SELLER_FAULT = (
+        "seller_fault",
+        "Satıcı Kaynaklı",
+    )
+    
 
 class PaymentRefund(models.Model):
     """
@@ -1674,17 +2281,16 @@ class PaymentRefund(models.Model):
         verbose_name="Ödeme İşlemi",
     )
 
+    suborder = models.ForeignKey(
+        SubOrder,
+        on_delete=models.PROTECT,
+        related_name="payment_refunds",
+        verbose_name="Alt Sipariş",
+    )
+
     # ==========================================================================
     # PROVIDER
     # ==========================================================================
-
-    provider_refund_id = models.CharField(
-        max_length=255,
-        blank=True,
-        null=True,
-        db_index=True,
-        verbose_name="Provider Refund ID",
-    )
 
     refund_reference = models.CharField(
         max_length=100,
@@ -1718,7 +2324,7 @@ class PaymentRefund(models.Model):
     # ==========================================================================
 
     status = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=RefundStatus.choices,
         default=RefundStatus.PENDING,
         db_index=True,
@@ -1730,6 +2336,17 @@ class PaymentRefund(models.Model):
         blank=True,
         default="",
         verbose_name="İade Nedeni",
+    )
+
+    refund_type = models.CharField(
+        max_length=30,
+        choices=RefundType.choices,
+        verbose_name="İade Türü",
+    )
+
+    refund_shipping = models.BooleanField(
+        default=False,
+        verbose_name="Kargo Ücreti İade Ediliyor",
     )
 
     # ==========================================================================
@@ -1778,17 +2395,6 @@ class PaymentRefund(models.Model):
         ]
 
         constraints = [
-            models.UniqueConstraint(
-                fields=[
-                    "payment_transaction",
-                    "provider_refund_id",
-                ],
-                condition=models.Q(
-                    provider_refund_id__isnull=False,
-                ),
-                name="unique_provider_refund",
-            ),
-
             models.CheckConstraint(
                 condition=models.Q(amount__gt=0),
                 name="refund_amount_gt_0",
@@ -1800,3 +2406,199 @@ class PaymentRefund(models.Model):
             f"{self.refund_reference} - "
             f"{self.amount} {self.currency}"
         )
+
+class PaymentRefundItem(models.Model):
+    """
+    Bir PaymentRefund içerisindeki provider-level refund işlemidir.
+
+    Tek bir logical refund birden fazla iyzico basket item'ına
+    bölünebilir.
+    """
+
+    payment_refund = models.ForeignKey(
+        PaymentRefund,
+        on_delete=models.PROTECT,
+        related_name="items",
+        verbose_name="Ödeme İadesi",
+    )
+
+    payment_transaction_item = models.ForeignKey(
+        PaymentTransactionItem,
+        on_delete=models.PROTECT,
+        related_name="refund_items",
+        verbose_name="Ödeme İşlem Kalemi",
+    )
+
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[
+            MinValueValidator(Decimal("0.01")),
+        ],
+        verbose_name="İade Tutarı",
+    )
+
+    provider_refund_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Provider Refund ID",
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=RefundStatus.choices,
+        default=RefundStatus.PENDING,
+        db_index=True,
+        verbose_name="İade Durumu",
+    )
+
+    conversation_id = models.CharField(
+        max_length=100,
+        unique=True,
+        verbose_name="Refund Conversation ID",
+    )
+
+    retryable = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name="Tekrar Denenebilir",
+    )
+
+    provider_error_code = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+    )
+    
+    provider_error_message = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        verbose_name = "Ödeme İade Kalemi"
+        verbose_name_plural = "Ödeme İade Kalemleri"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "payment_refund",
+                    "payment_transaction_item",
+                ],
+                name="unique_refund_transaction_item",
+            ),
+
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name="refund_item_amount_gt_0",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "status",
+                    "-created_at",
+                ],
+                name="refunditem_status_created_idx",
+            ),
+            models.Index(
+                fields=[
+                    "payment_transaction_item",
+                    "status",
+                ],
+                name="ptxitem_status_idx",
+            ),
+        ]
+
+class SubOrderCancellation(models.Model):
+    """
+    Bir SubOrder'ın seller/system tarafından iptal edilmesinin
+    tarihsel kaydı.
+
+    Cancellation ile PaymentRefund ayrı domain kayıtlarıdır.
+    Refund henüz oluşturulmamış veya tamamlanmamış olabilir.
+    """
+
+    suborder = models.OneToOneField(
+        SubOrder,
+        on_delete=models.PROTECT,
+        related_name="cancellation",
+        verbose_name="Alt Sipariş",
+    )
+
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="suborder_cancellations",
+        verbose_name="İptal Eden",
+    )
+
+    reason = models.CharField(
+        max_length=255,
+        verbose_name="İptal Nedeni",
+    )
+
+    refund_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[
+            MinValueValidator(Decimal("0.00")),
+        ],
+        verbose_name="İade Tutarı",
+    )
+
+    payment_refund = models.OneToOneField(
+        PaymentRefund,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="cancellation",
+        verbose_name="Ödeme İadesi",
+    )
+
+    cancelled_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="İptal Tarihi",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        verbose_name = "Alt Sipariş İptali"
+        verbose_name_plural = "Alt Sipariş İptalleri"
+
+        ordering = [
+            "-cancelled_at",
+            "-pk",
+        ]
+
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(refund_amount__gte=0),
+                name="suborder_cancel_refund_gte_0",
+            ),
+        ]
+
+    def __str__(self):
+        return self.suborder.suborder_number

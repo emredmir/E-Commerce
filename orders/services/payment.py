@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import ipaddress
 import json
 import logging
@@ -37,9 +39,14 @@ from orders.models import (
     ReservationStatus,
     StockReservation,
     StoredCard,
+    PaymentTransactionItem,
+    PaymentTransactionItemType,
+    SubOrder,
 )
 
 from .stock_reservation import StockReservationService
+
+from cart.services.cart import CartService
 
 
 logger = logging.getLogger(__name__)
@@ -472,7 +479,7 @@ class PaymentService:
             )
 
             expected_price = cls._money(
-                order.subtotal
+                order.total_amount
             )
 
             expected_currency = cls._clean(
@@ -514,229 +521,386 @@ class PaymentService:
         )
 
         # ------------------------------------------------------------------
-        # Provider'dan gelen verileri normalize et
+        # FINAL DB STATE
         # ------------------------------------------------------------------
-        # 5. NORMALIZE PROVIDER DATA
 
-        response_paid_price = cls._money(
+        return cls._finalize_successful_payment(
+            payment_id=payment_id,
+            conversation_id=conversation_id,
+            response=response,
+        )
+
+    @classmethod
+    def _persist_payment_transaction_items(
+        cls,
+        *,
+        payment_transaction,
+        response,
+    ):
+        item_transactions = response.get("itemTransactions")
+
+        if not isinstance(item_transactions, list):
+            raise PaymentVerificationError(
+                "iyzico ödeme kırılım bilgileri bulunamadı."
+            )
+
+        if not item_transactions:
+            raise PaymentVerificationError(
+                "iyzico ödeme kırılım bilgileri boş."
+            )
+
+        # ----------------------------------------------------------------------
+        # 1. IYZICO ANA PAID PRICE
+        # ----------------------------------------------------------------------
+        #
+        # Örneğin:
+        #
+        #   response["paidPrice"] = 104.99
+        #
+        # Aşağıda itemTransactions[].paidPrice toplamının da
+        # tam olarak bu değere eşit olduğunu doğrulayacağız.
+        #
+        response_paid_price = cls._normalize_optional_money(
             response.get("paidPrice")
         )
 
-        currency = (
-            cls._clean(
-                response.get("currency")
+        if response_paid_price is None:
+            raise PaymentVerificationError(
+                "iyzico ödeme paidPrice bilgisi eksik."
             )
-            or cls.CURRENCY
-        ).upper()
 
-        fraud_status = cls._normalize_optional_int(
-            response.get("fraudStatus")
+        response_paid_price = cls._money(
+            response_paid_price
         )
 
-        card_type = cls._clean(
-            response.get("cardType")
+        # ----------------------------------------------------------------------
+        # 2. ORDER ITEMS
+        # ----------------------------------------------------------------------
+
+        order_items = list(
+            OrderItem.objects
+            .filter(
+                sub_order__order=payment_transaction.order_id,
+            )
+            .order_by("id")
         )
 
-        card_association = cls._clean(
-            response.get("cardAssociation")
-        )
+        if not order_items:
+            raise PaymentVerificationError(
+                "Ödeme için sipariş kalemleri bulunamadı."
+            )
 
-        last_four_digits = cls._clean(
-            response.get("lastFourDigits")
-        )
+        product_items_by_provider_id = {
+            f"OI-{item.id}": item
+            for item in order_items
+        }
 
-        # ------------------------------------------------------------------
-        # FINAL DB STATE
-        #
-        # Burada:
-        #
-        # PaymentTransaction SUCCESS
-        # Reservation CONSUMED
-        # stock decrement
-        # Order PAID
-        #
-        # tek transaction içinde gerçekleşir.
-        # ------------------------------------------------------------------
-        # 6. FINAL ATOMIC STATE CHANGE
-
-        with transaction.atomic():
-            try:
-                payment_tx = (
-                    PaymentTransaction.objects
-                    .select_for_update()
-                    .select_related("order")
-                    .get(
-                        provider=cls.PROVIDER,
-                        conversation_id=conversation_id,
-                    )
+        suborders_by_shipping_provider_id = {
+            f"SHIP-{suborder.id}": suborder
+            for suborder in (
+                SubOrder.objects
+                .filter(order=payment_transaction.order_id)
+                .select_related(
+                    "store",
+                    "store__seller",
                 )
+            )
+            if cls._money(
+                suborder.shipping_amount
+            ) > Decimal("0.00")
+        }
 
-            except PaymentTransaction.DoesNotExist as exc:
+        expected_provider_item_ids = (
+            set(product_items_by_provider_id)
+            | set(suborders_by_shipping_provider_id)
+        )
+
+        if len(item_transactions) != len(expected_provider_item_ids):
+            raise PaymentVerificationError(
+                "iyzico ödeme kırılım sayısı "
+                "sipariş kalemleriyle eşleşmiyor."
+            )
+
+        seen_provider_item_ids = set()
+
+        payment_transaction_items = []
+
+        # ----------------------------------------------------------------------
+        # 3. ITEM PAID PRICE TOPLAMI
+        # ----------------------------------------------------------------------
+        #
+        # Burada iyzico'nun her item için döndürdüğü paidPrice'ları
+        # toplayacağız.
+        #
+        # Örnek:
+        #
+        #   Store A item -> 104.99
+        #   Store B item -> 200.00
+        #
+        #   toplam -> 304.99
+        #
+        # bunun response["paidPrice"] ile aynı olması gerekir.
+        #
+        total_item_paid_price = Decimal("0.00")
+        total_item_price = Decimal("0.00")
+
+        # ----------------------------------------------------------------------
+        # 4. ITEM TRANSACTIONS
+        # ----------------------------------------------------------------------
+
+        for item_transaction in item_transactions:
+            if not isinstance(item_transaction, dict):
                 raise PaymentVerificationError(
-                    "Ödeme kaydı bulunamadı."
-                ) from exc
-            
-            # IDEMPOTENCY
-            # Başka bir callback bizden önce tamamladıysa:
-            if payment_tx.status == PaymentStatus.SUCCESS:
-                order = payment_tx.order
-
-                return PaymentCompletionResult(
-                    payment_transaction_id=payment_tx.id,
-                    order_id=payment_tx.order_id,
-                    order_number=order.order_number,
-                    payment_id=(
-                        payment_tx.payment_id
-                        or payment_id
-                    ),
-                    conversation_id=payment_tx.conversation_id,
-                    paid_price=cls._money(
-                        payment_tx.paid_price
-                    ),
+                    "iyzico ödeme kırılım bilgisi geçersiz."
                 )
 
-            # PAYMENT ID
-            if payment_tx.payment_id:
-                if payment_tx.payment_id != payment_id:
+            provider_item_id = cls._clean(
+                item_transaction.get("itemId")
+            )
+
+            provider_transaction_id = cls._clean(
+                item_transaction.get("paymentTransactionId")
+            )
+
+            if not provider_item_id:
+                raise PaymentVerificationError(
+                    "iyzico ödeme kırılımında itemId eksik."
+                )
+
+            if not provider_transaction_id:
+                raise PaymentVerificationError(
+                    "iyzico ödeme kırılımında "
+                    "paymentTransactionId eksik."
+                )
+
+            if provider_item_id in seen_provider_item_ids:
+                raise PaymentVerificationError(
+                    "iyzico ödeme kırılımında "
+                    "aynı itemId birden fazla kez döndü."
+                )
+
+            seen_provider_item_ids.add(
+                provider_item_id
+            )
+
+            order_item = product_items_by_provider_id.get(
+                provider_item_id
+            )
+
+            suborder = suborders_by_shipping_provider_id.get(
+                provider_item_id
+            )
+
+            if order_item is None and suborder is None:
+                raise PaymentVerificationError(
+                    "iyzico ödeme kırılımındaki item "
+                    "siparişte bulunamadı."
+                )
+
+            if order_item is not None and suborder is not None:
+                raise PaymentVerificationError(
+                    "iyzico ödeme kırılımındaki item "
+                    "birden fazla sipariş türüyle eşleşiyor."
+                )
+
+            # ------------------------------------------------------------------
+            # PRICE
+            # ------------------------------------------------------------------
+
+            price = cls._normalize_optional_money(
+                item_transaction.get("price")
+            )
+
+            if price is None:
+                raise PaymentVerificationError(
+                    "iyzico ödeme kırılımında price eksik."
+                )
+
+            if price <= Decimal("0.00"):
+                raise PaymentVerificationError(
+                    "iyzico ödeme kırılımındaki item price "
+                    "sıfırdan büyük olmalıdır."
+                )
+
+            # ------------------------------------------------------------------
+            # PAID PRICE
+            # ------------------------------------------------------------------
+
+            paid_price = cls._normalize_optional_money(
+                item_transaction.get("paidPrice")
+            )
+
+            if paid_price is None:
+                raise PaymentVerificationError(
+                    "iyzico ödeme kırılımında paidPrice eksik."
+                )
+
+            paid_price = cls._money(
+                paid_price
+            )
+
+            if paid_price <= Decimal("0.00"):
+                raise PaymentVerificationError(
+                    "iyzico ödeme kırılımındaki paidPrice "
+                    "sıfırdan büyük olmalıdır."
+                )
+
+            if paid_price > price:
+                raise PaymentVerificationError(
+                    "iyzico ödeme kırılımındaki paidPrice, "
+                    "item price tutarını aşamaz."
+                )
+            # ------------------------------------------------------------------
+            # ITEM PAID PRICE TOPLAMA
+            # ------------------------------------------------------------------
+            #
+            # ÖNEMLİ:
+            #
+            # Burada order_item.total_amount kullanılmaz.
+            #
+            # Çünkü:
+            #
+            #     price       = ürün kalemi
+            #     paid_price  = bu kalem üzerinden gerçekten tahsil edilen
+            #                   tutarın kırılımı
+            #
+            # Kargo gibi order-level tutarlar paid_price içine
+            # dağıtılmış olabilir.
+            #
+            total_item_paid_price += paid_price
+            total_item_price += price
+
+            # ------------------------------------------------------------------
+            # ORDER ITEM PRICE VALIDATION
+            # ------------------------------------------------------------------
+
+            if order_item is not None:
+                expected_price = cls._money(
+                    order_item.total_amount
+                )
+
+                item_type = PaymentTransactionItemType.PRODUCT
+                suborder = order_item.sub_order
+
+                if order_item.sub_order.order_id != payment_transaction.order_id:
                     raise PaymentVerificationError(
-                        "iyzico paymentId doğrulaması başarısız."
+                        "Ödeme kaleminin alt siparişi "
+                        "ana siparişle eşleşmiyor."
                     )
 
             else:
-                payment_tx.payment_id = payment_id
+                if suborder.order_id != payment_transaction.order_id:
+                    raise PaymentVerificationError(
+                        "Ödeme kargo kaleminin alt siparişi "
+                        "ana siparişle eşleşmiyor."
+                    )
 
-            # Order'ı ayrıca lock et.
-            order = (
-                Order.objects
-                .select_for_update()
-                .get(pk=payment_tx.order_id)
-            )
+                expected_price = cls._money(
+                    suborder.shipping_amount
+                )
 
-            # --------------------------------------------------------------
-            # Order state
-            # --------------------------------------------------------------
+                item_type = PaymentTransactionItemType.SHIPPING
 
-            if order.status == OrderStatus.PAID:
-                # Payment transaction henüz SUCCESS değilse
-                # burada tutarsız durum vardır.
+            if price != expected_price:
                 raise PaymentVerificationError(
-                    "Sipariş zaten PAID durumda ancak ödeme kaydı "
-                    "henüz tamamlanmış değil."
+                    "iyzico ödeme kırılımındaki item tutarı "
+                    "sipariş tutarıyla eşleşmiyor."
                 )
 
-            if order.status != OrderStatus.PENDING_PAYMENT:
-                raise InvalidOrderStateError(
-                    "Sipariş 3DS ödeme tamamlama aşamasında "
-                    "uygun durumda değil."
+            # ------------------------------------------------------------------
+            # TRANSACTION STATUS
+            # ------------------------------------------------------------------
+
+            transaction_status = (
+                cls._normalize_optional_int(
+                    item_transaction.get(
+                        "transactionStatus"
+                    )
                 )
-
-            # --------------------------------------------------------------
-            # Provider paid price = transaction expected paid price
-            # --------------------------------------------------------------
-
-            expected_paid_price = cls._money(
-                payment_tx.paid_price
             )
 
-            if response_paid_price != expected_paid_price:
-                raise PaymentVerificationError(
-                    "iyzico paidPrice sipariş ödeme tutarıyla "
-                    "eşleşmiyor."
+            payment_transaction_items.append(
+                PaymentTransactionItem(
+                    payment_transaction=payment_transaction,
+                    suborder=suborder,
+                    order_item=order_item,
+                    item_type=item_type,
+                    provider_item_id=provider_item_id,
+                    provider_transaction_id=provider_transaction_id,
+                    price=price,
+                    paid_price=paid_price,
+                    transaction_status=transaction_status,
                 )
-
-            # CURRENCY
-            if currency != order.currency:
-                raise PaymentVerificationError(
-                    "iyzico ödeme para birimi "
-                    "sipariş para birimiyle eşleşmiyor."
-                )
-
-            # --------------------------------------------------------------
-            # Transaction SUCCESS
-            # --------------------------------------------------------------
-
-            payment_tx.status = PaymentStatus.SUCCESS
-            payment_tx.payment_id = payment_id
-            payment_tx.paid_price = response_paid_price
-            payment_tx.currency = currency
-            payment_tx.fraud_status = fraud_status
-            payment_tx.card_type = (
-                card_type or None
-            )
-            payment_tx.card_association = (
-                card_association or None
             )
 
-            if last_four_digits:
-                payment_tx.last_four_digits = (
-                    last_four_digits
-                )
+        # ----------------------------------------------------------------------
+        # 5. ITEM ID SET VALIDATION
+        # ----------------------------------------------------------------------
 
-            payment_tx.succeeded_at = timezone.now()
+        expected_provider_item_ids = (
+            set(product_items_by_provider_id)
+            | set(suborders_by_shipping_provider_id)
+        )
 
-            payment_tx.save(
-                update_fields=[
-                    "payment_id",
-                    "status",
-                    "paid_price",
-                    "currency",
-                    "fraud_status",
-                    "card_type",
-                    "card_association",
-                    "last_four_digits",
-                    "succeeded_at",
-                    "updated_at",
-                ]
+        if seen_provider_item_ids != expected_provider_item_ids:
+            raise PaymentVerificationError(
+                "iyzico ödeme kırılımları ile "
+                "sipariş kalemleri tam olarak eşleşmiyor."
             )
 
-            # --------------------------------------------------------------
-            # RESERVATION CONSUME
-            #
-            # Mevcut StockReservationService'in consume_order()
-            # metodu Order=PENDING_PAYMENT bekliyor.
-            #
-            # O yüzden Order'ı PAID yapmadan önce consume ediyoruz.
-            # --------------------------------------------------------------
+        # ----------------------------------------------------------------------
+        # 6. ITEM PRICE TOTAL == ORDER TOTAL
+        # ----------------------------------------------------------------------
 
-            try:
-                StockReservationService.consume_order(
-                    order=order,
-                )
+        total_item_price = cls._money(
+            total_item_price
+        )
 
-            except Exception as exc:
-                logger.exception(
-                    "Stock reservation consume failed after "
-                    "successful iyzico payment. "
-                    "payment_transaction_id=%s order_id=%s",
-                    payment_tx.id,
-                    order.id,
-                )
+        expected_order_total = cls._money(
+            payment_transaction.order.total_amount
+        )
 
-                raise ReservationError(
-                    "Ödeme başarılı olmasına rağmen stok "
-                    "rezervasyonu tamamlanamadı."
-                ) from exc
-
-            # --------------------------------------------------------------
-            # ORDER PAID
-            # --------------------------------------------------------------
-
-            order.status = OrderStatus.PAID
-            order.save(
-                update_fields=[
-                    "status",
-                    "updated_at",
-                ]
+        if total_item_price != expected_order_total:
+            raise PaymentVerificationError(
+                "iyzico ödeme kalemlerinin price toplamı "
+                "sipariş toplamıyla eşleşmiyor."
             )
 
-            return PaymentCompletionResult(
-                payment_transaction_id=payment_tx.id,
-                order_id=order.id,
-                order_number=order.order_number,
-                payment_id=payment_id,
-                conversation_id=payment_tx.conversation_id,
-                paid_price=response_paid_price,
+        # ----------------------------------------------------------------------
+        # 7. ITEM PAID PRICE TOTAL == PAYMENT PAID PRICE
+        # ----------------------------------------------------------------------
+        #
+        # Örneğin:
+        #
+        #   response paidPrice          = 104.99
+        #   item paidPrice toplamı      = 104.99
+        #
+        # doğru.
+        #
+        # Ancak:
+        #
+        #   response paidPrice          = 104.99
+        #   item paidPrice toplamı      = 5.00
+        #
+        # ise ödeme kırılımı ile ana ödeme birbirini temsil etmiyor.
+        #
+        total_item_paid_price = cls._money(
+            total_item_paid_price
+        )
+
+        if total_item_paid_price != response_paid_price:
+            raise PaymentVerificationError(
+                "iyzico ödeme kalemlerinin paidPrice toplamı "
+                "ana ödeme paidPrice tutarıyla eşleşmiyor."
             )
+
+        # ----------------------------------------------------------------------
+        # 7. BULK CREATE
+        # ----------------------------------------------------------------------
+
+        PaymentTransactionItem.objects.bulk_create(
+            payment_transaction_items
+        )
 
     # -------------------------------------------------------------------------
     # PAYMENT PREPARATION
@@ -877,6 +1041,7 @@ class PaymentService:
                     paid_price=paid_price,
                     currency=order.currency,
                     last_four_digits=last_four_digits,
+                    installment_count=installment,
                 )
             )
 
@@ -885,6 +1050,7 @@ class PaymentService:
             payment_transaction,
             request_payload,
         )
+    
 
     # -------------------------------------------------------------------------
     # ORDER VALIDATION
@@ -1067,6 +1233,10 @@ class PaymentService:
 
         basket_items = []
 
+        # --------------------------------------------------------------
+        # PRODUCT ITEMS
+        # --------------------------------------------------------------
+
         for item in items:
             store_product = item.store_product
             seller = store_product.store.seller
@@ -1077,57 +1247,95 @@ class PaymentService:
 
             if item_price <= Decimal("0.00"):
                 raise PaymentValidationError(
-                    "Ücretsiz / sıfır tutarlı ürün kalemi "
-                    "bu ödeme akışında kullanılamaz."
+                    "Sıfır / negatif tutarlı ürün kalemi "
+                    "ödeme basket'ında kullanılamaz."
                 )
 
             product = store_product.variant.product
 
             category1 = ""
-
             if product.category:
-                category1 = (
-                    str(product.category.name)
-                    .strip()
+                category1 = cls._clean(
+                    product.category.name
                 )
 
             category2 = ""
-
             if product.brand:
-                category2 = (
-                    str(product.brand.name)
-                    .strip()
+                category2 = cls._clean(
+                    product.brand.name
                 )
 
-            basket_item = {
-                "id": f"OI-{item.id}",
-                "name": item.product_name_snapshot,
-                "category1": category1,
-                "category2": category2,
-                "itemType": cls.ITEM_TYPE_PHYSICAL,
-                "price": cls._money_to_string(
-                    item_price
-                ),
-                "subMerchantKey": (
-                    seller.iyzico_submerchant_key
-                ),
-                "subMerchantPrice": (
-                    cls._money_to_string(
-                        cls._calculate_submerchant_price(
-                            item=item,
+            basket_items.append(
+                {
+                    "id": f"OI-{item.id}",
+                    "name": item.product_name_snapshot,
+                    "category1": category1,
+                    "category2": category2,
+                    "itemType": cls.ITEM_TYPE_PHYSICAL,
+                    "price": cls._money_to_string(
+                        item_price
+                    ),
+                    "subMerchantKey": (
+                        seller.iyzico_submerchant_key
+                    ),
+                    "subMerchantPrice": (
+                        cls._money_to_string(
+                            cls._calculate_submerchant_price(
+                                amount=item_price,
+                            )
                         )
-                    )
-                ),
-            }
+                    ),
+                }
+            )
+
+        # --------------------------------------------------------------
+        # SHIPPING ITEMS
+        # --------------------------------------------------------------
+
+        suborders = {}
+
+        for item in items:
+            suborders[item.sub_order_id] = item.sub_order
+
+        for suborder_id in sorted(suborders):
+            suborder = suborders[suborder_id]
+
+            shipping_amount = cls._money(
+                suborder.shipping_amount
+            )
+
+            # Ücretsiz kargoyu provider basket item yapmıyoruz.
+            # iyzico basket item price > 0 bekliyor.
+            if shipping_amount <= Decimal("0.00"):
+                continue
+
+            seller = suborder.store.seller
 
             basket_items.append(
-                basket_item
+                {
+                    "id": f"SHIP-{suborder.id}",
+                    "name": "Kargo Ücreti",
+                    "category1": "Kargo",
+                    "category2": "Kargo",
+                    "itemType": cls.ITEM_TYPE_PHYSICAL,
+                    "price": cls._money_to_string(
+                        shipping_amount
+                    ),
+                    "subMerchantKey": (
+                        seller.iyzico_submerchant_key
+                    ),
+                    "subMerchantPrice": (
+                        cls._money_to_string(
+                            shipping_amount
+                        )
+                    ),
+                }
             )
 
         return basket_items
 
     @classmethod
-    def _calculate_submerchant_price(cls, *, item):
+    def _calculate_submerchant_price(cls, *, amount,):
         """
         Şimdilik platform komisyonu yok.
 
@@ -1144,9 +1352,7 @@ class PaymentService:
         gibi bir business rule buraya taşınabilir.
         """
 
-        amount = cls._money(
-            item.total_amount,
-        )
+        amount = cls._money(amount)
 
         if amount <= Decimal("0.00"):
             raise PaymentValidationError(
@@ -1163,24 +1369,31 @@ class PaymentService:
         order,
     ):
         """
-        iyzico'da basket item price toplamı `price` değerine
+        iyzico basket item price toplamı order.total_amount'a
         eşit olmalıdır.
 
-        Mevcut modelimizde shipping order-level olduğu için:
+        Basket artık:
 
-            price     = ürün kalemleri toplamı
-            paidPrice = müşterinin gerçekten ödeyeceği order.total_amount
+            ürün item'ları
+                +
+            SubOrder başına shipping item'ı
 
-        kullanıyoruz.
+        şeklindedir.
 
-        Böylece shipping platform seviyesinde kalıyor.
+        Dolayısıyla:
+
+            basket price
+                =
+            product totals + shipping totals
+                =
+            order.total_amount
+
+        olmalıdır.
         """
 
         basket_total = sum(
             (
-                Decimal(
-                    item["price"]
-                )
+                Decimal(item["price"])
                 for item in basket_items
             ),
             Decimal("0.00"),
@@ -1195,16 +1408,14 @@ class PaymentService:
                 "Sepet toplamı sıfırdan büyük olmalıdır."
             )
 
-        # Order'ın subtotal alanı ile basket item toplamının
-        # birbirini temsil etmesini bekliyoruz.
-        expected_subtotal = cls._money(
-            order.subtotal
+        expected_total = cls._money(
+            order.total_amount
         )
 
-        if basket_total != expected_subtotal:
+        if basket_total != expected_total:
             raise PaymentValidationError(
-                "Sipariş toplamı ile ödeme basket toplamı "
-                "birbiriyle eşleşmiyor."
+                "Ödeme basket toplamı ile "
+                "sipariş toplamı eşleşmiyor."
             )
 
         return basket_total
@@ -1659,14 +1870,6 @@ class PaymentService:
                 "iyzico 3DS HTML içeriği döndürmedi."
             )
 
-        paid_price = cls._normalize_optional_money(
-            response.get("paidPrice")
-        )
-
-        if paid_price is None:
-            paid_price = cls._money(
-                order.total_amount
-            )
 
         currency = (
             cls._clean(
@@ -1680,6 +1883,7 @@ class PaymentService:
                 "iyzico ödeme para birimi "
                 "sipariş para birimiyle eşleşmiyor."
             )
+        
 
         fraud_status = cls._normalize_optional_int(
             response.get("fraudStatus")
@@ -1712,7 +1916,6 @@ class PaymentService:
 
             payment_tx.payment_id = payment_id
             payment_tx.status = PaymentStatus.PENDING
-            payment_tx.paid_price = paid_price
             payment_tx.currency = currency
             payment_tx.fraud_status = fraud_status
             payment_tx.card_type = card_type or None
@@ -1725,7 +1928,6 @@ class PaymentService:
                 update_fields=[
                     "payment_id",
                     "status",
-                    "paid_price",
                     "currency",
                     "fraud_status",
                     "card_type",
@@ -1942,7 +2144,7 @@ class PaymentService:
 
         if response_price != expected_price:
             raise PaymentVerificationError(
-                "iyzico price sipariş ürün toplamıyla "
+                "iyzico price sipariş toplamıyla "
                 "eşleşmiyor."
             )
 
@@ -2361,36 +2563,51 @@ class PaymentService:
 
         return card
 
-    @staticmethod
+    @classmethod
     def _validate_stored_card_expiration(
+        cls,
         *,
         card,
     ):
-        expire_month = str(
-            card.expire_month or ""
-        ).strip()
+        expire_month = cls._clean(
+            card.expire_month
+        )
 
-        expire_year = str(
-            card.expire_year or ""
-        ).strip()
+        expire_year = cls._clean(
+            card.expire_year
+        )
 
         if not expire_month or not expire_year:
             return
 
-        try:
-            month = int(
-                expire_month
-            )
-            year = int(
-                expire_year
-            )
-        except (
-            TypeError,
-            ValueError,
-        ) as exc:
+        if not re.fullmatch(
+            r"\d{1,2}",
+            expire_month,
+        ):
             raise PaymentValidationError(
-                "Kayıtlı kartın son kullanma tarihi geçerli değil."
-            ) from exc
+                "Kayıtlı kartın son kullanma ayı geçerli değil."
+            )
+
+        if not re.fullmatch(
+            r"\d{2,4}",
+            expire_year,
+        ):
+            raise PaymentValidationError(
+                "Kayıtlı kartın son kullanma yılı geçerli değil."
+            )
+
+        month = int(
+            expire_month
+        )
+
+        if month < 1 or month > 12:
+            raise PaymentValidationError(
+                "Kayıtlı kartın son kullanma ayı 1-12 arasında olmalıdır."
+            )
+
+        year = cls._normalize_expire_year(
+            expire_year
+        )
 
         current_date = timezone.localdate()
 
@@ -2712,6 +2929,802 @@ class PaymentService:
             checksum += digit
 
         return checksum % 10 == 0
+
+    # -------------------------------------------------------------------------
+    # SHARED PAYMENT FINALIZATION
+    # -------------------------------------------------------------------------
+
+    @classmethod
+    def _finalize_successful_payment(
+        cls,
+        *,
+        payment_id,
+        conversation_id,
+        response,
+    ):
+        """
+        Doğrulanmış bir iyzico SUCCESS response'unu localde finalize eder.
+
+        Bu method hem 3DS callback hem webhook tarafından kullanılabilir.
+
+        Tek transaction içinde:
+
+            PaymentTransaction = SUCCESS
+            StockReservation consume
+            Order = PAID
+
+        Provider HTTP çağrısı burada yapılmaz.
+        """
+
+        payment_id = cls._clean(payment_id)
+        conversation_id = cls._clean(conversation_id)
+
+        if not payment_id:
+            raise PaymentVerificationError(
+                "iyzico paymentId eksik."
+            )
+
+        if not conversation_id:
+            raise PaymentVerificationError(
+                "iyzico conversationId eksik."
+            )
+
+        response_payment_id = cls._clean(
+            response.get("paymentId")
+        )
+
+        if response_payment_id != payment_id:
+            raise PaymentVerificationError(
+                "iyzico paymentId doğrulaması başarısız."
+            )
+
+        response_conversation_id = cls._clean(
+            response.get("conversationId")
+        )
+
+        if response_conversation_id != conversation_id:
+            raise PaymentVerificationError(
+                "iyzico conversationId doğrulaması başarısız."
+            )
+
+        response_paid_price = cls._money(
+            response.get("paidPrice")
+        )
+
+        currency = (
+            cls._clean(
+                response.get("currency")
+            )
+            or cls.CURRENCY
+        ).upper()
+
+        fraud_status = cls._normalize_optional_int(
+            response.get("fraudStatus")
+        )
+
+        card_type = cls._clean(
+            response.get("cardType")
+        )
+
+        card_association = cls._clean(
+            response.get("cardAssociation")
+        )
+
+        last_four_digits = cls._clean(
+            response.get("lastFourDigits")
+        )
+
+        with transaction.atomic():
+            try:
+                payment_tx = (
+                    PaymentTransaction.objects
+                    .select_for_update()
+                    .select_related("order")
+                    .get(
+                        provider=cls.PROVIDER,
+                        conversation_id=conversation_id,
+                    )
+                )
+
+            except PaymentTransaction.DoesNotExist as exc:
+                raise PaymentVerificationError(
+                    "Ödeme kaydı bulunamadı."
+                ) from exc
+
+            # --------------------------------------------------------------
+            # IDEMPOTENCY
+            # --------------------------------------------------------------
+
+            if payment_tx.status == PaymentStatus.SUCCESS:
+                order = payment_tx.order
+
+                return PaymentCompletionResult(
+                    payment_transaction_id=payment_tx.id,
+                    order_id=payment_tx.order_id,
+                    order_number=order.order_number,
+                    payment_id=(
+                        payment_tx.payment_id
+                        or payment_id
+                    ),
+                    conversation_id=payment_tx.conversation_id,
+                    paid_price=cls._money(
+                        payment_tx.paid_price
+                    ),
+                )
+
+            # --------------------------------------------------------------
+            # PAYMENT ID
+            # --------------------------------------------------------------
+
+            if payment_tx.payment_id:
+                if payment_tx.payment_id != payment_id:
+                    raise PaymentVerificationError(
+                        "iyzico paymentId doğrulaması başarısız."
+                    )
+
+            else:
+                payment_tx.payment_id = payment_id
+
+            # --------------------------------------------------------------
+            # PAYMENT STATE
+            # --------------------------------------------------------------
+
+            if payment_tx.status not in (
+                PaymentStatus.INITIATED,
+                PaymentStatus.PENDING,
+            ):
+                raise InvalidOrderStateError(
+                    "Ödeme başarılı olarak finalize edilebilecek durumda değil."
+                )
+
+            # --------------------------------------------------------------
+            # ORDER STATE
+            # --------------------------------------------------------------
+
+            order = (
+                Order.objects
+                .select_for_update()
+                .get(pk=payment_tx.order_id)
+            )
+
+            if order.status == OrderStatus.PAID:
+                raise PaymentVerificationError(
+                    "Sipariş PAID durumda ancak payment transaction SUCCESS değil."
+                )
+
+            if order.status != OrderStatus.PENDING_PAYMENT:
+                raise InvalidOrderStateError(
+                    "Sipariş ödeme finalizasyonu için uygun durumda değil."
+                )
+
+            # --------------------------------------------------------------
+            # AMOUNT / CURRENCY
+            # --------------------------------------------------------------
+
+            expected_paid_price = (
+                cls._normalize_optional_money(
+                    payment_tx.paid_price
+                )
+            )
+
+            if expected_paid_price is None:
+                expected_paid_price = cls._money(
+                    order.total_amount
+                )
+
+            if response_paid_price != expected_paid_price:
+                raise PaymentVerificationError(
+                    "iyzico paidPrice sipariş ödeme tutarıyla eşleşmiyor."
+                )
+
+            if currency != (
+                cls._clean(order.currency).upper()
+            ):
+                raise PaymentVerificationError(
+                    "iyzico ödeme para birimi sipariş para birimiyle eşleşmiyor."
+                )
+
+            # --------------------------------------------------------------
+            # PAYMENT TRANSACTION ITEMS
+            # --------------------------------------------------------------
+
+            cls._persist_payment_transaction_items(
+                payment_transaction=payment_tx,
+                response=response,
+            )
+
+            # --------------------------------------------------------------
+            # TRANSACTION SUCCESS
+            # --------------------------------------------------------------
+
+            payment_tx.status = PaymentStatus.SUCCESS
+            payment_tx.payment_id = payment_id
+            payment_tx.paid_price = response_paid_price
+            payment_tx.currency = currency
+            payment_tx.fraud_status = fraud_status
+            payment_tx.card_type = (
+                card_type or None
+            )
+            payment_tx.card_association = (
+                card_association or None
+            )
+
+            if last_four_digits:
+                payment_tx.last_four_digits = (
+                    last_four_digits
+                )
+
+            payment_tx.succeeded_at = timezone.now()
+
+            payment_tx.save(
+                update_fields=[
+                    "payment_id",
+                    "status",
+                    "currency",
+                    "fraud_status",
+                    "card_type",
+                    "card_association",
+                    "last_four_digits",
+                    "succeeded_at",
+                    "updated_at",
+                ]
+            )
+
+            # --------------------------------------------------------------
+            # RESERVATION CONSUME
+            # --------------------------------------------------------------
+
+            try:
+                StockReservationService.consume_order(
+                    order=order,
+                )
+
+            except Exception as exc:
+                logger.exception(
+                    "Stock reservation consume failed after "
+                    "successful iyzico payment. "
+                    "payment_transaction_id=%s order_id=%s",
+                    payment_tx.id,
+                    order.id,
+                )
+
+                raise ReservationError(
+                    "Ödeme başarılı olmasına rağmen stok rezervasyonu tamamlanamadı."
+                ) from exc
+
+            # ------------------------------------------------------------------
+            # ORDER PAID
+            # ------------------------------------------------------------------
+
+            order.status = OrderStatus.PAID
+
+            order.save(
+                update_fields=[
+                    "status",
+                    "updated_at",
+                ]
+            )
+
+            # ------------------------------------------------------------------
+            # CART CLEANUP
+            # ------------------------------------------------------------------
+            # Başarılı ödeme ile satın alınan CartItem'ları temizler.
+
+            try:
+                CartService.clear_order_items(
+                    order=order,
+                )
+
+            except Exception:
+                logger.exception(
+                    "Cart cleanup failed after successful payment. "
+                    "payment_transaction_id=%s order_id=%s",
+                    payment_tx.id,
+                    order.id,
+                )
+
+            return PaymentCompletionResult(
+                payment_transaction_id=payment_tx.id,
+                order_id=order.id,
+                order_number=order.order_number,
+                payment_id=payment_id,
+                conversation_id=payment_tx.conversation_id,
+                paid_price=response_paid_price,
+            )
+
+
+    # -------------------------------------------------------------------------
+    # IYZICO WEBHOOK
+    # -------------------------------------------------------------------------
+
+    @classmethod
+    def handle_webhook(
+        cls,
+        *,
+        payload,
+        signature,
+    ):
+        """
+        iyzico Direct Format webhook bildirimi işler.
+
+        Webhook ve 3DS callback aynı ödeme finalizasyonunu hedefler.
+        Webhook SUCCESS için ThreedsPayment.create() çağırmaz;
+        provider payment/detail ile doğrulanan sonucu ortak
+        finalizasyon mekanizmasına gönderir.
+
+        SUCCESS:
+            webhook imzası
+                ↓
+            local PaymentTransaction eşleşmesi
+                ↓
+            iyzico payment/detail retrieve
+                ↓
+            response validation + signature
+                ↓
+            ortak payment finalization
+                ↓
+            PaymentTransaction = SUCCESS
+            StockReservation consume
+            Order = PAID
+
+        FAILURE:
+            local PaymentTransaction = FAILED
+        """
+
+        cls._validate_settings()
+
+        if not isinstance(payload, dict):
+            raise PaymentValidationError(
+                "iyzico webhook payload geçerli bir JSON object olmalıdır."
+            )
+
+        signature = cls._clean(signature)
+
+        if not signature:
+            raise PaymentVerificationError(
+                "iyzico webhook signature bilgisi eksik."
+            )
+
+        # ------------------------------------------------------------------
+        # WEBHOOK IDENTITY + SIGNATURE
+        # ------------------------------------------------------------------
+
+        event_type = cls._clean(
+            payload.get("iyziEventType")
+        )
+
+        payment_id = cls._clean(
+            payload.get("paymentId")
+        )
+
+        payment_conversation_id = cls._clean(
+            payload.get("paymentConversationId")
+        )
+
+        status = cls._clean(
+            payload.get("status")
+        ).upper()
+
+        if not event_type:
+            raise PaymentValidationError(
+                "iyzico webhook iyziEventType eksik."
+            )
+
+        if not payment_id:
+            raise PaymentValidationError(
+                "iyzico webhook paymentId eksik."
+            )
+
+        if not payment_conversation_id:
+            raise PaymentValidationError(
+                "iyzico webhook paymentConversationId eksik."
+            )
+
+        if not status:
+            raise PaymentValidationError(
+                "iyzico webhook status eksik."
+            )
+
+        cls._validate_webhook_signature(
+            event_type=event_type,
+            payment_id=payment_id,
+            payment_conversation_id=payment_conversation_id,
+            status=status,
+            signature=signature,
+        )
+
+        # merchantId HMAC'in parçası değildir ancak konfigüre edilmişse
+        # ek bir tenant/account doğrulaması olarak kontrol edilir.
+        configured_merchant_id = cls._clean(
+            getattr(
+                settings,
+                "IYZICO_MERCHANT_ID",
+                "",
+            )
+        )
+
+        webhook_merchant_id = cls._clean(
+            payload.get("merchantId")
+        )
+
+        if (
+            configured_merchant_id
+            and webhook_merchant_id != configured_merchant_id
+        ):
+            raise PaymentVerificationError(
+                "iyzico webhook merchantId doğrulaması başarısız."
+            )
+
+        # ------------------------------------------------------------------
+        # LOCAL PAYMENT LOOKUP
+        #
+        # DB lock sadece kısa metadata/state güncellemesi için tutulur.
+        # Provider HTTP çağrısı transaction içinde yapılmaz.
+        # ------------------------------------------------------------------
+
+        with transaction.atomic():
+            payment_tx = (
+                PaymentTransaction.objects
+                .select_for_update()
+                .select_related("order")
+                .filter(
+                    provider=cls.PROVIDER,
+                    conversation_id=payment_conversation_id,
+                )
+                .first()
+            )
+
+            # Geçerli imzalı ama localde bulunmayan webhook için
+            # retry döngüsünü tetiklemiyoruz. Durum operasyonel olarak
+            # loglanır ve 2xx ile sonlandırılır.
+            if payment_tx is None:
+                logger.warning(
+                    "iyzico webhook matched no local payment transaction. "
+                    "event_type=%s payment_id=%s conversation_id=%s "
+                    "status=%s iyzi_reference_code=%s",
+                    event_type,
+                    payment_id,
+                    payment_conversation_id,
+                    status,
+                    cls._clean(
+                        payload.get("iyziReferenceCode")
+                    ),
+                )
+
+                return {
+                    "handled": False,
+                    "payment_transaction_id": None,
+                    "status": status,
+                }
+
+            # Aynı conversation altında farklı paymentId kabul edilmez.
+            if (
+                payment_tx.payment_id
+                and payment_tx.payment_id != payment_id
+            ):
+                raise PaymentVerificationError(
+                    "iyzico webhook paymentId doğrulaması başarısız."
+                )
+
+            # --------------------------------------------------------------
+            # TERMINAL / IDEMPOTENT STATES
+            # --------------------------------------------------------------
+
+            if payment_tx.status == PaymentStatus.SUCCESS:
+                return {
+                    "handled": True,
+                    "payment_transaction_id": payment_tx.id,
+                    "status": status,
+                }
+
+            # --------------------------------------------------------------
+            # FAILURE
+            # --------------------------------------------------------------
+
+            if status == "FAILURE":
+                if payment_tx.order.status == OrderStatus.PAID:
+                    raise PaymentVerificationError(
+                        "Sipariş PAID durumda olmasına rağmen iyzico FAILURE webhook "
+                        "bildirimi geldi."
+                    )
+
+                payment_tx.payment_id = (
+                    payment_id
+                )
+                payment_tx.status = (
+                    PaymentStatus.FAILED
+                )
+
+                payment_tx.save(
+                    update_fields=[
+                        "payment_id",
+                        "status",
+                        "updated_at",
+                    ]
+                )
+
+                return {
+                    "handled": True,
+                    "payment_transaction_id": payment_tx.id,
+                    "status": status,
+                }
+
+            # --------------------------------------------------------------
+            # SUCCESS
+            #
+            # Provider retrieve çağrısı lock dışında yapılacak.
+            # --------------------------------------------------------------
+
+            if status != "SUCCESS":
+                return {
+                    "handled": True,
+                    "payment_transaction_id": payment_tx.id,
+                    "status": status,
+                }
+
+            # Local FAILED -> provider SUCCESS çelişkisini otomatik
+            # olarak sessizce çözmüyoruz. Bu durum reconciliation gerektirir.
+            if payment_tx.status == PaymentStatus.FAILED:
+                raise PaymentVerificationError(
+                    "Local ödeme FAILED durumda olmasına rağmen iyzico SUCCESS webhook "
+                    "bildirimi geldi. Reconciliation gereklidir."
+                )
+
+            expected_basket_id = cls._clean(
+                payment_tx.basket_id
+            )
+
+            expected_paid_price = (
+                cls._normalize_optional_money(
+                    payment_tx.paid_price
+                )
+            )
+
+            # INITIATED durumda kalmış bir transaction için
+            # initialize response DB'ye henüz yazılamamış olabilir.
+            # Bu durumda checkout'taki ödeme toplamını beklenen paidPrice
+            # olarak kullanıyoruz; provider detail yine ayrıca doğrulanacak.
+            if expected_paid_price is None:
+                expected_paid_price = cls._money(
+                    payment_tx.order.total_amount
+                )
+
+            expected_price = cls._money(
+                payment_tx.order.total_amount
+            )
+            expected_currency = (
+                cls._clean(
+                    payment_tx.order.currency
+                )
+                .upper()
+            )
+            payment_transaction_id = payment_tx.id
+
+        # ------------------------------------------------------------------
+        # PROVIDER RETRIEVE (TRANSACTION DIŞINDA)
+        # ------------------------------------------------------------------
+
+        response = cls._retrieve_remote_payment(
+            payment_id=payment_id,
+            payment_conversation_id=payment_conversation_id,
+        )
+
+        remote_status = cls._clean(
+            response.get("status")
+        ).lower()
+
+        if remote_status != "success":
+            raise PaymentGatewayError(
+                "iyzico ödeme sorgulaması başarısız oldu."
+            )
+
+        payment_status = cls._clean(
+            response.get("paymentStatus")
+        ).upper()
+
+        if payment_status != "SUCCESS":
+            raise PaymentVerificationError(
+                "iyzico payment/detail sonucu SUCCESS değil."
+            )
+
+        cls._validate_completion_response(
+            response=response,
+            payment_id=payment_id,
+            conversation_id=payment_conversation_id,
+            expected_basket_id=expected_basket_id,
+            expected_paid_price=expected_paid_price,
+            expected_price=expected_price,
+            expected_currency=expected_currency,
+        )
+
+        cls._verify_completion_signature(
+            response=response,
+        )
+
+        response_paid_price = cls._money(
+            response.get("paidPrice")
+        )
+
+        currency = (
+            cls._clean(
+                response.get("currency")
+            )
+            or cls.CURRENCY
+        ).upper()
+
+        fraud_status = cls._normalize_optional_int(
+            response.get("fraudStatus")
+        )
+
+        card_type = cls._clean(
+            response.get("cardType")
+        )
+
+        card_association = cls._clean(
+            response.get("cardAssociation")
+        )
+
+        last_four_digits = cls._clean(
+            response.get("lastFourDigits")
+        )
+
+        # ------------------------------------------------------------------
+        # FINALIZE PAYMENT
+        #
+        # Webhook SUCCESS için provider detail doğrulandıktan sonra
+        # mevcut finalizasyon mekanizmasını kullanıyoruz.
+        # Böylece callback ve webhook aynı Order/PaymentTransaction
+        # üzerinde yarışsa bile select_for_update() + idempotency
+        # nedeniyle yalnızca bir taraf finalizasyon yapar.
+        # ------------------------------------------------------------------
+
+        return cls._finalize_successful_payment(
+            payment_id=payment_id,
+            conversation_id=payment_conversation_id,
+            response=response,
+        )
+
+    @classmethod
+    def _validate_webhook_signature(
+        cls,
+        *,
+        event_type,
+        payment_id,
+        payment_conversation_id,
+        status,
+        signature,
+    ):
+        """
+        iyzico Direct Format X-IYZ-SIGNATURE-V3 doğrulaması.
+
+        HMAC mesaj sırası:
+
+            secretKey
+            + iyziEventType
+            + paymentId
+            + paymentConversationId
+            + status
+        """
+
+        secret_key = cls._clean(
+            getattr(
+                settings,
+                "IYZICO_SECRET_KEY",
+                "",
+            )
+        )
+
+        if not secret_key:
+            raise PaymentGatewayError(
+                "IYZICO_SECRET_KEY ayarı eksik."
+            )
+
+        message = (
+            secret_key
+            + event_type
+            + payment_id
+            + payment_conversation_id
+            + status
+        )
+
+        expected_signature = hmac.new(
+            secret_key.encode("utf-8"),
+            message.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        if not hmac.compare_digest(
+            expected_signature.lower(),
+            signature.lower(),
+        ):
+            raise PaymentVerificationError(
+                "iyzico webhook signature doğrulanamadı."
+            )
+
+    @classmethod
+    def _retrieve_remote_payment(
+        cls,
+        *,
+        payment_id=None,
+        payment_conversation_id=None,
+    ):
+        """
+        iyzico payment/detail ile ödeme durumunu sorgular.
+
+        Sorgulama şu iki kimlikten biriyle yapılabilir:
+
+            paymentId
+
+        veya:
+
+            paymentConversationId
+
+        Özellikle INITIATED transaction için paymentId henüz
+        local DB'ye yazılmamış olabilir. Bu durumda merchant'ın
+        oluşturduğu conversationId ile sorgulama yapılabilir.
+
+        Provider çağrısı transaction dışında yapılır.
+        """
+
+        payment_id = cls._clean(
+            payment_id
+        )
+
+        payment_conversation_id = cls._clean(
+            payment_conversation_id
+        )
+
+        if not payment_id and not payment_conversation_id:
+            raise PaymentValidationError(
+                "Ödeme sorgulaması için paymentId veya "
+                "paymentConversationId gereklidir."
+            )
+
+        request_payload = {
+            "locale": cls.LOCALE,
+        }
+
+        if payment_id:
+            request_payload["paymentId"] = payment_id
+
+        else:
+            request_payload[
+                "paymentConversationId"
+            ] = payment_conversation_id
+
+        try:
+            resource = iyzipay.Payment()
+
+            raw_response = resource.retrieve(
+                request_payload,
+                cls._options(),
+            )
+
+            response = json.load(
+                raw_response
+            )
+
+        except Exception as exc:
+            logger.exception(
+                "iyzico payment detail retrieve failed. "
+                "payment_id=%s payment_conversation_id=%s",
+                payment_id or None,
+                payment_conversation_id or None,
+            )
+
+            raise PaymentGatewayError(
+                "iyzico ödeme sorgulaması sırasında hata oluştu."
+            ) from exc
+
+        if not isinstance(
+            response,
+            dict,
+        ):
+            raise PaymentGatewayError(
+                "iyzico ödeme sorgu cevabı geçersiz."
+            )
+
+        return response
 
     # -------------------------------------------------------------------------
     # SETTINGS

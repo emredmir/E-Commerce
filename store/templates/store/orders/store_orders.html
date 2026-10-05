@@ -1,0 +1,1476 @@
+{% extends "core/home.html" %}
+{% load static %}
+{% load tz %}
+
+{% block title %}{{ store.store_name }} — Siparişler{% endblock %}
+
+{% block content %}
+
+<style>
+    :root {
+        --teal-50: #caf0f8;
+        --teal-100: #ade8f4;
+        --teal-500: #00b4d8;
+        --teal-600: #0096c7;
+        --teal-700: #0077b6;
+        --teal-900: #03045e;
+
+        --gray-50: #fafafa;
+        --gray-100: #f4f4f5;
+        --gray-200: #e4e4e7;
+        --gray-300: #d4d4d8;
+        --gray-400: #a1a1aa;
+        --gray-500: #71717a;
+        --gray-600: #52525b;
+        --gray-700: #3f3f46;
+        --gray-800: #27272a;
+        --gray-900: #18181b;
+
+        --red-50: #fef2f2;
+        --red-600: #dc2626;
+
+        --yellow-50: #fefce8;
+        --yellow-600: #ca8a04;
+
+        --green-50: #f0fdf4;
+        --green-600: #16a34a;
+
+        --blue-50: #eff6ff;
+        --blue-600: #2563eb;
+
+        --purple-50: #faf5ff;
+        --purple-600: #9333ea;
+
+        --radius: 12px;
+        --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+        --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.06);
+    }
+
+    body {
+        background-color: var(--gray-50);
+    }
+
+    /* ---------------------------------------------------
+       LAYOUT
+    --------------------------------------------------- */
+
+    .seller-layout {
+        display: flex;
+        gap: 24px;
+        max-width: 1400px;
+        margin: 32px auto;
+        padding: 0 24px;
+        align-items: flex-start;
+    }
+
+    /* ---------------------------------------------------
+       SIDEBAR
+    --------------------------------------------------- */
+
+    .seller-sidebar {
+        width: 280px;
+        background: #fff;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--gray-200);
+        position: sticky;
+        top: 24px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+
+    .sidebar-profile {
+        padding: 32px 24px 24px;
+        text-align: center;
+        background: linear-gradient(
+            180deg,
+            var(--teal-50) 0%,
+            #fff 100%
+        );
+        border-bottom: 1px solid var(--gray-100);
+    }
+
+    .sidebar-avatar {
+        width: 80px;
+        height: 80px;
+        border-radius: 24px;
+        background: var(--teal-600);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 12px;
+        box-shadow: 0 8px 16px rgba(0, 150, 199, 0.2);
+    }
+
+    .sidebar-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 24px;
+    }
+
+    .sidebar-store-name {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--gray-900);
+        margin: 0 0 6px;
+    }
+
+    .sidebar-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        background: var(--green-50);
+        color: var(--green-600);
+        font-size: 0.75rem;
+        font-weight: 700;
+        border-radius: 20px;
+        border: 1px solid #bbf7d0;
+    }
+
+    .sidebar-nav {
+        padding: 16px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        list-style: none;
+        margin: 0;
+    }
+
+    .sidebar-nav a {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        color: var(--gray-600);
+        font-weight: 600;
+        text-decoration: none;
+        border-radius: 10px;
+        transition: .2s;
+    }
+
+    .sidebar-nav a:hover {
+        background: var(--gray-50);
+        color: var(--gray-900);
+    }
+
+    .sidebar-nav a.active {
+        background: var(--teal-50);
+        color: var(--teal-700);
+    }
+
+    .sidebar-nav a i {
+        font-size: 1.1rem;
+        width: 24px;
+        text-align: center;
+    }
+
+    /* ---------------------------------------------------
+       MAIN
+    --------------------------------------------------- */
+
+    .seller-main {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+    }
+
+    .page-title {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--gray-900);
+    }
+
+    .page-subtitle {
+        margin: 6px 0 0;
+        color: var(--gray-500);
+        font-size: 0.9rem;
+    }
+
+    /* ---------------------------------------------------
+       STATUS CARDS
+    --------------------------------------------------- */
+
+    .status-grid {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+
+    .status-card {
+        position: relative;
+        background: #fff;
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius);
+        padding: 16px;
+        text-decoration: none;
+        box-shadow: var(--shadow-sm);
+        transition: .2s;
+        overflow: hidden;
+    }
+
+    .status-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--gray-300);
+    }
+
+    .status-card.active {
+        border-color: var(--teal-600);
+        background: var(--teal-50);
+        box-shadow: 0 4px 15px rgba(0, 180, 216, 0.1);
+    }
+
+    .status-card.active::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: var(--teal-600);
+    }
+
+    .status-card-title {
+        font-size: 0.76rem;
+        font-weight: 700;
+        color: var(--gray-500);
+        margin-bottom: 7px;
+        white-space: nowrap;
+    }
+
+    .status-card.active .status-card-title {
+        color: var(--teal-700);
+    }
+
+    .status-card-value {
+        font-size: 1.55rem;
+        font-weight: 700;
+        color: var(--gray-900);
+        line-height: 1;
+    }
+
+    .status-card.active .status-card-value {
+        color: var(--teal-900);
+    }
+
+    .status-card-icon {
+        position: absolute;
+        right: 14px;
+        top: 16px;
+        font-size: 1rem;
+        color: var(--gray-300);
+    }
+
+    .status-card.active .status-card-icon {
+        color: var(--teal-500);
+    }
+
+    /* Durum renkleri */
+
+    .status-card.preparing .status-card-title {
+        color: var(--yellow-600);
+    }
+
+    .status-card.shipped .status-card-title {
+        color: var(--blue-600);
+    }
+
+    .status-card.delivered .status-card-title {
+        color: var(--green-600);
+    }
+
+    .status-card.cancelled .status-card-title {
+        color: var(--red-600);
+    }
+
+    /* ---------------------------------------------------
+       FILTER BAR
+    --------------------------------------------------- */
+
+    .filter-bar {
+        background: #fff;
+        border-radius: var(--radius);
+        padding: 16px 20px;
+        border: 1px solid var(--gray-200);
+        margin-bottom: 20px;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .search-form {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+    }
+
+    .search-box {
+        position: relative;
+        flex: 1;
+    }
+
+    .search-box i {
+        position: absolute;
+        left: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--gray-400);
+    }
+
+    .search-box input {
+        width: 100%;
+        padding: 12px 16px 12px 42px;
+        border: 1px solid var(--gray-200);
+        border-radius: 10px;
+        font-size: 0.95rem;
+        outline: none;
+        transition: .2s;
+        box-sizing: border-box;
+    }
+
+    .search-box input:focus {
+        border-color: var(--teal-500);
+        box-shadow: 0 0 0 3px rgba(0, 180, 216, .1);
+    }
+
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 18px;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        cursor: pointer;
+        text-decoration: none;
+        border: none;
+        transition: .2s;
+        white-space: nowrap;
+    }
+
+    .btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .btn-outline {
+        background: #fff;
+        color: var(--gray-700);
+        border: 1px solid var(--gray-300);
+    }
+
+    .btn-outline:hover {
+        border-color: var(--gray-400);
+        background: var(--gray-50);
+    }
+
+    .btn-clear {
+        color: var(--red-600);
+        border-color: #fecaca;
+        background: var(--red-50);
+    }
+
+    /* ---------------------------------------------------
+       ORDER LIST
+    --------------------------------------------------- */
+
+    .orders-card {
+        background: #fff;
+        border-radius: var(--radius);
+        border: 1px solid var(--gray-200);
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+    }
+
+    .orders-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--gray-200);
+        background: var(--gray-50);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .orders-header-title {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--gray-600);
+        text-transform: uppercase;
+        letter-spacing: .4px;
+    }
+
+    .orders-header-count {
+        color: var(--gray-400);
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    /* ---------------------------------------------------
+       ORDER CARD
+    --------------------------------------------------- */
+
+    .order-card {
+        display: block;
+        text-decoration: none;
+        color: inherit;
+        padding: 20px;
+        border-bottom: 1px solid var(--gray-100);
+        transition: .2s;
+    }
+
+    .order-card:last-child {
+        border-bottom: none;
+    }
+
+    .order-card:hover {
+        background: var(--gray-50);
+    }
+
+    .order-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    .order-identifiers {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .order-number {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--gray-900);
+    }
+
+    .main-order-number {
+        color: var(--gray-500);
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .identifier-separator {
+        color: var(--gray-300);
+    }
+
+    .order-date {
+        color: var(--gray-500);
+        font-size: 0.8rem;
+    }
+
+    /* ---------------------------------------------------
+       ORDER STATUS BADGES
+    --------------------------------------------------- */
+
+    .order-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 11px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .order-status.pending {
+        background: var(--purple-50);
+        color: var(--purple-600);
+        border: 1px solid #e9d5ff;
+    }
+
+    .order-status.preparing {
+        background: var(--yellow-50);
+        color: var(--yellow-600);
+        border: 1px solid #fef08a;
+    }
+
+    .order-status.shipped {
+        background: var(--blue-50);
+        color: var(--blue-600);
+        border: 1px solid #bfdbfe;
+    }
+
+    .order-status.delivered {
+        background: var(--green-50);
+        color: var(--green-600);
+        border: 1px solid #bbf7d0;
+    }
+
+    .order-status.cancelled {
+        background: var(--red-50);
+        color: var(--red-600);
+        border: 1px solid #fecaca;
+    }
+
+    /* ---------------------------------------------------
+       ORDER BODY
+    --------------------------------------------------- */
+
+    .order-body {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+    }
+
+    .order-products {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-width: 0;
+        flex: 1;
+    }
+
+    .product-preview-list {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+    }
+
+    .product-preview {
+        width: 58px;
+        height: 58px;
+        border-radius: 10px;
+        border: 1px solid var(--gray-200);
+        background: #fff;
+        object-fit: contain;
+        padding: 3px;
+        margin-left: -8px;
+    }
+
+    .product-preview:first-child {
+        margin-left: 0;
+    }
+
+    .product-count {
+        width: 58px;
+        height: 58px;
+        margin-left: -8px;
+        border-radius: 10px;
+        background: var(--gray-100);
+        border: 1px solid var(--gray-200);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--gray-600);
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+
+    .product-summary {
+        min-width: 0;
+    }
+
+    .product-main-name {
+        color: var(--gray-900);
+        font-weight: 700;
+        font-size: 0.92rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 430px;
+    }
+
+    .product-secondary {
+        color: var(--gray-500);
+        font-size: 0.8rem;
+        margin-top: 5px;
+    }
+
+    /* ---------------------------------------------------
+       ORDER META
+    --------------------------------------------------- */
+
+    .order-meta {
+        display: flex;
+        align-items: center;
+        gap: 28px;
+        flex-shrink: 0;
+    }
+
+    .meta-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        text-align: right;
+    }
+
+    .meta-label {
+        color: var(--gray-400);
+        font-size: 0.72rem;
+        font-weight: 600;
+    }
+
+    .meta-value {
+        color: var(--gray-800);
+        font-size: 0.9rem;
+        font-weight: 700;
+    }
+
+    .meta-total {
+        color: var(--teal-700);
+        font-size: 1rem;
+    }
+
+    .detail-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--gray-500);
+        border: 1px solid var(--gray-200);
+        background: #fff;
+        transition: .2s;
+    }
+
+    .order-card:hover .detail-icon {
+        color: var(--teal-600);
+        border-color: var(--teal-500);
+        background: var(--teal-50);
+    }
+
+    /* ---------------------------------------------------
+       EMPTY
+    --------------------------------------------------- */
+
+    .empty-state {
+        text-align: center;
+        padding: 70px 20px;
+        color: var(--gray-500);
+    }
+
+    .empty-state i {
+        font-size: 3rem;
+        color: var(--gray-300);
+        margin-bottom: 16px;
+    }
+
+    .empty-state h3 {
+        margin: 0;
+        color: var(--gray-700);
+        font-size: 1.05rem;
+    }
+
+    .empty-state p {
+        margin: 8px 0 0;
+        font-size: .9rem;
+    }
+
+    /* ---------------------------------------------------
+       PAGINATION
+    --------------------------------------------------- */
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 6px;
+        padding: 20px;
+        border-top: 1px solid var(--gray-100);
+        background: #fff;
+    }
+
+    .page-btn {
+        min-width: 36px;
+        height: 36px;
+        padding: 0 10px;
+        border-radius: 8px;
+        border: 1px solid var(--gray-200);
+        background: #fff;
+        color: var(--gray-700);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        font-size: .85rem;
+        font-weight: 600;
+        transition: .2s;
+    }
+
+    .page-btn:hover {
+        border-color: var(--teal-600);
+        color: var(--teal-700);
+    }
+
+    .page-btn.current {
+        background: var(--teal-600);
+        border-color: var(--teal-600);
+        color: #fff;
+    }
+
+    .page-btn.disabled {
+        opacity: .4;
+        pointer-events: none;
+    }
+
+    /* ---------------------------------------------------
+       RESPONSIVE
+    --------------------------------------------------- */
+
+    @media (max-width: 1200px) {
+        .status-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .order-body {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .order-meta {
+            width: 100%;
+            justify-content: flex-start;
+            text-align: left;
+        }
+
+        .meta-item {
+            text-align: left;
+        }
+
+        .detail-icon {
+            margin-left: auto;
+        }
+    }
+
+    @media (max-width: 992px) {
+        .seller-layout {
+            flex-direction: column;
+        }
+
+        .seller-sidebar {
+            width: 100%;
+            position: relative;
+            top: 0;
+        }
+
+        .status-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 650px) {
+        .seller-layout {
+            padding: 0 12px;
+            margin: 20px auto;
+        }
+
+        .page-header {
+            align-items: flex-start;
+        }
+
+        .page-title {
+            font-size: 1.3rem;
+        }
+
+        .status-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .search-form {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .search-box {
+            max-width: none;
+        }
+
+        .order-top {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .order-products {
+            width: 100%;
+        }
+
+        .product-main-name {
+            max-width: 220px;
+        }
+
+        .order-meta {
+            gap: 18px;
+            flex-wrap: wrap;
+        }
+    }
+</style>
+
+
+<div class="seller-layout">
+
+    <!-- =========================================================
+         SIDEBAR
+    ========================================================== -->
+
+    <aside class="seller-sidebar">
+
+        <div class="sidebar-profile">
+
+            <div class="sidebar-avatar">
+                {% if store.logo %}
+                    <img
+                        src="{{ store.logo.url }}"
+                        alt="{{ store.store_name }}"
+                    >
+                {% else %}
+                    {{ store.store_name|slice:":1"|upper }}
+                {% endif %}
+            </div>
+
+            <h2 class="sidebar-store-name">
+                {{ store.store_name }}
+            </h2>
+
+            <div class="sidebar-badge">
+                <i class="fa-solid fa-check-circle"></i>
+                Onaylı Mağaza
+            </div>
+
+        </div>
+
+
+        <ul class="sidebar-nav">
+
+            <li>
+                <a href="{% url 'store:store_dashboard' store.slug %}">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    Özet Paneli
+                </a>
+            </li>
+
+            <li>
+                <a href="{% url 'products:store_product_list' store.slug %}">
+                    <i class="fa-solid fa-box-open"></i>
+                    Envanter (Ürünler)
+                </a>
+            </li>
+
+            <li>
+                <a
+                    href="{% url 'store:store_orders' store.slug %}"
+                    class="active"
+                >
+                    <i class="fa-solid fa-clipboard-list"></i>
+                    Siparişler
+                </a>
+            </li>
+
+            <li>
+                <a href="{% url 'store:update_store' store.slug %}">
+                    <i class="fa-solid fa-gear"></i>
+                    Mağaza Ayarları
+                </a>
+            </li>
+
+            <li
+                style="
+                    margin-top: 16px;
+                    border-top: 1px solid var(--gray-100);
+                    padding-top: 16px;
+                "
+            >
+                <a
+                    href="{% url 'store:store_list' %}"
+                    style="color: var(--red-600);"
+                >
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    Mağaza Değiştir
+                </a>
+            </li>
+
+        </ul>
+
+    </aside>
+
+
+    <!-- =========================================================
+         MAIN CONTENT
+    ========================================================== -->
+
+    <main class="seller-main">
+
+        <!-- HEADER -->
+
+        <div class="page-header">
+
+            <div>
+                <h1 class="page-title">
+                    Sipariş Yönetimi
+                </h1>
+
+                <p class="page-subtitle">
+                    Mağazanıza ait siparişleri yönetin ve takip edin.
+                </p>
+            </div>
+
+        </div>
+
+
+        <!-- =====================================================
+             STATUS FILTERS
+        ====================================================== -->
+
+        <div class="status-grid">
+
+            <!-- TÜMÜ -->
+
+            <a
+                href="?{% if current_q %}q={{ current_q|urlencode }}{% endif %}"
+                class="status-card {% if not current_status %}active{% endif %}"
+            >
+                <div class="status-card-title">
+                    Tüm Siparişler
+                </div>
+
+                <div class="status-card-value">
+                    {{ status_counts.all }}
+                </div>
+
+                <i class="fa-solid fa-layer-group status-card-icon"></i>
+            </a>
+
+
+            <!-- YENİ -->
+
+            <a
+                href="?status=pending{% if current_q %}&q={{ current_q|urlencode }}{% endif %}"
+                class="status-card {% if current_status == 'pending' %}active{% endif %}"
+            >
+                <div class="status-card-title">
+                    Yeni Siparişler
+                </div>
+
+                <div class="status-card-value">
+                    {{ status_counts.pending|default:"0" }}
+                </div>
+
+                <i class="fa-solid fa-bell status-card-icon"></i>
+            </a>
+
+
+            <!-- HAZIRLANIYOR -->
+
+            <a
+                href="?status=preparing{% if current_q %}&q={{ current_q|urlencode }}{% endif %}"
+                class="status-card preparing {% if current_status == 'preparing' %}active{% endif %}"
+            >
+                <div class="status-card-title">
+                    Hazırlanıyor
+                </div>
+
+                <div class="status-card-value">
+                    {{ status_counts.preparing|default:"0" }}
+                </div>
+
+                <i class="fa-solid fa-box-open status-card-icon"></i>
+            </a>
+
+
+            <!-- KARGODA -->
+
+            <a
+                href="?status=shipped{% if current_q %}&q={{ current_q|urlencode }}{% endif %}"
+                class="status-card shipped {% if current_status == 'shipped' %}active{% endif %}"
+            >
+                <div class="status-card-title">
+                    Kargoda
+                </div>
+
+                <div class="status-card-value">
+                    {{ status_counts.shipped|default:"0" }}
+                </div>
+
+                <i class="fa-solid fa-truck-fast status-card-icon"></i>
+            </a>
+
+
+            <!-- TESLİM EDİLDİ -->
+
+            <a
+                href="?status=delivered{% if current_q %}&q={{ current_q|urlencode }}{% endif %}"
+                class="status-card delivered {% if current_status == 'delivered' %}active{% endif %}"
+            >
+                <div class="status-card-title">
+                    Teslim Edildi
+                </div>
+
+                <div class="status-card-value">
+                    {{ status_counts.delivered|default:"0" }}
+                </div>
+
+                <i class="fa-solid fa-circle-check status-card-icon"></i>
+            </a>
+
+
+            <!-- İPTAL -->
+
+            <a
+                href="?status=cancelled{% if current_q %}&q={{ current_q|urlencode }}{% endif %}"
+                class="status-card cancelled {% if current_status == 'cancelled' %}active{% endif %}"
+            >
+                <div class="status-card-title">
+                    İptal
+                </div>
+
+                <div class="status-card-value">
+                    {{ status_counts.cancelled|default:"0" }}
+                </div>
+
+                <i class="fa-solid fa-ban status-card-icon"></i>
+            </a>
+
+        </div>
+
+
+        <!-- =====================================================
+             SEARCH
+        ====================================================== -->
+
+        <div class="filter-bar">
+
+            <form method="get" class="search-form">
+
+                {% if current_status %}
+                    <input
+                        type="hidden"
+                        name="status"
+                        value="{{ current_status }}"
+                    >
+                {% endif %}
+
+                <div class="search-box">
+
+                    <i class="fa-solid fa-magnifying-glass"></i>
+
+                    <input
+                        type="text"
+                        name="q"
+                        value="{{ current_q }}"
+                        placeholder="Sipariş no, müşteri, ürün, SKU veya barkod ara..."
+                    >
+
+                </div>
+
+
+                <button
+                    type="submit"
+                    class="btn btn-outline"
+                >
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    Ara
+                </button>
+
+
+                {% if current_q %}
+
+                    <a
+                        href="?{% if current_status %}status={{ current_status }}{% endif %}"
+                        class="btn btn-outline btn-clear"
+                    >
+                        <i class="fa-solid fa-xmark"></i>
+                        Temizle
+                    </a>
+
+                {% endif %}
+
+            </form>
+
+        </div>
+
+
+        <!-- =====================================================
+             ORDERS
+        ====================================================== -->
+
+        <div class="orders-card">
+
+            {% if orders %}
+
+                <div class="orders-header">
+
+                    <span class="orders-header-title">
+                        Siparişler
+                    </span>
+
+                    <span class="orders-header-count">
+                        {{ page_obj.paginator.count }} sipariş
+                    </span>
+
+                </div>
+
+
+                {% for order in orders %}
+
+                    <a
+                        href="{% url 'store:store_order_detail' store.slug order.suborder_number %}"
+                        class="order-card"
+                    >
+
+                        <!-- -------------------------------------
+                             TOP
+                        -------------------------------------- -->
+
+                        <div class="order-top">
+
+                            <div class="order-identifiers">
+
+                                <span class="order-number">
+                                    #{{ order.suborder_number }}
+                                </span>
+
+                                <span class="identifier-separator">
+                                    •
+                                </span>
+
+                                <span class="main-order-number">
+                                    Ana Sipariş:
+                                    #{{ order.order.order_number }}
+                                </span>
+
+                                <span class="identifier-separator">
+                                    •
+                                </span>
+
+                                <span class="order-date">
+                                    {{ order.created_at|localtime|date:"d.m.Y H:i" }}
+                                </span>
+
+                            </div>
+
+
+                            <!-- DURUM -->
+
+                            <span class="order-status {{ order.status|lower }}">
+
+                                {% if order.status == "pending" %}
+
+                                    <i class="fa-solid fa-bell"></i>
+
+                                {% elif order.status == "preparing" %}
+
+                                    <i class="fa-solid fa-box-open"></i>
+
+                                {% elif order.status == "shipped" %}
+
+                                    <i class="fa-solid fa-truck-fast"></i>
+
+                                {% elif order.status == "delivered" %}
+
+                                    <i class="fa-solid fa-circle-check"></i>
+
+                                {% elif order.status == "cancelled" %}
+
+                                    <i class="fa-solid fa-ban"></i>
+
+                                {% else %}
+
+                                    <i class="fa-solid fa-circle-info"></i>
+
+                                {% endif %}
+
+                                {{ order.get_status_display }}
+
+                            </span>
+
+                        </div>
+
+
+                        <!-- -------------------------------------
+                             BODY
+                        -------------------------------------- -->
+
+                        <div class="order-body">
+
+                            <!-- ÜRÜNLER -->
+
+                            <div class="order-products">
+
+                                <div class="product-preview-list">
+
+                                    {% for item in order.order_items|slice:":3" %}
+
+                                        {% if item.image_snapshot %}
+
+                                            <img
+                                                src="{{ item.image_snapshot.url }}"
+                                                alt="{{ item.product_name_snapshot }}"
+                                                class="product-preview"
+                                            >
+
+                                        {% else %}
+
+                                            <div class="product-preview">
+                                                <i
+                                                    class="fa-solid fa-image"
+                                                    style="
+                                                        color: var(--gray-300);
+                                                        display: flex;
+                                                        align-items: center;
+                                                        justify-content: center;
+                                                        width: 100%;
+                                                        height: 100%;
+                                                    "
+                                                ></i>
+                                            </div>
+
+                                        {% endif %}
+
+                                    {% endfor %}
+
+
+                                    {% if order.order_items|length > 3 %}
+
+                                        <div class="product-count">
+                                            +{{ order.order_items|length|add:"-3" }}
+                                        </div>
+
+                                    {% endif %}
+
+                                </div>
+
+
+                                <div class="product-summary">
+
+                                    {% with first_item=order.order_items.0 %}
+
+                                        {% if first_item %}
+
+                                            <div class="product-main-name">
+                                                {{ first_item.product_name_snapshot }}
+
+                                                {% if order.order_items|length > 1 %}
+                                                    <span style="color: var(--gray-400);">
+                                                        + {{ order.order_items|length|add:"-1" }} ürün
+                                                    </span>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="product-secondary">
+
+                                                {% if first_item.variant_display %}
+                                                    {{ first_item.variant_display }}
+                                                    •
+                                                {% endif %}
+
+                                                {{ first_item.quantity }} adet
+
+                                            </div>
+
+                                        {% endif %}
+
+                                    {% endwith %}
+
+                                </div>
+
+                            </div>
+
+
+                            <!-- SİPARİŞ META -->
+
+                            <div class="order-meta">
+
+                                <!-- MÜŞTERİ -->
+
+                                <div class="meta-item">
+
+                                    <span class="meta-label">
+                                        Müşteri
+                                    </span>
+
+                                    <span class="meta-value">
+                                        {{ order.order.shipping_full_name }}
+                                    </span>
+
+                                </div>
+
+
+                                <!-- ÜRÜN SAYISI -->
+
+                                <div class="meta-item">
+
+                                    <span class="meta-label">
+                                        Ürün
+                                    </span>
+
+                                    <span class="meta-value">
+                                        {{ order.order_items|length }} ürün
+                                    </span>
+
+                                </div>
+
+
+                                <!-- TOPLAM -->
+
+                                <div class="meta-item">
+
+                                    <span class="meta-label">
+                                        Sipariş Toplamı
+                                    </span>
+
+                                    <span class="meta-value meta-total">
+                                        ₺{{ order.total_amount|floatformat:2 }}
+                                    </span>
+
+                                </div>
+
+
+                                <!-- DETAIL -->
+
+                                <div class="detail-icon">
+                                    <i class="fa-solid fa-chevron-right"></i>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </a>
+
+                {% endfor %}
+
+
+                <!-- =================================================
+                     PAGINATION
+                ================================================== -->
+
+                {% if is_paginated %}
+
+                    <div class="pagination">
+
+                        {% if page_obj.has_previous %}
+
+                            <a
+                                href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.previous_page_number }}"
+                                class="page-btn"
+                            >
+                                <i class="fa-solid fa-chevron-left"></i>
+                            </a>
+
+                        {% else %}
+
+                            <span class="page-btn disabled">
+                                <i class="fa-solid fa-chevron-left"></i>
+                            </span>
+
+                        {% endif %}
+
+
+                        {% for num in page_obj.paginator.page_range %}
+
+                            {% if page_obj.number == num %}
+
+                                <span class="page-btn current">
+                                    {{ num }}
+                                </span>
+
+                            {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+
+                                <a
+                                    href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ num }}"
+                                    class="page-btn"
+                                >
+                                    {{ num }}
+                                </a>
+
+                            {% endif %}
+
+                        {% endfor %}
+
+
+                        {% if page_obj.has_next %}
+
+                            <a
+                                href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.next_page_number }}"
+                                class="page-btn"
+                            >
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </a>
+
+                        {% else %}
+
+                            <span class="page-btn disabled">
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </span>
+
+                        {% endif %}
+
+                    </div>
+
+                {% endif %}
+
+
+            {% else %}
+
+                <!-- =================================================
+                     EMPTY STATE
+                ================================================== -->
+
+                <div class="empty-state">
+
+                    {% if current_q %}
+
+                        <i class="fa-solid fa-magnifying-glass"></i>
+
+                        <h3>
+                            "{{ current_q }}" için sipariş bulunamadı.
+                        </h3>
+
+                        <p>
+                            Sipariş numarası, müşteri adı, ürün adı,
+                            SKU veya barkod ile tekrar deneyebilirsiniz.
+                        </p>
+
+                    {% elif current_status %}
+
+                        <i class="fa-solid fa-box-open"></i>
+
+                        <h3>
+                            Bu durumda sipariş bulunmuyor.
+                        </h3>
+
+                        <p>
+                            Başka bir sipariş durumunu kontrol edebilirsiniz.
+                        </p>
+
+                    {% else %}
+
+                        <i class="fa-solid fa-clipboard-list"></i>
+
+                        <h3>
+                            Henüz siparişiniz bulunmuyor.
+                        </h3>
+
+                        <p>
+                            Mağazanızdan verilen siparişler burada görünecektir.
+                        </p>
+
+                    {% endif %}
+
+                </div>
+
+            {% endif %}
+
+        </div>
+
+    </main>
+
+</div>
+
+{% endblock %}

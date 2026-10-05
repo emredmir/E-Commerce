@@ -27,8 +27,12 @@ SECRET_KEY = config('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = []
-# ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost').split(',')
+#ALLOWED_HOSTS = []
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost').split(',')
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://aa24-188-132-162-187.ngrok-free.app",
+]
 
 IYZICO_API_KEY = config("IYZICO_API_KEY")
 IYZICO_SECRET_KEY = config("IYZICO_SECRET_KEY")
@@ -36,6 +40,7 @@ IYZICO_BASE_URL = config("IYZICO_BASE_URL")
 IYZICO_3DS_CALLBACK_URL = config("IYZICO_3DS_CALLBACK_URL")
 IYZICO_ENV = config("IYZICO_ENV", default="sandbox",)
 IYZICO_SANDBOX_IDENTITY_NUMBER = config("IYZICO_SANDBOX_IDENTITY_NUMBER", default="",)
+PUBLIC_BASE_URL = config("PUBLIC_BASE_URL")
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -145,7 +150,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "Europe/Istanbul"
 
 USE_I18N = True
 

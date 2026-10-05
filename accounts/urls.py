@@ -4,7 +4,8 @@ from .views import (
     CustomPasswordChangeView, ProfileUpdateView, AddressListView, AddressFormView, AddressDeleteView, BecomeASellerView,
     CollectionListView, CollectionDetailView, CollectionDeleteAPIView, UserQuestionsListView, MarkAnswerAsReadAPIView,
     ProductQADeleteAPIView,
-    StoredCardListView, StoredCardCreateAPIView, StoredCardDeleteAPIView, StoredCardDefaultAPIView
+    StoredCardListView, StoredCardCreateAPIView, StoredCardDeleteAPIView, StoredCardDefaultAPIView,
+    CustomerOrderListView, CustomerOrderDetailView
     )
 app_name = 'accounts'
 
@@ -20,6 +21,10 @@ urlpatterns = [
     path('addresses/form/<int:pk>/', AddressFormView.as_view(), name='address_form_update'),
     path('addresses/delete/<int:pk>/', AddressDeleteView.as_view(), name='address_delete'),
     path('profile/become-a-seller/', BecomeASellerView.as_view(), name='seller_form'),
+
+    #order
+    path('orders/', CustomerOrderListView.as_view(), name="order_list",),
+    path('orders/<str:order_number>/', CustomerOrderDetailView.as_view(), name="order_detail",),
 
     #card
     path('stored-cards/', StoredCardListView.as_view(), name="stored_card_list",),
