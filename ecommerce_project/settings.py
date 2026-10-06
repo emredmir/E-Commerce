@@ -30,9 +30,8 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 #ALLOWED_HOSTS = []
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost').split(',')
 
-CSRF_TRUSTED_ORIGINS = [
-    "https://aa24-188-132-162-187.ngrok-free.app",
-]
+CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS")
+
 
 IYZICO_API_KEY = config("IYZICO_API_KEY")
 IYZICO_SECRET_KEY = config("IYZICO_SECRET_KEY")
