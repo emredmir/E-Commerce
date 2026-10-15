@@ -23,8 +23,19 @@ from orders.models import (
     SubOrderCancellation,
     SubOrderStatus,
     PaymentTransactionItem,
-    PaymentRefundItem
+    PaymentRefundItem,
+    OrderItem, PaymentTransactionItemType,
+    SubOrderItemCancellation, SubOrderItemCancellationUnit,
+    RefundType
 )
+from products.models import (
+    Product,
+    ProductVariant,
+    StoreProduct,
+    StoreProductStatus,
+    ProductStatus,
+)
+
 from orders.services.refund import RefundService
 from orders.services.cancellation import (
     CancellationService,
@@ -153,13 +164,76 @@ class CancellationServiceTests(TestCase):
             currency="TRY",
         )
 
+    
+    def _create_order_item(
+        self,
+        *,
+        suborder,
+        quantity,
+        unit_price=Decimal("100.00"),
+    ):
+        product = Product.objects.create(
+            name=f"Cancellation Product {suborder.pk}",
+            description="Cancellation test product",
+            status=ProductStatus.ACTIVE,
+        )
+
+        variant = ProductVariant.objects.create(
+            product=product,
+            is_active=True,
+        )
+
+        store_product = StoreProduct.objects.create(
+            store=suborder.store,
+            variant=variant,
+            sku=f"CANCEL-SKU-{suborder.pk}",
+            price=unit_price,
+            stock=10,
+            status=StoreProductStatus.ACTIVE,
+        )
+
+        return OrderItem.objects.create(
+            sub_order=suborder,
+            store_product=store_product,
+            product_name_snapshot=product.name,
+            variant_snapshot={"Varyant": "Test"},
+            variant_display="Varyant: Test",
+            sku_snapshot=store_product.sku,
+            quantity=quantity,
+            unit_price=unit_price,
+            discount_amount=Decimal("0.00"),
+            tax_amount=Decimal("0.00"),
+            total_amount=unit_price * quantity,
+        )
+
+
+    def _create_product_payment_item(
+        self,
+        *,
+        payment_transaction,
+        suborder,
+        order_item,
+        paid_price,
+    ):
+        return PaymentTransactionItem.objects.create(
+            payment_transaction=payment_transaction,
+            suborder=suborder,
+            order_item=order_item,
+            item_type=PaymentTransactionItemType.PRODUCT,
+            provider_item_id=f"CANCEL-ITEM-{order_item.pk}",
+            provider_transaction_id=f"CANCEL-PTX-{order_item.pk}",
+            price=paid_price,
+            paid_price=paid_price,
+        )
+
+
     # ======================================================================
     # 1. NORMAL CANCELLATION
     # ======================================================================
 
     @patch(
         "orders.services.cancellation."
-        "StockReservationService.restore_consumed_suborder"
+        "StockReservationService.restore_cancelled_quantity"
     )
     def test_cancel_suborder_creates_refund_and_snapshot(
         self,
@@ -175,6 +249,18 @@ class CancellationServiceTests(TestCase):
 
         payment_transaction = self._create_payment(
             order=order,
+        )
+
+        order_item = self._create_order_item(
+            suborder=suborder,
+            quantity=5,
+        )
+
+        self._create_product_payment_item(
+            payment_transaction=payment_transaction,
+            suborder=suborder,
+            order_item=order_item,
+            paid_price=Decimal("500.00"),
         )
 
         cancellation = (
@@ -241,7 +327,7 @@ class CancellationServiceTests(TestCase):
 
     @patch(
         "orders.services.cancellation."
-        "StockReservationService.restore_consumed_suborder"
+        "StockReservationService.restore_cancelled_quantity"
     )
     def test_shipped_suborder_cannot_be_cancelled(
         self,
@@ -285,7 +371,7 @@ class CancellationServiceTests(TestCase):
 
     @patch(
         "orders.services.cancellation."
-        "StockReservationService.restore_consumed_suborder"
+        "StockReservationService.restore_cancelled_quantity"
     )
     def test_already_cancelled_suborder_cannot_be_cancelled_again(
         self,
@@ -318,7 +404,7 @@ class CancellationServiceTests(TestCase):
 
     @patch(
         "orders.services.cancellation."
-        "StockReservationService.restore_consumed_suborder"
+        "StockReservationService.restore_cancelled_quantity"
     )
     def test_cancellation_cannot_exceed_remaining_refund_amount(
         self,
@@ -344,6 +430,18 @@ class CancellationServiceTests(TestCase):
 
         payment_transaction = self._create_payment(
             order=order,
+        )
+
+        order_item_b = self._create_order_item(
+            suborder=suborder_b,
+            quantity=5,
+        )
+
+        self._create_product_payment_item(
+            payment_transaction=payment_transaction,
+            suborder=suborder_b,
+            order_item=order_item_b,
+            paid_price=Decimal("500.00"),
         )
 
         PaymentRefund.objects.create(
@@ -377,18 +475,36 @@ class CancellationServiceTests(TestCase):
 
     @patch(
         "orders.services.cancellation."
-        "StockReservationService.restore_consumed_suborder"
+        "StockReservationService.restore_cancelled_quantity"
     )
     def test_stock_restore_failure_rolls_back_cancellation(
         self,
         mock_restore,
     ):
-        order = self._create_order()
+        order = self._create_order(total=Decimal("1000.00"))
 
         suborder = self._create_suborder(
             order=order,
             store=self.store_a,
             total=Decimal("500.00"),
+        )
+
+        payment = self._create_payment(
+            order=order,
+            amount=Decimal("1000.00"),
+        )
+
+        order_item = self._create_order_item(
+            suborder=suborder,
+            quantity=5,
+            unit_price=Decimal("100.00"),
+        )
+
+        self._create_product_payment_item(
+            payment_transaction=payment,
+            suborder=suborder,
+            order_item=order_item,
+            paid_price=Decimal("500.00"),
         )
 
         self._create_payment(
@@ -421,72 +537,180 @@ class CancellationServiceTests(TestCase):
             SubOrderCancellation.objects.exists(),
         )
 
-        @patch(
-            "orders.services.cancellation."
-            "StockReservationService.restore_consumed_suborder"
+    @patch(
+        "orders.services.cancellation."
+        "StockReservationService.restore_cancelled_quantity"
+    )
+    def test_second_suborder_can_be_cancelled_after_partial_refund(
+        self,
+        mock_restore,
+    ):
+        order = self._create_order()
+
+        suborder_a = self._create_suborder(
+            order=order,
+            store=self.store_a,
+            total=Decimal("500.00"),
+            status=SubOrderStatus.CANCELLED,
         )
-        def test_second_suborder_can_be_cancelled_after_partial_refund(
-            self,
-            mock_restore,
-        ):
-            order = self._create_order()
-    
-            suborder_a = self._create_suborder(
-                order=order,
-                store=self.store_a,
-                total=Decimal("500.00"),
-                status=SubOrderStatus.CANCELLED,
+
+        suborder_b = self._create_suborder(
+            order=order,
+            store=self.store_b,
+            total=Decimal("500.00"),
+            status=SubOrderStatus.PENDING,
+        )
+
+        payment_transaction = self._create_payment(
+            order=order,
+            amount=Decimal("1000.00"),
+            status=PaymentStatus.PARTIALLY_REFUNDED,
+        )
+
+        order_item_b = self._create_order_item(
+            suborder=suborder_b,
+            quantity=5,
+        )
+
+        self._create_product_payment_item(
+            payment_transaction=payment_transaction,
+            suborder=suborder_b,
+            order_item=order_item_b,
+            paid_price=Decimal("500.00"),
+        )
+
+        PaymentRefund.objects.create(
+            payment_transaction=payment_transaction,
+            suborder=suborder_a,
+            amount=Decimal("500.00"),
+            currency="TRY",
+            status=RefundStatus.SUCCESS,
+            reason="First cancellation",
+        )
+
+        cancellation = (
+            CancellationService.cancel_suborder(
+                suborder=suborder_b,
+                cancelled_by=self.user,
+                reason="İkinci mağaza iptali",
             )
-    
-            suborder_b = self._create_suborder(
-                order=order,
-                store=self.store_b,
-                total=Decimal("500.00"),
-                status=SubOrderStatus.PENDING,
-            )
-    
-            payment_transaction = self._create_payment(
-                order=order,
-                amount=Decimal("1000.00"),
-                status=PaymentStatus.PARTIALLY_REFUNDED,
-            )
-    
-            PaymentRefund.objects.create(
-                payment_transaction=payment_transaction,
-                suborder=suborder_a,
-                amount=Decimal("500.00"),
-                currency="TRY",
-                status=RefundStatus.SUCCESS,
-                reason="First cancellation",
-            )
-    
-            cancellation = (
-                CancellationService.cancel_suborder(
-                    suborder=suborder_b,
-                    cancelled_by=self.user,
-                    reason="İkinci mağaza iptali",
-                )
-            )
-    
-            suborder_b.refresh_from_db()
-            cancellation.refresh_from_db()
-    
-            self.assertEqual(
-                suborder_b.status,
-                SubOrderStatus.CANCELLED,
-            )
-    
-            self.assertEqual(
-                cancellation.refund_amount,
-                Decimal("500.00"),
-            )
-    
-            self.assertEqual(
-                cancellation.payment_refund.status,
-                RefundStatus.PENDING,
-            )
-    
-            mock_restore.assert_called_once()
+        )
+
+        suborder_b.refresh_from_db()
+        cancellation.refresh_from_db()
+
+        self.assertEqual(
+            suborder_b.status,
+            SubOrderStatus.CANCELLED,
+        )
+
+        self.assertEqual(
+            cancellation.refund_amount,
+            Decimal("500.00"),
+        )
+
+        self.assertEqual(
+            cancellation.payment_refund.status,
+            RefundStatus.PENDING,
+        )
+
+        mock_restore.assert_called_once()
+
+    @patch(
+        "orders.services.cancellation."
+        "StockReservationService.restore_cancelled_quantity"
+    )
+    def test_cancel_items_cancels_only_requested_quantity(
+        self,
+        mock_restore,
+    ):
+        order = self._create_order(
+            total=Decimal("300.00"),
+        )
+
+        suborder = self._create_suborder(
+            order=order,
+            store=self.store_a,
+            total=Decimal("300.00"),
+        )
+
+        payment_transaction = self._create_payment(
+            order=order,
+            amount=Decimal("300.00"),
+        )
+
+        order_item = self._create_order_item(
+            suborder=suborder,
+            quantity=3,
+        )
+
+        self._create_product_payment_item(
+            payment_transaction=payment_transaction,
+            suborder=suborder,
+            order_item=order_item,
+            paid_price=Decimal("300.00"),
+        )
+
+        CancellationService.cancel_items(
+            suborder=suborder,
+            items={order_item.pk: 1},
+            cancelled_by=self.user,
+            reason="Satıcı tarafından kısmi iptal",
+        )
+
+        cancellation = SubOrderItemCancellation.objects.get(
+            order_item=order_item,
+        )
+
+        self.assertEqual(cancellation.quantity, 1)
+        self.assertEqual(
+            cancellation.refund_amount,
+            Decimal("100.00"),
+        )
+
+        self.assertEqual(
+            list(
+                SubOrderItemCancellationUnit.objects.filter(
+                    cancellation=cancellation,
+                ).values_list("unit_number", flat=True)
+            ),
+            [1],
+        )
+
+        suborder.refresh_from_db()
+        self.assertEqual(suborder.status, SubOrderStatus.PENDING)
+
+        self.assertFalse(
+            SubOrderCancellation.objects.filter(
+                suborder=suborder,
+            ).exists()
+        )
+
+        mock_restore.assert_called_once_with(
+            order_item_id=order_item.pk,
+            quantity=1,
+        )
+
+        refund = PaymentRefund.objects.get(
+            suborder=suborder,
+            refund_type=RefundType.SELLER_PARTIAL_CANCELLATION,
+        )
+
+        RefundService._ensure_refund_items(
+            refund=refund,
+            suborder=suborder,
+            payment_transaction=payment_transaction,
+        )
+
+        refund_item = PaymentRefundItem.objects.get(
+            payment_refund=refund,
+        )
+
+        self.assertEqual(refund_item.amount, Decimal("100.00"))
+        self.assertEqual(
+            refund_item.payment_transaction_item.order_item_id,
+            order_item.pk,
+        )
 
 
     

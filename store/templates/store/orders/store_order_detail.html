@@ -445,6 +445,152 @@
         border-color: #b91c1c;
     }
 
+    .return-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 13px;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .return-status--authorized {
+        background: #e8eefc;
+        color: #254da8;
+    }
+
+    .return-status--in_transit {
+        background: #fff0d6;
+        color: #8a5200;
+    }
+
+    .return-status--awaiting_seller_review {
+        background: #e7f3ff;
+        color: #155b91;
+    }
+
+    .return-status--disputed {
+        background: #fde8e8;
+        color: #a32121;
+    }
+
+    .return-status--refund_pending {
+        background: #f3e8ff;
+        color: #6b21a8;
+    }
+
+    .return-status--completed {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .return-status--rejected,
+    .return-status--cancelled {
+        background: #f1f1f1;
+        color: #555;
+    }
+
+    
+    /* =========================================================
+       RETURN REVIEW ACTIONS
+       ========================================================= */
+
+    .return-review-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+    }
+
+    .return-delivery-notice {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        width: fit-content;
+        max-width: 100%;
+        box-sizing: border-box;
+        padding: 10px 13px;
+        background: var(--blue-50);
+        border: 1px solid #bfdbfe;
+        border-radius: 10px;
+        color: var(--gray-700);
+        font-size: .82rem;
+        line-height: 1.5;
+    }
+
+    .return-delivery-notice i {
+        flex-shrink: 0;
+        color: var(--blue-600);
+    }
+
+    .return-action-buttons {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        flex-wrap: wrap;
+    }
+
+    .return-action-buttons form {
+        margin: 0;
+    }
+
+    .return-dispute-btn {
+        background: #fff;
+        color: var(--red-600);
+        border: 1px solid #fecaca;
+    }
+
+    .return-dispute-btn:hover {
+        background: var(--red-50);
+        border-color: var(--red-600);
+    }
+
+    .return-dispute-modal .shipping-modal-header {
+        background: var(--red-50);
+    }
+
+    .return-dispute-modal .shipping-modal-eyebrow {
+        color: var(--red-600);
+    }
+
+    .return-dispute-modal .shipping-modal-submit {
+        background: var(--red-600);
+        border-color: var(--red-600);
+    }
+
+    .return-dispute-modal .shipping-modal-submit:hover {
+        background: #b91c1c;
+        border-color: #b91c1c;
+    }
+
+    @media (max-width: 700px) {
+        .return-review-actions {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .return-action-buttons {
+            width: 100%;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .return-action-buttons {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .return-action-buttons form,
+        .return-action-buttons button {
+            width: 100%;
+        }
+    }
+
+
     /* =========================================================
        INVOICE
        ========================================================= */
@@ -1581,6 +1727,14 @@
                             {{ suborder.get_status_display }}
                         
                         </span>
+                        
+                        {# Her iade talebinin güncel durumu ayrıca gösterilir. #}
+                        {% for return_request in return_requests %}
+                            <span class="return-status return-status--{{ return_request.status }}">
+                                İade #{{ return_request.unit_number }}:
+                                {{ return_request.get_status_display }}
+                            </span>
+                        {% endfor %}
                     
                     
                         <!-- STATUS ACTION -->
@@ -1619,17 +1773,6 @@
                             </form>
                         
                         
-                            <!-- SİPARİŞİ İPTAL ET -->
-                        
-                            <button
-                                type="button"
-                                class="status-action-btn cancellation-action-btn"
-                                data-cancellation-modal-open
-                            >
-                                <i class="fa-solid fa-ban"></i>
-                                Siparişi İptal Et
-                            </button>
-                        
                         
                         {% elif suborder.status == "preparing" %}
                         
@@ -1644,17 +1787,6 @@
                                 Kargoya Ver
                             </button>
                         
-                        
-                            <!-- SİPARİŞİ İPTAL ET -->
-                        
-                            <button
-                                type="button"
-                                class="status-action-btn cancellation-action-btn"
-                                data-cancellation-modal-open
-                            >
-                                <i class="fa-solid fa-ban"></i>
-                                Siparişi İptal Et
-                            </button>
                         
                         
                         {% elif suborder.status == "shipped" %}
@@ -1688,6 +1820,17 @@
                             
                             </form>
                         
+                        {% endif %}
+
+                        {% if can_cancel %}
+                            <button
+                                type="button"
+                                class="status-action-btn cancellation-action-btn"
+                                data-cancellation-modal-open
+                            >
+                                <i class="fa-solid fa-ban"></i>
+                                Ürünleri İptal Et
+                            </button>
                         {% endif %}
                         
                     </div>
@@ -2139,6 +2282,378 @@
 
         </div>
 
+                <!-- =================================================
+             RETURN REQUESTS
+             ================================================= -->
+
+        <section class="detail-card">
+
+            <div class="card-header">
+
+                <h2 class="card-title">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    İade Talepleri
+                </h2>
+
+                <span style="color: var(--gray-500); font-size: .78rem;">
+                    {{ return_requests|length }} talep
+                </span>
+
+            </div>
+
+            <div class="card-body">
+
+                {% for return_request in return_requests %}
+
+                    <article style="
+                        padding: 18px;
+                        border: 1px solid var(--gray-200);
+                        border-radius: 12px;
+                        margin-bottom: 16px;
+                        background: var(--gray-50);
+                    ">
+
+                        <div style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: flex-start;
+                            gap: 12px;
+                            flex-wrap: wrap;
+                            margin-bottom: 14px;
+                        ">
+
+                            <div>
+                                <strong style="color: var(--gray-900);">
+                                    İade #{{ return_request.reference }}
+                                </strong>
+
+                                <div style="
+                                    margin-top: 6px;
+                                    color: var(--gray-500);
+                                    font-size: .8rem;
+                                ">
+                                    {{ return_request.order_item.product_name_snapshot }}
+                                    · Birim {{ return_request.unit_number }}
+                                </div>
+
+                                <div style="
+                                    margin-top: 4px;
+                                    color: var(--gray-400);
+                                    font-size: .75rem;
+                                ">
+                                    {{ return_request.created_at|localtime|date:"d.m.Y H:i" }}
+                                </div>
+                            </div>
+
+                            <span class="order-status
+                                {% if return_request.status == 'completed' %}
+                                    delivered
+                                {% elif return_request.status == 'disputed' %}
+                                    cancelled
+                                {% elif return_request.status == 'refund_pending' %}
+                                    preparing
+                                {% else %}
+                                    shipped
+                                {% endif %}
+                            ">
+                                {{ return_request.get_status_display }}
+                            </span>
+
+                        </div>
+
+                        <div style="
+                            display: grid;
+                            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                            gap: 12px;
+                            margin-bottom: 14px;
+                        ">
+
+                            <div class="meta-box">
+                                <div class="meta-box-label">İade Nedeni</div>
+                                <div class="meta-box-value">
+                                    {{ return_request.get_reason_display }}
+                                </div>
+                            </div>
+
+                            <div class="meta-box">
+                                <div class="meta-box-label">Kargo Firması</div>
+                                <div class="meta-box-value">
+                                    {% if return_request.return_cargo_company %}
+                                        {{ return_request.get_return_cargo_company_display }}
+                                    {% else %}
+                                        Belirtilmedi
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="meta-box">
+                                <div class="meta-box-label">Kargo Takip No</div>
+                                <div class="meta-box-value">
+                                    {% if return_request.return_tracking_number %}
+                                        {{ return_request.return_tracking_number }}
+                                    {% else %}
+                                        Belirtilmedi
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                        </div>
+
+                        {% if return_request.customer_note %}
+                            <div style="margin-bottom: 14px;">
+                                <strong style="font-size: .8rem;">
+                                    Müşteri Notu
+                                </strong>
+
+                                <p style="
+                                    margin: 6px 0 0;
+                                    color: var(--gray-600);
+                                    font-size: .84rem;
+                                    white-space: pre-line;
+                                ">{{ return_request.customer_note }}</p>
+                            </div>
+                        {% endif %}
+
+                        
+                        {% if return_request.status == "awaiting_seller_review" %}
+                                                
+                            <div class="return-review-actions">
+                            
+                                <div class="return-delivery-notice">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    <span>İade paketi teslim alınmış durumda. Talebi onaylayabilir veya gerekçeli itiraz edebilirsiniz.</span>
+                                </div>
+                            
+                                <div class="return-action-buttons">
+                                
+                                    <!-- İADEYİ ONAYLA -->
+                                    <form
+                                        method="post"
+                                        action="{% url 'store:store_return_approve' store.slug suborder.suborder_number return_request.pk %}"
+                                        data-return-approve-form
+                                        data-confirm-title="İade talebi onaylansın mı?"
+                                        data-confirm-message="İade talebini onaylamak istiyor musunuz? Onay sonrasında para iadesi işlemi başlatılabilir."
+                                        data-confirm-button="İadeyi Onayla"
+                                    >
+                                        {% csrf_token %}
+                                
+                                        <button
+                                            type="button"
+                                            class="status-action-btn"
+                                            data-return-approve-trigger
+                                        >
+                                            <i class="fa-solid fa-check"></i>
+                                            İadeyi Onayla
+                                        </button>
+                                    </form>
+                                
+                                    <!-- İTİRAZ MODALINI AÇ -->
+                                    <button
+                                        type="button"
+                                        class="status-action-btn return-dispute-btn"
+                                        data-return-dispute-open="return-dispute-modal-{{ return_request.pk }}"
+                                    >
+                                        <i class="fa-solid fa-triangle-exclamation"></i>
+                                        İtiraz Et
+                                    </button>
+                                
+                                </div>
+                            
+                            </div>
+                        
+                            <!-- İTİRAZ GEREKÇESİ MODALI -->
+                            <div
+                                id="return-dispute-modal-{{ return_request.pk }}"
+                                class="shipping-modal-overlay return-dispute-modal"
+                                data-return-dispute-modal
+                                hidden
+                            >
+                                <div
+                                    class="shipping-modal-box"
+                                    role="dialog"
+                                    aria-modal="true"
+                                    aria-labelledby="return-dispute-title-{{ return_request.pk }}"
+                                >
+                        
+                                    <div class="shipping-modal-header">
+                                    
+                                        <div>
+                                            <span class="shipping-modal-eyebrow">
+                                                İade İşlemi
+                                            </span>
+                                        
+                                            <h3
+                                                id="return-dispute-title-{{ return_request.pk }}"
+                                                class="shipping-modal-title"
+                                            >
+                                                İade Talebine İtiraz Et
+                                            </h3>
+                                        </div>
+                                    
+                                        <button
+                                            type="button"
+                                            class="shipping-modal-close"
+                                            data-return-dispute-close
+                                            aria-label="Kapat"
+                                        >
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    
+                                    </div>
+                                
+                                    <form
+                                        method="post"
+                                        action="{% url 'store:store_return_dispute' store.slug suborder.suborder_number return_request.pk %}"
+                                        data-return-dispute-form
+                                    >
+                                        {% csrf_token %}
+                                
+                                        <div class="shipping-form-group">
+                                        
+                                            <label
+                                                for="dispute-reason-{{ return_request.pk }}"
+                                                class="shipping-form-label"
+                                            >
+                                                İtiraz Gerekçesi
+                                            </label>
+                                        
+                                            <textarea
+                                                id="dispute-reason-{{ return_request.pk }}"
+                                                name="reason"
+                                                class="shipping-form-control"
+                                                rows="5"
+                                                maxlength="2000"
+                                                required
+                                                placeholder="İade talebine neden itiraz ettiğinizi açıklayın..."
+                                            ></textarea>
+                                        
+                                            <small style="
+                                                display: block;
+                                                margin-top: 6px;
+                                                color: var(--gray-500);
+                                                font-size: .75rem;
+                                            ">
+                                                En fazla 2000 karakter.
+                                            </small>
+                                        
+                                        </div>
+                                    
+                                        <div class="shipping-modal-info cancellation-modal-info">
+                                            <i class="fa-solid fa-triangle-exclamation"></i>
+                                            <span>
+                                                İtirazınız kaydedilecek ve iade talebi itiraz
+                                                durumuna geçirilecektir.
+                                            </span>
+                                        </div>
+                                    
+                                        <div class="shipping-modal-actions">
+                                        
+                                            <button
+                                                type="button"
+                                                class="shipping-modal-cancel"
+                                                data-return-dispute-close
+                                            >
+                                                Vazgeç
+                                            </button>
+                                        
+                                            <button
+                                                type="submit"
+                                                class="shipping-modal-submit"
+                                                data-return-dispute-submit
+                                            >
+                                                <i class="fa-solid fa-paper-plane"></i>
+                                                İtirazı Gönder
+                                            </button>
+                                        
+                                        </div>
+                                    
+                                    </form>
+                                
+                                </div>
+                            </div>
+
+                        {% elif return_request.status == "disputed" %}
+
+                            <div style="
+                                padding: 14px;
+                                background: var(--red-50);
+                                border: 1px solid #fecaca;
+                                border-radius: 10px;
+                                color: var(--red-600);
+                                font-size: .84rem;
+                            ">
+                                <strong>İtiraz edildi</strong>
+
+                                {% if return_request.dispute_reason %}
+                                    <p style="
+                                        margin: 8px 0 0;
+                                        color: var(--gray-700);
+                                        white-space: pre-line;
+                                    ">
+                                        {{ return_request.dispute_reason }}
+                                    </p>
+                                {% endif %}
+
+                                {% if return_request.disputed_by %}
+                                    <p style="margin: 8px 0 0; font-size: .78rem;">
+                                        İtiraz eden:
+                                        {{ return_request.disputed_by }}
+                                    </p>
+                                {% endif %}
+                            </div>
+
+                        {% elif return_request.status == "refund_pending" %}
+
+                            <div style="
+                                display: inline-block;
+                                padding: 12px;
+                                background: var(--yellow-50);
+                                border: 1px solid #fef08a;
+                                border-radius: 10px;
+                                color: var(--yellow-600);
+                                font-size: .84rem;
+                            ">
+                                Para iadesi bekleniyor.
+                            </div>
+
+                        {% elif return_request.status == "completed" %}
+
+                            <div style="
+                                display: inline-block;
+                                padding: 12px;
+                                background: var(--green-50);
+                                border: 1px solid #bbf7d0;
+                                border-radius: 10px;
+                                color: var(--green-600);
+                                font-size: .84rem;
+                            ">
+                                İade işlemi tamamlandı.
+                            </div>
+
+                        {% endif %}
+
+                    </article>
+
+                {% empty %}
+
+                    <div style="
+                        padding: 28px 12px;
+                        text-align: center;
+                        color: var(--gray-500);
+                    ">
+                        <i class="fa-solid fa-box-open"
+                           style="font-size: 1.8rem; margin-bottom: 10px;"></i>
+
+                        <p style="margin: 0;">
+                            Bu sipariş için henüz iade talebi bulunmuyor.
+                        </p>
+                    </div>
+
+                {% endfor %}
+
+            </div>
+
+        </section>
 
         <!-- =================================================
              CUSTOMER / BILLING / SHIPPING
@@ -2855,17 +3370,135 @@
 
             {% csrf_token %}
 
-
+            <!-- Ürün seçimi araçları -->
             <div class="shipping-form-group">
-
+                <div style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                ">
+                    <label class="shipping-form-label" style="margin: 0;">
+                        İptal Edilecek Ürünler
+                    </label>
+                
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button
+                            type="button"
+                            id="cancellation-select-all"
+                            class="shipping-modal-cancel"
+                        >
+                            Tümünü Seç
+                        </button>
+                    
+                        <button
+                            type="button"
+                            id="cancellation-clear-selection"
+                            class="shipping-modal-cancel"
+                        >
+                            Seçimi Temizle
+                        </button>
+                    </div>
+                </div>
+            
+                <p style="
+                    margin: 8px 0 12px;
+                    color: var(--gray-500);
+                    font-size: .78rem;
+                    line-height: 1.5;
+                ">
+                    Her ürün için iptal etmek istediğiniz adedi seçin.
+                    0 değeri o üründen iptal yapılmayacağı anlamına gelir.
+                </p>
+            
+                <div style="
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                ">
+                    {% for item in items %}
+                        <div style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            gap: 14px;
+                            padding: 12px;
+                            border: 1px solid var(--gray-200);
+                            border-radius: 10px;
+                            background: var(--gray-50);
+                        ">
+                            <div style="flex: 1; min-width: 0;">
+                                <strong style="
+                                    display: block;
+                                    color: var(--gray-800);
+                                    font-size: .84rem;
+                                    overflow-wrap: anywhere;
+                                ">
+                                    {{ item.product_name_snapshot }}
+                                </strong>
+                            
+                                {% if item.variant_display %}
+                                    <span style="
+                                        display: block;
+                                        margin-top: 4px;
+                                        color: var(--gray-500);
+                                        font-size: .75rem;
+                                    ">
+                                        {{ item.variant_display }}
+                                    </span>
+                                {% endif %}
+                                
+                                <span style="
+                                    display: block;
+                                    margin-top: 5px;
+                                    color: var(--gray-500);
+                                    font-size: .75rem;
+                                ">
+                                    İptal edilebilir:
+                                    {{ item.cancellable_quantity }}
+                                    / {{ item.quantity }} adet
+                                </span>
+                            </div>
+                        
+                            <div style="width: 100px; flex-shrink: 0;">
+                                <label
+                                    for="cancellation-quantity-{{ item.pk }}"
+                                    class="shipping-form-label"
+                                >
+                                    İptal adedi
+                                </label>
+                            
+                                <input
+                                    type="number"
+                                    id="cancellation-quantity-{{ item.pk }}"
+                                    name="quantity_{{ item.pk }}"
+                                    class="shipping-form-control"
+                                    value="0"
+                                    min="0"
+                                    max="{{ item.cancellable_quantity }}"
+                                    step="1"
+                                    inputmode="numeric"
+                                    data-cancellation-quantity
+                                    {% if item.cancellable_quantity == 0 %}
+                                        disabled
+                                    {% endif %}
+                                >
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        
+            <!-- İptal nedeni -->
+            <div class="shipping-form-group">
                 <label
                     for="cancellation-reason"
                     class="shipping-form-label"
                 >
                     İptal Nedeni
                 </label>
-
-
+            
                 <textarea
                     id="cancellation-reason"
                     name="reason"
@@ -2873,28 +3506,23 @@
                     maxlength="255"
                     rows="4"
                     required
-                    placeholder="Siparişi neden iptal ettiğinizi belirtin..."
+                    placeholder="İptal nedenini belirtin..."
                 ></textarea>
-
             </div>
-
-
+        
+            <!-- İade bilgilendirmesi -->
             <div class="shipping-modal-info cancellation-modal-info">
-
                 <i class="fa-solid fa-triangle-exclamation"></i>
-
+            
                 <span>
-                    Sipariş iptal edildiğinde bu mağazaya ait ürünlerin
-                    stoğu geri yüklenecek ve
-                    <strong>{{ suborder.total_amount|floatformat:2 }} {{ main_order.currency }}</strong>
-                    tutarında iade işlemi başlatılacaktır.
+                    Yalnızca seçtiğiniz adetlerin ürün tutarı iade için
+                    hazırlanacaktır. Kargo bedeli, alt siparişin tüm ürün
+                    adetleri iptal edildiğinde ve daha önce iade için
+                    ayrılmadığında iadeye eklenebilir.
                 </span>
-
             </div>
-
-
+        
             <div class="shipping-modal-actions">
-
                 <button
                     type="button"
                     class="shipping-modal-cancel"
@@ -2902,19 +3530,16 @@
                 >
                     Vazgeç
                 </button>
-
-
+            
                 <button
                     type="submit"
                     class="shipping-modal-submit cancellation-modal-submit"
                     id="cancellation-submit"
                 >
                     <i class="fa-solid fa-ban"></i>
-                    Siparişi İptal Et
+                    Seçilenleri İptal Et
                 </button>
-
             </div>
-
         </form>
 
     </div>
@@ -3010,6 +3635,20 @@ document.addEventListener(
 
         const cancellationSubmit =
             document.getElementById("cancellation-submit");
+
+        const cancellationQuantities = Array.from(
+            cancellationForm.querySelectorAll(
+                "[data-cancellation-quantity]"
+            )
+        );
+
+        const cancellationSelectAll = document.getElementById(
+            "cancellation-select-all"
+        );
+
+        const cancellationClearSelection = document.getElementById(
+            "cancellation-clear-selection"
+        );
 
         const shippingForm =
             document.getElementById("shipping-form");
@@ -3173,6 +3812,12 @@ document.addEventListener(
                         );
                     
                         cancellationReason.value = "";
+
+                        cancellationQuantities.forEach(function (input) {
+                            if (!input.disabled) {
+                                input.value = "0";
+                            }
+                        });
                     
                         cancellationSubmit.disabled = false;
                     
@@ -3229,6 +3874,30 @@ document.addEventListener(
             
             }
         );
+
+        cancellationSelectAll.addEventListener(
+            "click",
+            function () {
+                cancellationQuantities.forEach(function (input) {
+                    if (input.disabled) {
+                        return;
+                    }
+                
+                    input.value = input.max;
+                });
+            }
+        );
+        
+        cancellationClearSelection.addEventListener(
+            "click",
+            function () {
+                cancellationQuantities.forEach(function (input) {
+                    if (!input.disabled) {
+                        input.value = "0";
+                    }
+                });
+            }
+        );
         
         
         /*
@@ -3241,6 +3910,43 @@ document.addEventListener(
             
                 const reason =
                     cancellationReason.value.trim();
+
+                const hasInvalidQuantity = cancellationQuantities.some(
+                    function (input) {
+                        return !input.disabled && !input.checkValidity();
+                    }
+                );
+                
+                if (hasInvalidQuantity) {
+                    event.preventDefault();
+                
+                    WizardUI.showToast(
+                        "error",
+                        "İptal adetleri geçerli aralıkta olmalıdır."
+                    );
+                
+                    return;
+                }
+                
+                const hasSelectedQuantity = cancellationQuantities.some(
+                    function (input) {
+                        return (
+                            !input.disabled &&
+                            Number(input.value) > 0
+                        );
+                    }
+                );
+                
+                if (!hasSelectedQuantity) {
+                    event.preventDefault();
+                
+                    WizardUI.showToast(
+                        "error",
+                        "İptal etmek için en az bir ürünün adedini seçmelisiniz."
+                    );
+                
+                    return;
+                }
             
             
                 if (!reason) {
@@ -3323,6 +4029,208 @@ document.addEventListener(
                 );
 
             });
+
+        
+        /*
+         * İade onayı → Wizard Confirm
+         */
+
+        document
+            .querySelectorAll("[data-return-approve-form]")
+            .forEach(function (form) {
+
+                const button = form.querySelector(
+                    "[data-return-approve-trigger]"
+                );
+
+                if (!button) {
+                    return;
+                }
+
+                button.addEventListener("click", async function () {
+
+                    const confirmed = await WizardUI.showConfirm({
+                        title: form.dataset.confirmTitle,
+                        message: form.dataset.confirmMessage,
+                        confirmText: form.dataset.confirmButton,
+                        cancelText: "Vazgeç",
+                    });
+
+                    if (!confirmed) {
+                        return;
+                    }
+
+                    button.disabled = true;
+
+                    WizardUI.setButtonLoading(
+                        button,
+                        true,
+                        "İşleniyor..."
+                    );
+
+                    form.submit();
+                });
+            });
+
+
+        /*
+         * İade itiraz modalını aç
+         */
+
+        document
+            .querySelectorAll("[data-return-dispute-open]")
+            .forEach(function (button) {
+
+                button.addEventListener("click", function () {
+
+                    const modal = document.getElementById(
+                        button.dataset.returnDisputeOpen
+                    );
+
+                    if (!modal) {
+                        WizardUI.showToast(
+                            "error",
+                            "İtiraz penceresi açılamadı."
+                        );
+                        return;
+                    }
+
+                    const textarea = modal.querySelector("textarea");
+                    const submitButton = modal.querySelector(
+                        "[data-return-dispute-submit]"
+                    );
+
+                    if (textarea) {
+                        textarea.value = "";
+                    }
+
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                    }
+
+                    modal.hidden = false;
+                    document.body.classList.add("modal-open");
+
+                    if (textarea) {
+                        textarea.focus();
+                    }
+                });
+            });
+
+
+        /*
+         * İade itiraz modalını kapat
+         */
+
+        document
+            .querySelectorAll("[data-return-dispute-close]")
+            .forEach(function (button) {
+
+                button.addEventListener("click", function () {
+
+                    const modal = button.closest(
+                        "[data-return-dispute-modal]"
+                    );
+
+                    if (!modal) {
+                        return;
+                    }
+
+                    modal.hidden = true;
+
+                    if (
+                        !document.querySelector(
+                            ".shipping-modal-overlay:not([hidden]), " +
+                            ".wizard-modal-overlay:not([hidden])"
+                        )
+                    ) {
+                        document.body.classList.remove("modal-open");
+                    }
+                });
+            });
+
+
+        /*
+         * İtiraz gerekçesi doğrulama ve gönderim
+         */
+
+        document
+            .querySelectorAll("[data-return-dispute-form]")
+            .forEach(function (form) {
+
+                const textarea = form.querySelector("textarea");
+                const submitButton = form.querySelector(
+                    "[data-return-dispute-submit]"
+                );
+
+                form.addEventListener("submit", function (event) {
+
+                    const reason = textarea.value.trim();
+
+                    if (!reason) {
+                        event.preventDefault();
+
+                        WizardUI.showToast(
+                            "error",
+                            "Lütfen itiraz gerekçesini yazın."
+                        );
+
+                        textarea.focus();
+                        return;
+                    }
+
+                    if (reason.length > 2000) {
+                        event.preventDefault();
+
+                        WizardUI.showToast(
+                            "error",
+                            "İtiraz gerekçesi 2000 karakterden uzun olamaz."
+                        );
+
+                        textarea.focus();
+                        return;
+                    }
+
+                    if (submitButton) {
+                        submitButton.disabled = true;
+
+                        WizardUI.setButtonLoading(
+                            submitButton,
+                            true,
+                            "Gönderiliyor..."
+                        );
+                    }
+                });
+            });
+
+
+        /*
+         * ESC ile açık iade itiraz modalını kapat
+         */
+
+        document.addEventListener("keydown", function (event) {
+
+            if (event.key !== "Escape") {
+                return;
+            }
+
+            const openReturnModal = document.querySelector(
+                "[data-return-dispute-modal]:not([hidden])"
+            );
+
+            if (openReturnModal) {
+                openReturnModal.hidden = true;
+
+                if (
+                    !document.querySelector(
+                        ".shipping-modal-overlay:not([hidden]), " +
+                        ".wizard-modal-overlay:not([hidden])"
+                    )
+                ) {
+                    document.body.classList.remove("modal-open");
+                }
+            }
+        });
 
 
         /*

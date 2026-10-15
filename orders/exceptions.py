@@ -195,3 +195,11 @@ class ShippingOperationError(Exception):
 
 class CancellationError(Exception):
     """Alt sipariş iptal işlemi gerçekleştirilemedi."""
+
+# Return
+class ReturnOperationError(Exception):
+    """İade işlemi iş kurallarına uygun olmadığında kullanılır."""
+
+
+class ReturnRequestNotFoundError(ReturnOperationError):
+    """İade talebi bulunamadığında kullanılır."""

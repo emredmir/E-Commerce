@@ -10,8 +10,9 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.urls import reverse_lazy
 from django.views.generic import UpdateView, FormView, DetailView, ListView, TemplateView
 from django.views import View
-from django.http import JsonResponse
+from django.http import JsonResponse, Http404
 from django.template.loader import render_to_string
+from django.db import transaction
 import json
 import logging
 
@@ -29,10 +30,12 @@ from django.db.models.functions import RowNumber
 
 from products.models import ProductCollection, ProductCollectionItem, ProductQuestion, ProductAnswer
 from cart.services.cart import CartService
+
 from orders.services.card_storage import (
     CardStorageService,
     StoredCardCreateData,
 )
+from orders.services.returns import ReturnService
 
 from orders.exceptions import (
     CardStorageConsistencyError,
@@ -40,9 +43,15 @@ from orders.exceptions import (
     CardStorageOperationInProgressError,
     PaymentValidationError,
     StoredCardNotFoundError,
+    ReturnOperationError,
 )
 
-from orders.models import Order, SubOrder, OrderItem, PaymentStatus, PaymentTransaction, SubOrderStatus
+from orders.models import (
+    Order, SubOrder, OrderItem, 
+    PaymentStatus, PaymentTransaction, SubOrderStatus,
+    ReturnStatus, ReturnRequest, ReturnReason,
+    CargoCompany,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -554,7 +563,283 @@ class CustomerOrderDetailView(LoginRequiredMixin, DetailView):
 
         context["sub_orders"] = sub_orders
 
+
+
+        return_requests = list(
+            ReturnRequest.objects
+            .filter(
+                order_item__sub_order__order_id=self.object.pk,
+                requested_by=self.request.user,
+            )
+            .select_related(
+                "order_item",
+                "payment_refund",
+            )
+            .order_by("-created_at", "-pk")
+        )
+
+        return_requests_by_item = {}
+
+        for return_request in return_requests:
+            return_requests_by_item.setdefault(
+                return_request.order_item_id,
+                [],
+            ).append(return_request)
+
+        for sub_order in sub_orders:
+            for item in sub_order.items.all():
+                item.customer_return_requests = (
+                    return_requests_by_item.get(item.pk, [])
+                )
+
+                reserved_count = sum(
+                    1
+                    for return_request in item.customer_return_requests
+                    if return_request.status
+                    in ReturnService.QUANTITY_RESERVED_STATUSES
+                )
+
+                item.remaining_return_quantity = max(
+                    item.quantity - reserved_count,
+                    0,
+                )
+
+                item.return_quantity_choices = list(
+                    range(1, item.remaining_return_quantity + 1)
+                )
+
+                item.can_request_return = (
+                    sub_order.is_delivered
+                    and item.remaining_return_quantity > 0
+                )
+
+        context["return_requests"] = return_requests
+        context["return_requests_by_item"] = return_requests_by_item
+        context["return_reason_choices"] = ReturnReason.choices
+        context["cargo_company_choices"] = CargoCompany.choices
+        context["return_status_choices"] = ReturnStatus.choices
+
         return context
+
+class CustomerReturnCreateView(LoginRequiredMixin, View):
+    """
+    Müşteri, teslim edilmiş siparişindeki bir ürün birimi için
+    iade talebi oluşturur.
+
+    İş kuralları ReturnService tarafından yönetilir.
+    """
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        order_number = kwargs["order_number"]
+        order_item_id = kwargs["order_item_id"]
+        is_ajax = (
+            request.headers.get("x-requested-with")
+            == "XMLHttpRequest"
+        )
+
+        # İstenen ürünün müşterinin kendi siparişine ait olduğunu
+        # view seviyesinde de doğrula.
+        order_item = (
+            OrderItem.objects
+            .select_related("sub_order__order")
+            .filter(
+                pk=order_item_id,
+                sub_order__order__order_number=order_number,
+                sub_order__order__user=request.user,
+            )
+            .first()
+        )
+
+        if order_item is None:
+            raise Http404("Sipariş ürünü bulunamadı.")
+
+        try:
+            quantity = int(request.POST.get("quantity", "1"))
+        except (TypeError, ValueError):
+            quantity = 0
+
+        if quantity < 1:
+            error_message = "İade edilecek adet geçersiz."
+
+            if is_ajax:
+                return JsonResponse(
+                    {"ok": False, "message": error_message},
+                    status=400,
+                )
+
+            messages.error(request, error_message)
+            return redirect(
+                "accounts:order_detail",
+                order_number=order_number,
+            )
+
+        reason = request.POST.get("reason", "").strip()
+        customer_note = request.POST.get("customer_note", "").strip()
+        created_returns = []
+
+        try:
+            with transaction.atomic():
+                for _ in range(quantity):
+                    return_request = ReturnService.create_return_request(
+                        order_item_id=order_item.pk,
+                        requested_by=request.user,
+                        reason=reason,
+                        customer_note=customer_note,
+                    )
+                    created_returns.append(return_request)
+
+        except ReturnOperationError as exc:
+            if is_ajax:
+                return JsonResponse(
+                    {"ok": False, "message": str(exc)},
+                    status=400,
+                )
+
+            messages.error(request, str(exc))
+
+        else:
+            if is_ajax:
+                return_requests_html = []
+
+                for return_request in created_returns:
+                    html = render_to_string(
+                        "accounts/orders/return_request.html",
+                        {
+                            "return_request": return_request,
+                            "order": order_item.sub_order.order,
+                            "cargo_company_choices": CargoCompany.choices,
+                        },
+                        request=request,
+                    )
+
+                    return_requests_html.append({
+                        "id": return_request.pk,
+                        "html": html,
+                    })
+
+                reserved_count = ReturnRequest.objects.filter(
+                    order_item=order_item,
+                    status__in=ReturnService.QUANTITY_RESERVED_STATUSES,
+                ).count()
+
+                remaining_quantity = max(
+                    order_item.quantity - reserved_count,
+                    0,
+                )
+
+                return JsonResponse({
+                    "ok": True,
+                    "message": (
+                        f"{len(created_returns)} adet için "
+                        "iade talebiniz oluşturuldu."
+                    ),
+                    "item_id": order_item.pk,
+                    "remaining_quantity": remaining_quantity,
+                    "items": return_requests_html,
+                })
+
+            messages.success(
+                request,
+                (
+                    f"{len(created_returns)} adet için iade talebiniz "
+                    "oluşturuldu."
+                ),
+            )
+
+        return redirect(
+            "accounts:order_detail",
+            order_number=order_number,
+        )
+
+class CustomerReturnShipmentView(LoginRequiredMixin, View):
+    """
+    Müşteri, kendi iade talebi için kargo bilgilerini kaydeder.
+    """
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        order_number = kwargs["order_number"]
+        return_request_id = kwargs["return_request_id"]
+        is_ajax = (
+            request.headers.get("x-requested-with")
+            == "XMLHttpRequest"
+        )
+
+        return_request = (
+            ReturnRequest.objects
+            .select_related(
+                "order_item__sub_order__order",
+                "payment_refund",
+            )
+            .filter(
+                pk=return_request_id,
+                requested_by=request.user,
+                order_item__sub_order__order__order_number=order_number,
+                order_item__sub_order__order__user=request.user,
+            )
+            .first()
+        )
+
+        if return_request is None:
+            raise Http404("İade talebi bulunamadı.")
+
+        try:
+            ReturnService.mark_return_shipped(
+                return_request_id=return_request.pk,
+                requested_by=request.user,
+                cargo_company=request.POST.get("cargo_company", ""),
+                tracking_number=request.POST.get("tracking_number", ""),
+            )
+
+        except ReturnOperationError as exc:
+            if is_ajax:
+                return JsonResponse(
+                    {"ok": False, "message": str(exc)},
+                    status=400,
+                )
+
+            messages.error(request, str(exc))
+
+        else:
+            if is_ajax:
+                return_request = (
+                    ReturnRequest.objects
+                    .select_related(
+                        "order_item__sub_order__order",
+                        "payment_refund",
+                    )
+                    .get(pk=return_request.pk)
+                )
+
+                html = render_to_string(
+                    "accounts/orders/return_request.html",
+                    {
+                        "return_request": return_request,
+                        "order": return_request.order_item.sub_order.order,
+                        "cargo_company_choices": CargoCompany.choices,
+                    },
+                    request=request,
+                )
+
+                return JsonResponse({
+                    "ok": True,
+                    "message": "İade kargo bilgileriniz kaydedildi.",
+                    "id": return_request.pk,
+                    "html": html,
+                })
+
+            messages.success(
+                request,
+                "İade kargo bilgileriniz kaydedildi.",
+            )
+
+        return redirect(
+            "accounts:order_detail",
+            order_number=order_number,
+        )
 
 class StoredCardListView(LoginRequiredMixin, TemplateView):
     """ 

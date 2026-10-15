@@ -2248,6 +2248,10 @@ class RefundType(models.TextChoices):
         "suborder_cancellation",
         "Alt Sipariş İptali",
     )
+    SELLER_PARTIAL_CANCELLATION = (
+        "seller_partial_cancellation",
+        "Satıcı Kısmi İptali",
+    )
     CUSTOMER_REQUEST = (
         "customer_request",
         "Müşteri Talebi",
@@ -2527,6 +2531,293 @@ class PaymentRefundItem(models.Model):
             ),
         ]
 
+class ReturnReason(models.TextChoices):
+    WITHDRAWAL = "withdrawal", "Cayma / Keyfi İade"
+    DEFECTIVE = "defective", "Kusurlu Ürün"
+    WRONG_ITEM = "wrong_item", "Yanlış Ürün"
+    DAMAGED = "damaged", "Hasarlı Ürün"
+    NOT_AS_DESCRIBED = "not_as_described", "Açıklamaya Uygun Değil"
+    OTHER = "other", "Diğer"
+
+
+class ReturnStatus(models.TextChoices):
+    AUTHORIZED = "authorized", "İade Gönderimine İzin Verildi"
+    IN_TRANSIT = "in_transit", "İade Kargoda"
+    AWAITING_SELLER_REVIEW = (
+        "awaiting_seller_review",
+        "Satıcı İncelemesi Bekleniyor",
+    )
+    DISPUTED = "disputed", "İtiraz Edildi"
+    REFUND_PENDING = "refund_pending", "Para İadesi Bekleniyor"
+    COMPLETED = "completed", "İade Tamamlandı"
+    REJECTED = "rejected", "İade Talebi Reddedildi"
+    CANCELLED = "cancelled", "İptal Edildi"
+
+
+class ReturnDeliverySource(models.TextChoices):
+    SELLER = "seller", "Satıcı Onayı"
+    SIMULATED = "simulated", "Test Teslimat Simülasyonu"
+    CARRIER = "carrier", "Kargo Firması"
+
+class ReturnRequest(models.Model):
+    """
+    Satın alınmış tek bir ürün birimi için iade talebi.
+
+    Bir OrderItem.quantity değeri 2 veya daha yüksek olsa bile,
+    her ReturnRequest yalnızca bir ürün birimini temsil eder.
+
+    Sorumlulukları:
+        - İade talebi ve nedenini kaydetmek.
+        - İade kargo bilgilerini saklamak.
+        - Teslim ve satıcı inceleme zamanlarını takip etmek.
+        - İtiraz ve para iadesi sürecini ilişkilendirmek.
+
+    Ürün uygunluğu, iade miktarı ve durum geçişlerinin
+    iş kuralları ReturnService içerisinde doğrulanır.
+    """
+
+    reference = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+    )
+
+    order_item = models.ForeignKey(
+        "OrderItem",
+        on_delete=models.PROTECT,
+        related_name="return_requests",
+    )
+
+    unit_number = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1)],
+        verbose_name="İade Edilen Ürün Birimi",
+    )
+
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="return_requests",
+    )
+
+    reason = models.CharField(
+        max_length=32,
+        choices=ReturnReason.choices,
+    )
+
+    customer_note = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    status = models.CharField(
+        max_length=32,
+        choices=ReturnStatus.choices,
+        default=ReturnStatus.AUTHORIZED,
+    )
+
+    # Keyfi iadede ürünün stoğa geri eklendiği zaman.
+    # Diğer iade nedenlerinde boş kalır.
+    stock_restored_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Stoğa İade Tarihi",
+    )
+
+    # Satış sayacının düzeltildiği zaman.
+    # Bu alan, ürünün fiziksel stoğa eklendiği anlamına gelmez.
+    sold_count_adjusted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Satış Sayacı Düzeltme Tarihi",
+    )
+
+    # --------------------------------------------------------------
+    # RETURN SHIPMENT
+    # --------------------------------------------------------------
+
+    return_cargo_company = models.CharField(
+        max_length=30,
+        choices=CargoCompany.choices,
+        blank=True,
+        default="",
+    )
+
+    return_tracking_number = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+    )
+
+    return_shipped_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    # İade paketinin mağazaya ulaştığının kabul edildiği zaman.
+    # Şimdilik satıcı onayı veya test simülasyonu ile doldurulabilir.
+    delivered_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    delivery_confirmation_source = models.CharField(
+        max_length=20,
+        choices=ReturnDeliverySource.choices,
+        blank=True,
+        default="",
+    )
+
+    delivery_confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="confirmed_return_deliveries",
+    )
+
+    # --------------------------------------------------------------
+    # SELLER REVIEW
+    # --------------------------------------------------------------
+
+    # delivered_at sonrasında ReturnService tarafından belirlenir.
+    seller_review_deadline = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    # Satıcının manuel olarak kabul ettiği zaman.
+    # Otomatik kabulde bu alan boş kalır.
+    seller_approved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    seller_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="approved_return_requests",
+    )
+
+    # --------------------------------------------------------------
+    # DISPUTE
+    # --------------------------------------------------------------
+
+    disputed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    disputed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="disputed_return_requests",
+    )
+
+    dispute_reason = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    admin_resolved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    
+    admin_resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="resolved_return_disputes",
+    )
+    
+    admin_resolution_note = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    # --------------------------------------------------------------
+    # CANCELLATION / REFUND
+    # --------------------------------------------------------------
+
+    cancelled_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="cancelled_return_requests",
+    )
+
+    # Her ReturnRequest için ayrı bir ödeme iadesi kaydı.
+    # Para iadesinin durumunu PaymentRefund yönetir.
+    payment_refund = models.OneToOneField(
+        "PaymentRefund",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="return_request",
+    )
+
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    # --------------------------------------------------------------
+    # TIMESTAMPS
+    # --------------------------------------------------------------
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = [
+            "-created_at",
+            "-pk",
+        ]
+
+        indexes = [
+            models.Index(
+                fields=["order_item", "status"],
+                name="return_item_status_idx",
+            ),
+            models.Index(
+                fields=["status", "seller_review_deadline"],
+                name="return_status_deadline_idx",
+            ),
+            models.Index(
+                fields=["requested_by", "-created_at"],
+                name="return_customer_created_idx",
+            ),
+        ]
+
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(unit_number__gte=1),
+                name="return_unit_number_gte_1",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"İade {self.reference} "
+            f"(OrderItem: {self.order_item_id})"
+        )
+
 class SubOrderCancellation(models.Model):
     """
     Bir SubOrder'ın seller/system tarafından iptal edilmesinin
@@ -2602,3 +2893,162 @@ class SubOrderCancellation(models.Model):
 
     def __str__(self):
         return self.suborder.suborder_number
+
+
+class SubOrderItemCancellation(models.Model):
+    """
+    Bir SubOrder içindeki belirli bir OrderItem için
+    gerçekleştirilen kısmi veya tam ürün iptali kaydı.
+
+    Bir OrderItem için birden fazla iptal kaydı oluşturulabilir.
+    İptal edilen toplam miktarın OrderItem.quantity değerini
+    aşmaması CancellationService tarafından doğrulanır.
+
+    PaymentRefund, iptal kaydından ayrı bir domain kaydıdır.
+    İade henüz oluşturulmamış veya tamamlanmamış olabilir.
+    """
+
+    order_item = models.ForeignKey(
+        OrderItem,
+        on_delete=models.PROTECT,
+        related_name="cancellations",
+        verbose_name="Sipariş Kalemi",
+    )
+
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="suborder_item_cancellations",
+        verbose_name="İptal Eden",
+    )
+
+    quantity = models.PositiveIntegerField(
+        validators=[
+            MinValueValidator(1),
+        ],
+        verbose_name="İptal Edilen Adet",
+    )
+
+    reason = models.CharField(
+        max_length=255,
+        verbose_name="İptal Nedeni",
+    )
+
+    refund_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[
+            MinValueValidator(Decimal("0.00")),
+        ],
+        verbose_name="İade Tutarı",
+    )
+
+    payment_refund = models.ForeignKey(
+        PaymentRefund,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="item_cancellation",
+        verbose_name="Ödeme İadesi",
+    )
+
+    cancelled_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="İptal Tarihi",
+    )
+
+    class Meta:
+        verbose_name = "Sipariş Kalemi İptali"
+        verbose_name_plural = "Sipariş Kalemi İptalleri"
+
+        ordering = [
+            "-cancelled_at",
+            "-pk",
+        ]
+
+        indexes = [
+            models.Index(
+                fields=["order_item", "-cancelled_at"],
+                name="soitemcancel_item_dt",
+            ),
+        ]
+
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gte=1),
+                name="soitemcancel_qty_gte_1",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(refund_amount__gte=0),
+                name="soitemcancel_refund_gte_0",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.quantity} adet iptal - "
+            f"OrderItem #{self.order_item_id}"
+        )
+
+
+class SubOrderItemCancellationUnit(models.Model):
+    """
+    Bir iptal kaydında iptal edilen belirli ürün birimini temsil eder.
+
+    Aynı OrderItem için aynı birimin birden fazla kez
+    iptal edilmesini veritabanı seviyesinde engeller.
+    """
+
+    cancellation = models.ForeignKey(
+        SubOrderItemCancellation,
+        on_delete=models.PROTECT,
+        related_name="units",
+        verbose_name="Ürün İptali",
+    )
+
+    order_item = models.ForeignKey(
+        OrderItem,
+        on_delete=models.PROTECT,
+        related_name="cancelled_units",
+        verbose_name="Sipariş Kalemi",
+    )
+
+    unit_number = models.PositiveSmallIntegerField(
+        validators=[
+            MinValueValidator(1),
+        ],
+        verbose_name="İptal Edilen Ürün Birimi",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Oluşturulma Tarihi",
+    )
+
+    class Meta:
+        verbose_name = "İptal Edilen Ürün Birimi"
+        verbose_name_plural = "İptal Edilen Ürün Birimleri"
+
+        ordering = [
+            "order_item_id",
+            "unit_number",
+        ]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["order_item", "unit_number"],
+                name="soitem_cancel_unit_uniq",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(unit_number__gte=1),
+                name="soitem_cancel_unit_gte1",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"OrderItem #{self.order_item_id} "
+            f"- iptal edilen birim {self.unit_number}"
+        )

@@ -30,7 +30,7 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 #ALLOWED_HOSTS = []
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost').split(',')
 
-CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS")
+CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS").split(",")
 
 
 IYZICO_API_KEY = config("IYZICO_API_KEY")
@@ -40,6 +40,24 @@ IYZICO_3DS_CALLBACK_URL = config("IYZICO_3DS_CALLBACK_URL")
 IYZICO_ENV = config("IYZICO_ENV", default="sandbox",)
 IYZICO_SANDBOX_IDENTITY_NUMBER = config("IYZICO_SANDBOX_IDENTITY_NUMBER", default="",)
 PUBLIC_BASE_URL = config("PUBLIC_BASE_URL")
+
+# İade kargo teslimat simülasyonu sadece DEBUG=True iken varsayılan olarak açık.
+RETURN_SIMULATED_DELIVERY_ENABLED = DEBUG
+
+# Müşteri kargoya verdiğini işaretledikten kaç dakika sonra
+# test ortamında teslimat simüle edilecek
+RETURN_SIMULATED_DELIVERY_DELAY_MINUTES = int(
+    os.getenv("RETURN_SIMULATED_DELIVERY_DELAY_MINUTES", "10")
+)
+
+#Canlı ortamda RETURN_SELLER_REVIEW_TIMEOUT_MINUTES çevre değişkenini tanımla. Şu anki 10 dakika yalnızca geliştirme/test akışı için
+# Teslimattan sonra satıcının itiraz süresi.
+# Geliştirmede 10 dakika; canlı ortamda açıkça yapılandırılmalı.
+RETURN_SELLER_REVIEW_TIMEOUT_MINUTES = (
+    10
+    if DEBUG
+    else int(os.environ["RETURN_SELLER_REVIEW_TIMEOUT_MINUTES"])
+)
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'

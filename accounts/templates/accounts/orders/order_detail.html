@@ -1,4 +1,5 @@
 {% extends "accounts/profile.html" %}
+{% load static %}
 {% load tz %}
 
 {% block title %}
@@ -290,12 +291,12 @@
     .order-item {
         display: flex;
         align-items: flex-start;
-
         gap: 14px;
-
         padding: 18px 20px;
-
         border-bottom: 1px solid #f1f5f9;
+        width: 100%;
+        box-sizing: border-box;
+        min-width: 0;
     }
 
 
@@ -341,22 +342,20 @@
 
 
     .order-item-main {
+        flex: 1 1 0;
         min-width: 0;
-        flex: 1;
     }
-
 
     .order-item-name {
         display: block;
-
+        max-width: 100%;
         margin-bottom: 5px;
-
         color: #0f172a;
-
         font-size: 0.94rem;
         font-weight: 700;
-
-        word-break: break-word;
+        white-space: normal;
+        overflow-wrap: break-word;
+        word-break: normal;
     }
 
 
@@ -371,6 +370,7 @@
         line-height: 1.45;
 
         word-break: break-word;
+        word-break: normal;
     }
 
 
@@ -380,14 +380,24 @@
         font-size: 0.76rem;
     }
 
+    .order-item-middle {
+        display: flex;
+        flex: 0 1 280px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        min-width: 0;
+    }
+
     .order-item-actions {
         display: flex;
 
-        flex-wrap: wrap;
-
+        flex-wrap: nowrap;
+        align-items: center;
         gap: 8px;
 
-        margin-top: 10px;
+        margin-top: 0;
+        width: 100%;
     }
 
 
@@ -395,7 +405,7 @@
         display: inline-flex;
 
         align-items: center;
-
+        justify-content: center;
         gap: 6px;
 
         min-height: 32px;
@@ -414,7 +424,7 @@
         font-weight: 600;
 
         text-decoration: none;
-
+        white-space: nowrap;
         transition:
             background 0.15s ease,
             border-color 0.15s ease,
@@ -442,13 +452,14 @@
 
     .order-item-side {
         display: flex;
+        flex: 0 0 auto;
         flex-direction: column;
 
         align-items: flex-end;
 
         gap: 5px;
 
-        flex-shrink: 0;
+        min-width: max-content;
     }
 
 
@@ -767,6 +778,270 @@
 
 
     /* =========================================================
+       RETURNS — kompakt yatay alan
+       ========================================================= */
+
+    .order-return-inline {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        margin-top: 0;
+    }
+
+    .order-return-inline-content {
+        flex: 0 1 auto;
+        min-width: 0;
+        width: auto;
+        color: #64748b;
+        font-size: 0.74rem;
+        line-height: 1.4;
+    }
+
+    .order-return-inline-content[hidden] {
+        display: none !important;
+    }
+
+    .order-return-inline-content i {
+        color: #0284c7;
+        margin-right: 3px;
+    }
+
+    .order-return-inline-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        gap: 6px;
+        min-height: 30px;
+        padding: 5px 10px;
+        border: 1px solid #0284c7;
+        border-radius: 7px;
+        background: #fff;
+        color: #0284c7;
+        font-size: 0.74rem;
+        font-weight: 600;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+
+    .order-return-inline-button:hover {
+        background: #f0f9ff;
+    }
+
+    .order-return-inline-button.secondary {
+        border-color: #cbd5e1;
+        color: #475569;
+    }
+
+    .order-return-inline-button.secondary:hover {
+        background: #f8fafc;
+    }
+
+    .order-return-inline-button[hidden] {
+        display: none !important;
+    }
+
+    /* Modallar */
+
+    .order-return-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        background: rgb(15 23 42 / 55%);
+    }
+
+    .order-return-modal[hidden] {
+        display: none !important;
+    }
+
+    .order-return-modal-panel {
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 440px;
+        max-height: 90vh;
+        overflow-y: auto;
+        padding: 20px;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 20px 60px rgb(15 23 42 / 20%);
+    }
+
+    .order-return-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .order-return-modal-header h3 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1rem;
+    }
+
+    .order-return-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 32px;
+        width: 32px;
+        height: 32px;
+        border: 0;
+        border-radius: 7px;
+        background: #f1f5f9;
+        color: #475569;
+        font-size: 1.3rem;
+        cursor: pointer;
+    }
+
+    .order-return-description {
+        margin: 10px 0 14px;
+        color: #64748b;
+        font-size: 0.8rem;
+        line-height: 1.5;
+    }
+
+    .order-return-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .order-return-entry {
+        min-width: 0;
+    }
+
+    .order-return-item {
+        padding: 10px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #fff;
+    }
+
+    .order-return-item-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 7px;
+    }
+
+    .order-return-reference {
+        color: #334155;
+        font-size: 0.79rem;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+
+    .order-return-status {
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #f1f5f9;
+        color: #475569;
+        font-size: 0.68rem;
+        font-weight: 700;
+    }
+
+    .order-return-meta {
+        display: grid;
+        gap: 4px;
+        color: #64748b;
+        font-size: 0.75rem;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+
+    .order-return-meta strong {
+        color: #475569;
+    }
+
+    .order-return-form {
+        display: grid;
+        gap: 12px;
+        margin-top: 14px;
+    }
+
+    .order-return-field {
+        display: grid;
+        gap: 5px;
+    }
+
+    .order-return-field label {
+        color: #475569;
+        font-size: 0.79rem;
+        font-weight: 600;
+    }
+
+    .order-return-field input,
+    .order-return-field select,
+    .order-return-field textarea {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 38px;
+        padding: 8px 10px;
+        border: 1px solid #cbd5e1;
+        border-radius: 7px;
+        background: #fff;
+        color: #334155;
+        font: inherit;
+        font-size: 0.82rem;
+    }
+
+    .order-return-field textarea {
+        min-height: 70px;
+        resize: vertical;
+    }
+
+    .order-return-submit,
+    .order-return-secondary-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 34px;
+        padding: 7px 10px;
+        border: 1px solid #0284c7;
+        border-radius: 7px;
+        background: #0284c7;
+        color: #fff;
+        font: inherit;
+        font-size: 0.76rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .order-return-submit:hover {
+        background: #0369a1;
+    }
+
+    .order-return-secondary-button {
+        margin-top: 9px;
+        border-color: #cbd5e1;
+        background: #fff;
+        color: #475569;
+    }
+
+    .order-return-secondary-button:hover {
+        background: #f8fafc;
+    }
+
+    .order-return-empty {
+        margin: 8px 0;
+        color: #64748b;
+        font-size: 0.76rem;
+    }
+
+
+
+
+    /* =========================================================
        RESPONSIVE
        ========================================================= */
 
@@ -806,6 +1081,51 @@
 
     @media (max-width: 600px) {
 
+        .order-return-modal-panel {
+            padding: 16px;
+        }
+
+        .order-item {
+            flex-wrap: wrap;
+        }
+    
+        .order-item-main {
+            flex: 1 1 calc(100% - 70px);
+        }
+    
+        .order-item-middle {
+            flex: 1 1 100%;
+            margin-left: 70px;
+        }
+    
+        .order-item-side {
+            flex: 1 1 100%;
+            margin-left: 70px;
+            align-items: flex-start;
+            min-width: 0;
+        }
+    
+        .order-item-actions {
+            flex-wrap: wrap;
+        }
+
+        .order-item-action-button {
+            white-space: normal;
+        }
+
+        .order-return-inline {
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .order-return-inline-content {
+            flex: 1 1 120px;
+            width: auto;
+        }
+
+        .order-return-inline-button {
+            white-space: normal;
+        }
         .order-address-grid {
             grid-template-columns: 1fr;
         }
@@ -1079,25 +1399,200 @@
 
                                 </div>
 
-                                <div class="order-item-actions">
+                                <div class="order-item-middle">
 
-                                    {% if sub_order.is_delivered %}
+                                    <div class="order-item-actions">
+
+                                        {% if sub_order.is_delivered %}
+                                            <a
+                                                href="#"
+                                                class="order-item-action-button review"
+                                            >
+                                                <i class="fa-regular fa-star"></i>
+                                                Ürünü Değerlendir
+                                            </a>
+                                        {% endif %}
+                                        
                                         <a
                                             href="#"
-                                            class="order-item-action-button review"
+                                            class="order-item-action-button question"
                                         >
-                                            <i class="fa-regular fa-star"></i>
-                                            Ürünü Değerlendir
+                                            <i class="fa-regular fa-circle-question"></i>
+                                            Satıcıya Soru Sor
                                         </a>
+                                    </div>
+
+                                    {% if sub_order.is_delivered %}
+                                        <div class="order-return-inline">
+                                            
+                                        
+                                            {% if item.can_request_return %}
+                                                <button
+                                                    type="button"
+                                                    class="order-return-inline-button"
+                                                    data-return-modal-open="return-create-modal-{{ item.pk }}"
+                                                >
+                                                    <i class="fa-solid fa-plus"></i>
+                                                    İade talebi oluştur
+                                                </button>
+                                            {% endif %}
+                                            
+                                            <button
+                                                type="button"
+                                                class="order-return-inline-button secondary"
+                                                data-return-modal-open="return-history-modal-{{ item.pk }}"
+                                                data-return-history-button="{{ item.pk }}"
+                                                {% if not item.customer_return_requests %}hidden{% endif %}
+                                            >
+                                                İade durumunu görüntüle
+                                            </button>
+                                        </div>
+                                    
+                                        {# İade oluşturma modalı #}
+                                        {% if item.can_request_return %}
+                                            <div
+                                                class="order-return-modal"
+                                                id="return-create-modal-{{ item.pk }}"
+                                                hidden
+                                            >
+                                                <div
+                                                    class="order-return-modal-panel"
+                                                    role="dialog"
+                                                    aria-modal="true"
+                                                    aria-labelledby="create-modal-title-{{ item.pk }}"
+                                                >
+                                                    <div class="order-return-modal-header">
+                                                        <h3 id="create-modal-title-{{ item.pk }}">
+                                                            İade talebi oluştur
+                                                        </h3>
+                                                    
+                                                        <button
+                                                            type="button"
+                                                            class="order-return-close"
+                                                            data-return-modal-close
+                                                            aria-label="Kapat"
+                                                        >&times;</button>
+                                                    </div>
+                                                
+                                                    <p class="order-return-description">
+                                                        {% if item.remaining_return_quantity > 1 %}
+                                                            İade etmek istediğiniz adedi ve iade nedenini seçin.
+                                                        {% else %}
+                                                            İade nedenini seçin.
+                                                        {% endif %}
+                                                    </p>
+                                                
+                                                    <form
+                                                        method="post"
+                                                        action="{% url 'accounts:customer_return_create' order_number=order.order_number order_item_id=item.pk %}"
+                                                        class="order-return-form"
+                                                        data-ajax-return-form
+                                                        data-return-form-kind="create"
+                                                        data-item-id="{{ item.pk }}"
+                                                    >
+                                                        {% csrf_token %}
+                                                
+                                                        <div class="order-return-field" data-quantity-control>
+                                                            {% if item.remaining_return_quantity > 1 %}
+                                                                <label for="return-quantity-{{ item.pk }}">
+                                                                    İade edilecek adet
+                                                                </label>
+                                                            
+                                                                <select
+                                                                    name="quantity"
+                                                                    id="return-quantity-{{ item.pk }}"
+                                                                    required
+                                                                >
+                                                                    {% for choice in item.return_quantity_choices %}
+                                                                        <option value="{{ choice }}">
+                                                                            {{ choice }} adet
+                                                                        </option>
+                                                                    {% endfor %}
+                                                                </select>
+                                                            {% else %}
+                                                                <input type="hidden" name="quantity" value="1">
+                                                            {% endif %}
+                                                        </div>
+                                                    
+                                                        <div class="order-return-field">
+                                                            <label for="return-reason-{{ item.pk }}">
+                                                                İade nedeni
+                                                            </label>
+                                                        
+                                                            <select
+                                                                name="reason"
+                                                                id="return-reason-{{ item.pk }}"
+                                                                required
+                                                            >
+                                                                <option value="">İade nedeni seçin</option>
+                                                        
+                                                                {% for value, label in return_reason_choices %}
+                                                                    <option value="{{ value }}">{{ label }}</option>
+                                                                {% endfor %}
+                                                            </select>
+                                                        </div>
+                                                    
+                                                        <div class="order-return-field">
+                                                            <label for="return-note-{{ item.pk }}">
+                                                                Açıklama
+                                                            </label>
+                                                        
+                                                            <textarea
+                                                                name="customer_note"
+                                                                id="return-note-{{ item.pk }}"
+                                                                maxlength="2000"
+                                                                placeholder="Gerekirse açıklama yazın."
+                                                            ></textarea>
+                                                        </div>
+                                                    
+                                                        <button type="submit" class="order-return-submit">
+                                                            Talebi gönder
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                        
+                                        {# İade geçmişi ve kargo bilgisi modalı #}
+                                        <div
+                                            class="order-return-modal"
+                                            id="return-history-modal-{{ item.pk }}"
+                                            hidden
+                                        >
+                                            <div
+                                                class="order-return-modal-panel"
+                                                role="dialog"
+                                                aria-modal="true"
+                                                aria-labelledby="return-history-title-{{ item.pk }}"
+                                            >
+                                                <div class="order-return-modal-header">
+                                                    <h3 id="return-history-title-{{ item.pk }}">
+                                                        İade taleplerim
+                                                    </h3>
+                                                
+                                                    <button
+                                                        type="button"
+                                                        class="order-return-close"
+                                                        data-return-modal-close
+                                                        aria-label="Kapat"
+                                                    >&times;</button>
+                                                </div>
+                                            
+                                                <div
+                                                    class="order-return-list"
+                                                    data-return-list="{{ item.pk }}"
+                                                >
+                                                    {% for return_request in item.customer_return_requests %}
+                                                        {% include "accounts/orders/return_request.html" with return_request=return_request order=order cargo_company_choices=cargo_company_choices %}
+                                                    {% empty %}
+                                                        <p class="order-return-empty" data-return-empty>
+                                                            Henüz iade talebiniz bulunmuyor.
+                                                        </p>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </div>
                                     {% endif %}
-                                
-                                    <a
-                                        href="#"
-                                        class="order-item-action-button question"
-                                    >
-                                        <i class="fa-regular fa-circle-question"></i>
-                                        Satıcıya Soru Sor
-                                    </a>
                                 
                                 </div>
 
@@ -1583,6 +2078,326 @@
 
 
 </div>
+
+
+
+<!-- WIZARD UI CSS -->
+<style>
+  .wizard-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100000; display: flex; align-items: center; justify-content: center; }
+  .wizard-modal-overlay[hidden] { display: none !important; }
+  .wizard-modal-box { background: #fff; padding: 24px; border-radius: 8px; width: 100%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+  .wizard-modal-title { margin-top: 0; color: #1e293b; font-size: 1.25rem; }
+  .wizard-modal-text { color: #475569; margin-bottom: 24px; font-size: 1rem;}
+  .wizard-modal-actions { display: flex; justify-content: flex-end; gap: 12px; }
+  .wizard-btn-cancel { background: transparent; border: 1px solid #cbd5e1; padding: 8px 16px; border-radius: 6px; cursor: pointer; color: #475569; font-weight: 600; font-size: 0.95rem; }
+  .wizard-btn-cancel:hover { background: #f8f9fa; }
+  .wizard-btn-confirm { background: var(--teal-600); border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; color: #fff; font-weight: 600; font-size: 0.95rem; }
+  .wizard-btn-confirm:hover { background: var(--teal-700); }
+  body.modal-open { overflow: hidden; }
+  #wizard-toast-container { position: fixed; top: 80px; right: 20px; z-index: 100000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+  .wizard-toast { background: #fff; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); padding: 16px 20px; display: flex; align-items: center; gap: 12px; transform: translateX(120%); opacity: 0; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); pointer-events: auto; min-width: 250px; border-left: 4px solid #cbd5e1; }
+  .wizard-toast.show { transform: translateX(0); opacity: 1; }
+  .wizard-toast-success { border-left-color: #10b981; }
+  .wizard-toast-success i { color: #10b981; font-size: 1.2rem; }
+  .wizard-toast-error { border-left-color: #ef4444; }
+  .wizard-toast-error i { color: #ef4444; font-size: 1.2rem; }
+  .wizard-toast-warning { border-left-color: #f59e0b; }
+  .wizard-toast-warning i { color: #f59e0b; font-size: 1.2rem; }
+  .wizard-toast-close { margin-left: auto; background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; transition: 0.2s; }
+  .wizard-toast-close:hover { color: #1e293b; }
+</style>
+
+<!-- WIZARD UI TOAST CONTAINER -->
+<div id="wizard-toast-container"></div>
+
+<!-- DJANGO MESSAGES -->
+<div id="wizard-django-messages" hidden>
+
+    {% for message in messages %}
+
+        <div
+            data-wizard-message
+            data-wizard-message-type="{% if message.tags == 'success' %}success{% elif message.tags == 'error' %}error{% elif message.tags == 'warning' %}warning{% else %}info{% endif %}"
+        >
+            {{ message }}
+        </div>
+
+    {% endfor %}
+
+</div>
+
+
+
+
+
+
+<script src="{% static 'products/js/wizard_ui.js' %}"></script>
+
+
+<script>
+    (function () {
+        "use strict";
+    
+        function showNotice(message, type) {
+            if (
+                window.WizardUI &&
+                typeof window.WizardUI.showToast === "function"
+            ) {
+                window.WizardUI.showToast(
+                    message,
+                    type === "error" ? "error" : "success"
+                );
+            } else {
+                console[type === "error" ? "error" : "log"](message);
+            }
+        }
+    
+        function closeModal(modal) {
+            if (modal) {
+                modal.hidden = true;
+            }
+        }
+    
+        function openModal(modal) {
+            if (modal) {
+                modal.hidden = false;
+            }
+        }
+    
+        function updateQuantityControl(itemId, remaining) {
+            const modal = document.getElementById(
+                "return-create-modal-" + itemId
+            );
+        
+            const wrapper = modal?.querySelector("[data-quantity-control]");
+        
+            if (!wrapper) {
+                return;
+            }
+        
+            wrapper.replaceChildren();
+        
+            if (remaining <= 1) {
+                const input = document.createElement("input");
+                input.type = "hidden";
+                input.name = "quantity";
+                input.value = "1";
+                wrapper.appendChild(input);
+                return;
+            }
+        
+            const label = document.createElement("label");
+            const selectId = "return-quantity-" + itemId;
+        
+            label.htmlFor = selectId;
+            label.textContent = "İade edilecek adet";
+        
+            const select = document.createElement("select");
+            select.name = "quantity";
+            select.id = selectId;
+            select.required = true;
+        
+            for (let count = 1; count <= remaining; count++) {
+                const option = document.createElement("option");
+                option.value = String(count);
+                option.textContent = count + " adet";
+                select.appendChild(option);
+            }
+        
+            wrapper.append(label, select);
+        }
+    
+        document.addEventListener("click", function (event) {
+            const openButton = event.target.closest(
+                "[data-return-modal-open]"
+            );
+        
+            if (openButton) {
+                openModal(
+                    document.getElementById(
+                        openButton.dataset.returnModalOpen
+                    )
+                );
+                return;
+            }
+        
+            const closeButton = event.target.closest(
+                "[data-return-modal-close]"
+            );
+        
+            if (closeButton) {
+                closeModal(closeButton.closest(".order-return-modal"));
+                return;
+            }
+        
+            if (event.target.matches(".order-return-modal")) {
+                closeModal(event.target);
+            }
+        });
+    
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape") {
+                document.querySelectorAll(
+                    ".order-return-modal:not([hidden])"
+                ).forEach(closeModal);
+            }
+        });
+    
+        document.addEventListener("submit", async function (event) {
+            const form = event.target.closest("[data-ajax-return-form]");
+        
+            if (!form) {
+                return;
+            }
+        
+            event.preventDefault();
+        
+            const submitButton = form.querySelector(
+                'button[type="submit"]'
+            );
+        
+            const originalButtonText = submitButton
+                ? submitButton.innerHTML
+                : "";
+        
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.textContent = "İşleniyor...";
+            }
+        
+            try {
+                const response = await fetch(form.action, {
+                    method: "POST",
+                    body: new FormData(form),
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Accept": "application/json"
+                    },
+                    credentials: "same-origin"
+                });
+            
+                const data = await response.json();
+            
+                if (!response.ok || !data.ok) {
+                    showNotice(
+                        data.message || "İşlem tamamlanamadı.",
+                        "error"
+                    );
+                    return;
+                }
+            
+                if (form.dataset.returnFormKind === "create") {
+                    const itemId = String(data.item_id);
+                    const list = document.querySelector(
+                        '[data-return-list="' + itemId + '"]'
+                    );
+                
+                    if (!list) {
+                        showNotice(
+                            "Talep oluşturuldu ancak iade listesi bulunamadı. "
+                            + "Sayfayı yenileyerek sonucu kontrol edin.",
+                            "error"
+                        );
+                        return;
+                    }
+                
+                    const emptyMessage = list.querySelector(
+                        "[data-return-empty]"
+                    );
+                
+                    if (emptyMessage) {
+                        emptyMessage.remove();
+                    }
+                
+                    data.items.forEach(function (item) {
+                        list.insertAdjacentHTML("beforeend", item.html);
+                    });
+                
+                    const remaining = Number(data.remaining_quantity);
+                
+                    const createButton = document.querySelector(
+                        '[data-return-modal-open="return-create-modal-'
+                        + itemId + '"]'
+                    );
+                
+                    if (createButton) {
+                        createButton.hidden = remaining <= 0;
+                    }
+                
+                    const historyButton = document.querySelector(
+                        '[data-return-history-button="' + itemId + '"]'
+                    );
+                
+                    if (historyButton) {
+                        historyButton.hidden = false;
+                    }
+                
+                    const summary = document.querySelector(
+                        '[data-return-summary="' + itemId + '"]'
+                    );
+                                    
+                    if (summary) {
+                        const totalEntries = list.querySelectorAll(
+                            "[data-return-entry]"
+                        ).length;
+                    
+                        summary.textContent = totalEntries + " iade talebi";
+                    
+                        const summaryContainer = summary.closest(
+                            ".order-return-inline-content"
+                        );
+                    
+                        if (summaryContainer) {
+                            summaryContainer.hidden = totalEntries > 0;
+                        }
+                    }
+                
+                    updateQuantityControl(itemId, remaining);
+                    form.reset();
+                
+                    closeModal(form.closest(".order-return-modal"));
+                
+                    showNotice(data.message, "success");
+                
+                    /*
+                     * Kullanıcı sayfada yukarı kaydırılmadan,
+                     * kargo bilgilerini gir butonunu doğrudan görür.
+                     */
+                    openModal(
+                        document.getElementById(
+                            "return-history-modal-" + itemId
+                        )
+                    );
+                
+                    return;
+                }
+            
+                if (form.dataset.returnFormKind === "shipment") {
+                    const entry = form.closest("[data-return-entry]");
+                
+                    if (entry) {
+                        entry.outerHTML = data.html;
+                    }
+                
+                    showNotice(data.message, "success");
+                }
+            
+            } catch (error) {
+                showNotice(
+                    "İşlem sırasında bağlantı hatası oluştu. "
+                    + "Lütfen tekrar deneyin.",
+                    "error"
+                );
+            
+            } finally {
+                if (submitButton && submitButton.isConnected) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonText;
+                }
+            }
+        });
+    })();
+</script>
 
 
 {% endblock %}

@@ -5,7 +5,8 @@ from .views import (
     CollectionListView, CollectionDetailView, CollectionDeleteAPIView, UserQuestionsListView, MarkAnswerAsReadAPIView,
     ProductQADeleteAPIView,
     StoredCardListView, StoredCardCreateAPIView, StoredCardDeleteAPIView, StoredCardDefaultAPIView,
-    CustomerOrderListView, CustomerOrderDetailView
+    CustomerOrderListView, CustomerOrderDetailView,
+    CustomerReturnCreateView, CustomerReturnShipmentView
     )
 app_name = 'accounts'
 
@@ -25,6 +26,9 @@ urlpatterns = [
     #order
     path('orders/', CustomerOrderListView.as_view(), name="order_list",),
     path('orders/<str:order_number>/', CustomerOrderDetailView.as_view(), name="order_detail",),
+    # Returns
+    path('orders/<str:order_number>/items/<int:order_item_id>/returns/', CustomerReturnCreateView.as_view(), name='customer_return_create',),
+    path('orders/<str:order_number>/returns/<int:return_request_id>/shipment/', CustomerReturnShipmentView.as_view(), name='customer_return_shipment',),
 
     #card
     path('stored-cards/', StoredCardListView.as_view(), name="stored_card_list",),

@@ -2,6 +2,7 @@ from decimal import Decimal
 from uuid import uuid4
 from unittest.mock import patch
 
+from django.db.models import Sum
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
@@ -27,6 +28,9 @@ from orders.models import (
     SubOrder,
     SubOrderStatus,
     PaymentTransactionItemType,
+    RefundType, ReturnRequest,
+    ReturnStatus,
+    SubOrderItemCancellation, SubOrderItemCancellationUnit
 )
 
 
@@ -34,6 +38,7 @@ from orders.services.refund import (
     RefundError,
     RefundService,
 )
+from orders.services.returns import ReturnService
 from datetime import timedelta
 
 from django.utils import timezone
@@ -262,6 +267,7 @@ class RefundServiceTests(TestCase):
             transaction_status=1,
         )
 
+    
     def _create_refund(
         self,
         *,
@@ -269,6 +275,7 @@ class RefundServiceTests(TestCase):
         suborder,
         amount,
         status=RefundStatus.PENDING,
+        refund_shipping=False,
     ):
         return PaymentRefund.objects.create(
             payment_transaction=payment_transaction,
@@ -277,7 +284,91 @@ class RefundServiceTests(TestCase):
             currency="TRY",
             status=status,
             reason="Test refund",
+            refund_type=RefundType.SUBORDER_CANCELLATION,
+            refund_shipping=refund_shipping,
         )
+
+
+    def _install_provider_success_authentication(self, mock_provider, payment_transaction):
+        """Successful mock responses include the fields required by RefundService.
+
+        The existing test response remains authoritative for status, amount,
+        currency, transaction ID, and refund reference. Only missing auth fields
+        are filled, so deliberately malformed responses remain malformed.
+        """
+        from django.conf import settings
+        import iyzipay
+
+        original_side_effect = mock_provider.side_effect
+        original_return_value = mock_provider.return_value
+        responses = (
+            list(original_side_effect)
+            if isinstance(original_side_effect, (list, tuple))
+            else None
+        )
+        response_index = 0
+
+        def provider_response(**kwargs):
+            nonlocal response_index
+
+            if responses is not None:
+                if response_index >= len(responses):
+                    raise StopIteration("No mocked provider response remains.")
+                raw_response = responses[response_index]
+                response_index += 1
+                if isinstance(raw_response, BaseException):
+                    raise raw_response
+            elif isinstance(original_side_effect, BaseException):
+                raise original_side_effect
+            elif callable(original_side_effect):
+                raw_response = original_side_effect(**kwargs)
+            elif original_side_effect is not None:
+                # unittest.mock stores a list side_effect as an iterator
+                # (_MockIter), so consume its next response instead of
+                # accidentally returning the iterator as the provider payload.
+                if hasattr(original_side_effect, "__next__"):
+                    raw_response = next(original_side_effect)
+                else:
+                    raw_response = original_side_effect
+            else:
+                raw_response = original_return_value
+
+            if not isinstance(raw_response, dict):
+                return raw_response
+            if str(raw_response.get("status") or "").strip().lower() != "success":
+                return raw_response
+
+            response = dict(raw_response)
+            response.setdefault("paymentId", payment_transaction.payment_id)
+            response.setdefault("conversationId", kwargs.get("conversation_id"))
+
+            # Generate a valid signature for otherwise-successful test responses.
+            # The provider's claimed price/currency/IDs are not overwritten.
+            if (
+                "signature" not in response
+                and response.get("paymentId")
+                and response.get("conversationId")
+                and response.get("currency")
+                and response.get("price") is not None
+            ):
+                signed_price = format(
+                    Decimal(str(response["price"])).normalize(),
+                    "f",
+                )
+                response["signature"] = (
+                    iyzipay.Refund().calculate_hmac_sha256_signature(
+                        [
+                            str(response["paymentId"]),
+                            signed_price,
+                            str(response["currency"]),
+                            str(response["conversationId"]),
+                        ],
+                        settings.IYZICO_SECRET_KEY,
+                    )
+                )
+            return response
+
+        mock_provider.side_effect = provider_response
 
     # ======================================================================
     # 1. SINGLE SUBORDER / FULL REFUND
@@ -336,6 +427,10 @@ class RefundServiceTests(TestCase):
             "refundHostReference": "HOST-REF-500",
             "retryable": False,
         }
+
+        self._install_provider_success_authentication(
+            mock_provider, payment_transaction
+        )
 
         result = RefundService.process_refund(
             payment_refund_id=refund.pk,
@@ -473,6 +568,10 @@ class RefundServiceTests(TestCase):
             "retryable": False,
         }
 
+        self._install_provider_success_authentication(
+            mock_provider, payment_transaction
+        )
+
         RefundService.process_refund(
             payment_refund_id=refund.pk,
         )
@@ -587,6 +686,10 @@ class RefundServiceTests(TestCase):
             },
         ]
 
+        self._install_provider_success_authentication(
+            mock_provider, payment_transaction
+        )
+
         RefundService.process_refund(
             payment_refund_id=refund_a.pk,
         )
@@ -676,6 +779,10 @@ class RefundServiceTests(TestCase):
             "refundHostReference": "HOST-IDEM",
             "retryable": False,
         }
+
+        self._install_provider_success_authentication(
+            mock_provider, payment_transaction
+        )
 
         RefundService.process_refund(
             payment_refund_id=refund.pk,
@@ -1044,6 +1151,10 @@ class RefundServiceTests(TestCase):
             },
         ]
 
+        self._install_provider_success_authentication(
+            mock_provider, payment_transaction
+        )
+
         RefundService.process_refund(
             payment_refund_id=refund.pk,
         )
@@ -1154,6 +1265,10 @@ class RefundServiceTests(TestCase):
             "refundHostReference": "HOST-WRONG",
         }
 
+        self._install_provider_success_authentication(
+            mock_provider, payment_transaction
+        )
+
         RefundService.process_refund(
             payment_refund_id=refund.pk,
         )
@@ -1244,6 +1359,10 @@ class RefundServiceTests(TestCase):
             "refundHostReference": "HOST-RETRY-SUCCESS",
             "retryable": False,
         }
+
+        self._install_provider_success_authentication(
+            mock_provider, payment_transaction
+        )
 
         RefundService.process_refund(
             payment_refund_id=refund.pk,
@@ -1360,7 +1479,12 @@ class RefundServiceTests(TestCase):
             RefundStatus.RECONCILIATION_REQUIRED,
         )
 
-        with self.assertRaises(RefundError):
+        # Mutabakat gerektiren iade otomatik yeniden denenmemeli.
+        # Servis, sağlayıcı çağrısı yapmadan kontrollü bir hata yükseltir.
+        with self.assertRaisesMessage(
+            RefundError,
+            "Bu iade için önce provider mutabakatı yapılmalıdır.",
+        ):
             RefundService.process_refund(
                 payment_refund_id=refund.pk,
             )
@@ -1557,6 +1681,10 @@ class RefundServiceTests(TestCase):
             },
         ]
 
+        self._install_provider_success_authentication(
+            mock_provider, payment_transaction
+        )
+
         result = RefundService.process_refund(
             payment_refund_id=refund.pk,
         )
@@ -1728,6 +1856,10 @@ class RefundServiceTests(TestCase):
             "retryable": False,
         }
 
+        self._install_provider_success_authentication(
+            mock_provider, payment_transaction
+        )
+
         result = RefundService.process_refund(
             payment_refund_id=refund.pk,
         )
@@ -1885,6 +2017,7 @@ class RefundServiceTests(TestCase):
             currency="TRY",
             status=RefundStatus.PENDING,
             reason="Test refund",
+            refund_type=RefundType.SUBORDER_CANCELLATION,
             refund_shipping=True,
         )
 
@@ -1919,6 +2052,10 @@ class RefundServiceTests(TestCase):
             return responses[kwargs["payment_transaction_id"]]
 
         mock_provider.side_effect = provider_response
+
+        self._install_provider_success_authentication(
+            mock_provider, payment_transaction
+        )
 
         result = RefundService.process_refund(
             payment_refund_id=refund.pk,
@@ -2032,3 +2169,865 @@ class RefundServiceTests(TestCase):
             mock_provider.call_count,
             3,
         )
+
+    def test_unit_refund_amount_distributes_remaining_cent(self):
+        self.assertEqual(
+            RefundService._calculate_unit_refund_amount(
+                paid_price=Decimal("100.01"),
+                quantity=2,
+                unit_number=1,
+            ),
+            Decimal("50.01"),
+        )
+
+        self.assertEqual(
+            RefundService._calculate_unit_refund_amount(
+                paid_price=Decimal("100.01"),
+                quantity=2,
+                unit_number=2,
+            ),
+            Decimal("50.00"),
+        )
+
+    
+    @patch.object(RefundService, "_call_provider")
+    def test_product_success_shipping_failure_keeps_return_pending(
+        self,
+        mock_provider,
+    ):
+        order = self._create_order(
+            total=Decimal("129.99"),
+        )
+        order.subtotal = Decimal("30.00")
+        order.shipping_amount = Decimal("99.99")
+        order.total_amount = Decimal("129.99")
+        order.save(
+            update_fields=[
+                "subtotal",
+                "shipping_amount",
+                "total_amount",
+            ]
+        )
+
+        suborder = SubOrder.objects.create(
+            order=order,
+            store=self.store_a,
+            store_name_snapshot=self.store_a.store_name,
+            subtotal=Decimal("30.00"),
+            discount_amount=Decimal("0.00"),
+            shipping_amount=Decimal("99.99"),
+            tax_amount=Decimal("0.00"),
+            total_amount=Decimal("129.99"),
+            status=SubOrderStatus.DELIVERED,
+        )
+
+        store_product = self._create_store_product(
+            store=self.store_a,
+        )
+        order_item = self._create_order_item(
+            suborder=suborder,
+            store_product=store_product,
+            total=Decimal("30.00"),
+        )
+        order_item.quantity = 2
+        order_item.unit_price = Decimal("15.00")
+        order_item.total_amount = Decimal("30.00")
+        order_item.save(
+            update_fields=[
+                "quantity",
+                "unit_price",
+                "total_amount",
+            ]
+        )
+
+        payment_transaction = self._create_payment(
+            order=order,
+            amount=Decimal("129.99"),
+        )
+
+        product_payment_item = self._create_transaction_item(
+            payment_transaction=payment_transaction,
+            order_item=order_item,
+            suborder=suborder,
+            price=Decimal("30.00"),
+            provider_transaction_id="PTX-PRODUCT-TEST",
+        )
+
+        shipping_payment_item = PaymentTransactionItem.objects.create(
+            payment_transaction=payment_transaction,
+            suborder=suborder,
+            order_item=None,
+            item_type=PaymentTransactionItemType.SHIPPING,
+            provider_item_id=f"SHIP-{suborder.pk}",
+            provider_transaction_id="PTX-SHIPPING-TEST",
+            price=Decimal("99.99"),
+            paid_price=Decimal("99.99"),
+            transaction_status=1,
+        )
+
+        refund = PaymentRefund.objects.create(
+            payment_transaction=payment_transaction,
+            suborder=suborder,
+            amount=Decimal("114.99"),
+            currency="TRY",
+            status=RefundStatus.PENDING,
+            reason="Customer withdrawal",
+            refund_type=RefundType.CUSTOMER_REQUEST,
+            refund_shipping=True,
+        )
+
+        return_request = ReturnRequest.objects.create(
+            order_item=order_item,
+            unit_number=2,
+            reason="withdrawal",
+            reference=f"RET-TEST-{uuid4().hex[:12]}",
+            requested_by=self.user,
+            status="refund_pending",
+            payment_refund=refund,
+        )
+
+        product_refund_item = PaymentRefundItem.objects.create(
+            payment_refund=refund,
+            payment_transaction_item=product_payment_item,
+            amount=Decimal("15.00"),
+            status=RefundStatus.PENDING,
+            conversation_id=f"TEST-PRODUCT-{uuid4().hex}",
+        )
+
+        shipping_refund_item = PaymentRefundItem.objects.create(
+            payment_refund=refund,
+            payment_transaction_item=shipping_payment_item,
+            amount=Decimal("99.99"),
+            status=RefundStatus.PENDING,
+            conversation_id=f"TEST-SHIPPING-{uuid4().hex}",
+        )
+
+        def provider_response(**kwargs):
+            if kwargs["payment_transaction_id"] == "PTX-PRODUCT-TEST":
+                return {
+                    "status": "success",
+                    "paymentTransactionId": "PTX-PRODUCT-TEST",
+                    "price": "15.00",
+                    "currency": "TRY",
+                    "refundHostReference": "HOST-PRODUCT-TEST",
+                    "retryable": False,
+                }
+
+            if kwargs["payment_transaction_id"] == "PTX-SHIPPING-TEST":
+                return {
+                    "status": "failure",
+                    "errorCode": "TEST_SHIPPING_FAILURE",
+                    "errorMessage": "Simulated shipping refund failure",
+                    "retryable": False,
+                }
+
+            raise AssertionError(
+                "Unexpected provider transaction ID: "
+                f"{kwargs['payment_transaction_id']}"
+            )
+
+        mock_provider.side_effect = provider_response
+
+        self._install_provider_success_authentication(
+            mock_provider, payment_transaction
+        )
+
+        result = RefundService.process_refund(
+            payment_refund_id=refund.pk,
+        )
+
+        refund.refresh_from_db()
+        return_request.refresh_from_db()
+        product_refund_item.refresh_from_db()
+        shipping_refund_item.refresh_from_db()
+        payment_transaction.refresh_from_db()
+
+        self.assertEqual(result.status, RefundStatus.FAILED)
+        self.assertEqual(refund.status, RefundStatus.FAILED)
+
+        self.assertEqual(
+            product_refund_item.status,
+            RefundStatus.SUCCESS,
+        )
+        self.assertEqual(
+            product_refund_item.provider_refund_id,
+            "HOST-PRODUCT-TEST",
+        )
+
+        self.assertEqual(
+            shipping_refund_item.status,
+            RefundStatus.FAILED,
+        )
+        self.assertEqual(
+            shipping_refund_item.provider_error_code,
+            "TEST_SHIPPING_FAILURE",
+        )
+        self.assertFalse(shipping_refund_item.retryable)
+
+        self.assertEqual(return_request.status, "refund_pending")
+        self.assertEqual(
+            payment_transaction.status,
+            PaymentStatus.PARTIALLY_REFUNDED,
+        )
+        self.assertEqual(mock_provider.call_count, 2)
+
+        # Başarılı ürün iadesi ikinci kez gönderilmemeli.
+        RefundService.process_refund(
+            payment_refund_id=refund.pk,
+        )
+        self.assertEqual(mock_provider.call_count, 2)
+
+
+    def _create_two_unit_return_scenario(self):
+        total = Decimal("129.99")
+        subtotal = Decimal("30.00")
+        shipping = Decimal("99.99")
+    
+        order = self._create_order(total=total)
+        order.subtotal = subtotal
+        order.shipping_amount = shipping
+        order.total_amount = total
+        order.save(
+            update_fields=[
+                "subtotal",
+                "shipping_amount",
+                "total_amount",
+            ]
+        )
+    
+        suborder = self._create_suborder(
+            order=order,
+            store=self.store_a,
+            total=total,
+            status=SubOrderStatus.DELIVERED,
+        )
+        suborder.subtotal = subtotal
+        suborder.shipping_amount = shipping
+        suborder.total_amount = total
+        suborder.save(
+            update_fields=[
+                "subtotal",
+                "shipping_amount",
+                "total_amount",
+            ]
+        )
+    
+        store_product = self._create_store_product(
+            store=self.store_a,
+        )
+    
+        order_item = self._create_order_item(
+            suborder=suborder,
+            store_product=store_product,
+            total=subtotal,
+        )
+        order_item.quantity = 2
+        order_item.unit_price = Decimal("15.00")
+        order_item.total_amount = subtotal
+        order_item.save(
+            update_fields=[
+                "quantity",
+                "unit_price",
+                "total_amount",
+            ]
+        )
+    
+        payment_transaction = self._create_payment(
+            order=order,
+            amount=total,
+        )
+    
+        product_payment_item = self._create_transaction_item(
+            payment_transaction=payment_transaction,
+            order_item=order_item,
+            suborder=suborder,
+            price=subtotal,
+            provider_transaction_id="PTX-RETURN-PRODUCT",
+        )
+    
+        shipping_payment_item = PaymentTransactionItem.objects.create(
+            payment_transaction=payment_transaction,
+            suborder=suborder,
+            order_item=None,
+            item_type=PaymentTransactionItemType.SHIPPING,
+            provider_item_id=f"SHIP-{suborder.pk}",
+            provider_transaction_id="PTX-RETURN-SHIPPING",
+            price=shipping,
+            paid_price=shipping,
+            transaction_status=1,
+        )
+    
+        return {
+            "order": order,
+            "suborder": suborder,
+            "order_item": order_item,
+            "payment_transaction": payment_transaction,
+            "product_payment_item": product_payment_item,
+            "shipping_payment_item": shipping_payment_item,
+        }
+    
+    
+    def _create_unit_return_request(
+        self,
+        *,
+        order_item,
+        unit_number,
+        reason,
+    ):
+        return ReturnRequest.objects.create(
+            order_item=order_item,
+            unit_number=unit_number,
+            reason=reason,
+            requested_by=self.user,
+            status=ReturnStatus.AWAITING_SELLER_REVIEW,
+        )
+
+    def test_withdrawal_refunds_shipping_only_on_last_unit(self):
+        data = self._create_two_unit_return_scenario()
+        order_item = data["order_item"]
+
+        store_product = order_item.store_product
+        store_product.sold_count = order_item.quantity
+        store_product.save(update_fields=["sold_count"])
+
+        first_request = self._create_unit_return_request(
+            order_item=order_item,
+            unit_number=1,
+            reason="withdrawal",
+        )
+
+        approved_first = ReturnService.approve_return(
+            return_request_id=first_request.pk,
+            store=self.store_a,
+            approved_by=self.user,
+        )
+
+        first_refund = approved_first.payment_refund
+
+        self.assertEqual(first_refund.amount, Decimal("15.00"))
+        self.assertFalse(first_refund.refund_shipping)
+
+        self.assertFalse(
+            PaymentRefundItem.objects.filter(
+                payment_refund=first_refund,
+                payment_transaction_item__item_type=(
+                    PaymentTransactionItemType.SHIPPING
+                ),
+            ).exists()
+        )
+
+        second_request = self._create_unit_return_request(
+            order_item=order_item,
+            unit_number=2,
+            reason="withdrawal",
+        )
+
+        approved_second = ReturnService.approve_return(
+            return_request_id=second_request.pk,
+            store=self.store_a,
+            approved_by=self.user,
+        )
+
+        second_refund = approved_second.payment_refund
+
+        self.assertEqual(
+            second_refund.amount,
+            Decimal("114.99"),
+        )
+        self.assertTrue(second_refund.refund_shipping)
+
+        second_items = list(
+            PaymentRefundItem.objects
+            .filter(payment_refund=second_refund)
+            .select_related("payment_transaction_item")
+        )
+
+        amounts_by_type = {
+            item.payment_transaction_item.item_type: item.amount
+            for item in second_items
+        }
+
+        self.assertEqual(
+            amounts_by_type[PaymentTransactionItemType.PRODUCT],
+            Decimal("15.00"),
+        )
+        self.assertEqual(
+            amounts_by_type[PaymentTransactionItemType.SHIPPING],
+            Decimal("99.99"),
+        )
+
+
+    def test_defective_return_refunds_shipping_once(self):
+        data = self._create_two_unit_return_scenario()
+        order_item = data["order_item"]
+
+        # Senaryoda satın alınan iki ürünün stok satış sayısını hazırla.
+        store_product = order_item.store_product
+        store_product.sold_count = order_item.quantity
+        store_product.save(update_fields=["sold_count"])
+
+        first_request = self._create_unit_return_request(
+            order_item=order_item,
+            unit_number=1,
+            reason="defective",
+        )
+
+        approved_first = ReturnService.approve_return(
+            return_request_id=first_request.pk,
+            store=self.store_a,
+            approved_by=self.user,
+        )
+
+        first_refund = approved_first.payment_refund
+
+        self.assertEqual(
+            first_refund.amount,
+            Decimal("114.99"),
+        )
+        self.assertTrue(first_refund.refund_shipping)
+
+        second_request = self._create_unit_return_request(
+            order_item=order_item,
+            unit_number=2,
+            reason="withdrawal",
+        )
+
+        approved_second = ReturnService.approve_return(
+            return_request_id=second_request.pk,
+            store=self.store_a,
+            approved_by=self.user,
+        )
+
+        second_refund = approved_second.payment_refund
+
+        self.assertEqual(second_refund.amount, Decimal("15.00"))
+        self.assertFalse(second_refund.refund_shipping)
+
+        shipping_refunds = PaymentRefundItem.objects.filter(
+            payment_transaction_item=data["shipping_payment_item"],
+        )
+
+        self.assertEqual(shipping_refunds.count(), 1)
+        self.assertEqual(
+            shipping_refunds.aggregate(total=Sum("amount"))["total"],
+            Decimal("99.99"),
+        )
+
+    @patch.object(RefundService, "_call_provider")
+    def test_product_success_shipping_failure_keeps_return_pending(
+        self,
+        mock_provider,
+    ):
+        data = self._create_two_unit_return_scenario()
+        order_item = data["order_item"]
+        payment_transaction = data["payment_transaction"]
+        suborder = data["suborder"]
+        product_payment_item = data["product_payment_item"]
+        shipping_payment_item = data["shipping_payment_item"]
+
+        refund = PaymentRefund.objects.create(
+            payment_transaction=payment_transaction,
+            suborder=suborder,
+            amount=Decimal("114.99"),
+            currency="TRY",
+            status=RefundStatus.PENDING,
+            reason="Customer withdrawal",
+            refund_type=RefundType.CUSTOMER_REQUEST,
+            refund_shipping=True,
+        )
+
+        return_request = ReturnRequest.objects.create(
+            order_item=order_item,
+            unit_number=2,
+            reason="withdrawal",
+            requested_by=self.user,
+            status=ReturnStatus.REFUND_PENDING,
+            payment_refund=refund,
+        )
+
+        product_refund_item = PaymentRefundItem.objects.create(
+            payment_refund=refund,
+            payment_transaction_item=product_payment_item,
+            amount=Decimal("15.00"),
+            status=RefundStatus.PENDING,
+            conversation_id=f"TEST-PRODUCT-{uuid4().hex}",
+        )
+
+        shipping_refund_item = PaymentRefundItem.objects.create(
+            payment_refund=refund,
+            payment_transaction_item=shipping_payment_item,
+            amount=Decimal("99.99"),
+            status=RefundStatus.PENDING,
+            conversation_id=f"TEST-SHIPPING-{uuid4().hex}",
+        )
+
+        def provider_response(**kwargs):
+            transaction_id = kwargs["payment_transaction_id"]
+
+            if transaction_id == "PTX-RETURN-PRODUCT":
+                return {
+                    "status": "success",
+                    "paymentTransactionId": "PTX-RETURN-PRODUCT",
+                    "price": "15.00",
+                    "currency": "TRY",
+                    "refundHostReference": "HOST-PRODUCT-TEST",
+                    "retryable": False,
+                }
+
+            if transaction_id == "PTX-RETURN-SHIPPING":
+                return {
+                    "status": "failure",
+                    "errorCode": "TEST_SHIPPING_FAILURE",
+                    "errorMessage": "Simulated shipping refund failure",
+                    "retryable": False,
+                }
+
+            raise AssertionError(
+                f"Unexpected payment transaction ID: {transaction_id}"
+            )
+
+        mock_provider.side_effect = provider_response
+
+        self._install_provider_success_authentication(
+            mock_provider, payment_transaction
+        )
+
+        result = RefundService.process_refund(
+            payment_refund_id=refund.pk,
+        )
+
+        refund.refresh_from_db()
+        return_request.refresh_from_db()
+        product_refund_item.refresh_from_db()
+        shipping_refund_item.refresh_from_db()
+        payment_transaction.refresh_from_db()
+
+        self.assertEqual(result.status, RefundStatus.FAILED)
+        self.assertEqual(refund.status, RefundStatus.FAILED)
+
+        self.assertEqual(
+            product_refund_item.status,
+            RefundStatus.SUCCESS,
+        )
+        self.assertEqual(
+            product_refund_item.provider_refund_id,
+            "HOST-PRODUCT-TEST",
+        )
+
+        self.assertEqual(
+            shipping_refund_item.status,
+            RefundStatus.FAILED,
+        )
+        self.assertEqual(
+            shipping_refund_item.provider_error_code,
+            "TEST_SHIPPING_FAILURE",
+        )
+        self.assertFalse(shipping_refund_item.retryable)
+
+        # İade talebi ancak bütün iade kalemleri tamamlanınca kapanmalı.
+        self.assertEqual(
+            return_request.status,
+            ReturnStatus.REFUND_PENDING,
+        )
+
+        self.assertEqual(
+            payment_transaction.status,
+            PaymentStatus.PARTIALLY_REFUNDED,
+        )
+
+        self.assertEqual(mock_provider.call_count, 2)
+
+        called_transaction_ids = {
+            call.kwargs["payment_transaction_id"]
+            for call in mock_provider.call_args_list
+        }
+
+        self.assertEqual(
+            called_transaction_ids,
+            {
+                "PTX-RETURN-PRODUCT",
+                "PTX-RETURN-SHIPPING",
+            },
+        )
+
+    
+    @patch.object(RefundService, "_call_provider")
+    def test_seller_partial_cancellation_refunds_exact_unit_amount(
+        self,
+        mock_provider,
+    ):
+        order = self._create_order(
+            total=Decimal("100.01"),
+        )
+
+        suborder = self._create_suborder(
+            order=order,
+            store=self.store_a,
+            total=Decimal("100.01"),
+            status=SubOrderStatus.PREPARING,
+        )
+
+        store_product = self._create_store_product(
+            store=self.store_a,
+        )
+
+        order_item = self._create_order_item(
+            suborder=suborder,
+            store_product=store_product,
+            total=Decimal("100.01"),
+        )
+
+        order_item.quantity = 2
+        order_item.save(update_fields=["quantity"])
+
+        payment_transaction = self._create_payment(
+            order=order,
+            amount=Decimal("100.01"),
+        )
+
+        transaction_item = self._create_transaction_item(
+            payment_transaction=payment_transaction,
+            order_item=order_item,
+            suborder=suborder,
+            price=Decimal("100.01"),
+            provider_transaction_id="PTX-PARTIAL-UNIT",
+        )
+
+        refund = PaymentRefund.objects.create(
+            payment_transaction=payment_transaction,
+            suborder=suborder,
+            amount=Decimal("50.01"),
+            currency="TRY",
+            status=RefundStatus.PENDING,
+            reason="Seller partial cancellation",
+            refund_type=RefundType.SELLER_PARTIAL_CANCELLATION,
+            refund_shipping=False,
+        )
+
+        cancellation = SubOrderItemCancellation.objects.create(
+            order_item=order_item,
+            cancelled_by=self.user,
+            quantity=1,
+            reason="Seller partial cancellation",
+            refund_amount=Decimal("50.01"),
+            payment_refund=refund,
+        )
+
+        SubOrderItemCancellationUnit.objects.create(
+            cancellation=cancellation,
+            order_item=order_item,
+            unit_number=1,
+        )
+
+        mock_provider.return_value = {
+            "status": "success",
+            "paymentTransactionId": "PTX-PARTIAL-UNIT",
+            "price": "50.01",
+            "currency": "TRY",
+            "refundHostReference": "HOST-PARTIAL-UNIT",
+            "retryable": False,
+        }
+
+        self._install_provider_success_authentication(
+            mock_provider, payment_transaction
+        )
+
+        result = RefundService.process_refund(
+            payment_refund_id=refund.pk,
+        )
+
+        refund.refresh_from_db()
+        payment_transaction.refresh_from_db()
+
+        refund_item = PaymentRefundItem.objects.get(
+            payment_refund=refund,
+        )
+
+        self.assertEqual(result.status, RefundStatus.SUCCESS)
+        self.assertEqual(refund.status, RefundStatus.SUCCESS)
+        self.assertEqual(refund_item.status, RefundStatus.SUCCESS)
+        self.assertEqual(refund_item.amount, Decimal("50.01"))
+        self.assertEqual(
+            refund_item.payment_transaction_item_id,
+            transaction_item.pk,
+        )
+        self.assertEqual(
+            payment_transaction.status,
+            PaymentStatus.PARTIALLY_REFUNDED,
+        )
+
+        mock_provider.assert_called_once()
+        self.assertEqual(
+            mock_provider.call_args.kwargs["amount"],
+            Decimal("50.01"),
+        )
+
+    
+    @patch.object(RefundService, "_call_provider")
+    def test_seller_partial_cancellation_aggregates_multiple_units(
+        self,
+        mock_provider,
+    ):
+        order = self._create_order(
+            total=Decimal("100.01"),
+        )
+
+        suborder = self._create_suborder(
+            order=order,
+            store=self.store_a,
+            total=Decimal("100.01"),
+            status=SubOrderStatus.PREPARING,
+        )
+
+        store_product = self._create_store_product(
+            store=self.store_a,
+        )
+
+        order_item = self._create_order_item(
+            suborder=suborder,
+            store_product=store_product,
+            total=Decimal("100.01"),
+        )
+
+        order_item.quantity = 2
+        order_item.save(update_fields=["quantity"])
+
+        payment_transaction = self._create_payment(
+            order=order,
+            amount=Decimal("100.01"),
+        )
+
+        self._create_transaction_item(
+            payment_transaction=payment_transaction,
+            order_item=order_item,
+            suborder=suborder,
+            price=Decimal("100.01"),
+            provider_transaction_id="PTX-PARTIAL-BOTH",
+        )
+
+        refund = PaymentRefund.objects.create(
+            payment_transaction=payment_transaction,
+            suborder=suborder,
+            amount=Decimal("100.01"),
+            currency="TRY",
+            status=RefundStatus.PENDING,
+            reason="Seller cancelled both units",
+            refund_type=RefundType.SELLER_PARTIAL_CANCELLATION,
+            refund_shipping=False,
+        )
+
+        for unit_number, amount in (
+            (1, Decimal("50.01")),
+            (2, Decimal("50.00")),
+        ):
+            cancellation = SubOrderItemCancellation.objects.create(
+                order_item=order_item,
+                cancelled_by=self.user,
+                quantity=1,
+                reason="Seller partial cancellation",
+                refund_amount=amount,
+                payment_refund=refund,
+            )
+
+            SubOrderItemCancellationUnit.objects.create(
+                cancellation=cancellation,
+                order_item=order_item,
+                unit_number=unit_number,
+            )
+
+        mock_provider.return_value = {
+            "status": "success",
+            "paymentTransactionId": "PTX-PARTIAL-BOTH",
+            "price": "100.01",
+            "currency": "TRY",
+            "refundHostReference": "HOST-PARTIAL-BOTH",
+            "retryable": False,
+        }
+
+        self._install_provider_success_authentication(
+            mock_provider, payment_transaction
+        )
+
+        result = RefundService.process_refund(
+            payment_refund_id=refund.pk,
+        )
+
+        refund.refresh_from_db()
+
+        refund_items = list(
+            PaymentRefundItem.objects.filter(
+                payment_refund=refund,
+            )
+        )
+
+        self.assertEqual(result.status, RefundStatus.SUCCESS)
+        self.assertEqual(refund.status, RefundStatus.SUCCESS)
+        self.assertEqual(len(refund_items), 1)
+        self.assertEqual(
+            refund_items[0].amount,
+            Decimal("100.01"),
+        )
+        self.assertEqual(
+            refund_items[0].status,
+            RefundStatus.SUCCESS,
+        )
+
+        mock_provider.assert_called_once()
+        self.assertEqual(
+            mock_provider.call_args.kwargs["amount"],
+            Decimal("100.01"),
+        )
+
+    
+    def test_shipping_refund_requires_shipping_transaction_item(self):
+        order = self._create_order(total=Decimal("100.00"))
+    
+        suborder = self._create_suborder(
+            order=order,
+            store=self.store_a,
+            total=Decimal("100.00"),
+        )
+    
+        store_product = self._create_store_product(store=self.store_a)
+    
+        order_item = self._create_order_item(
+            suborder=suborder,
+            store_product=store_product,
+            total=Decimal("100.00"),
+        )
+    
+        payment_transaction = self._create_payment(
+            order=order,
+            amount=Decimal("100.00"),
+        )
+    
+        self._create_transaction_item(
+            payment_transaction=payment_transaction,
+            order_item=order_item,
+            suborder=suborder,
+            price=Decimal("100.00"),
+            provider_transaction_id="PTX-MISSING-SHIPPING",
+        )
+    
+        refund = self._create_refund(
+            payment_transaction=payment_transaction,
+            suborder=suborder,
+            amount=Decimal("100.00"),
+            refund_shipping=True,
+        )
+    
+        with patch.object(RefundService, "_call_provider") as mock_provider:
+            with self.assertRaises(RefundError):
+                RefundService.process_refund(
+                    payment_refund_id=refund.pk,
+                )
+    
+            mock_provider.assert_not_called()
+    
+        self.assertFalse(
+            PaymentRefundItem.objects.filter(
+                payment_refund=refund,
+            ).exists()
+        )
+    
+

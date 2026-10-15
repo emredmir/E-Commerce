@@ -1,0 +1,176 @@
+{% load tz %}
+<div
+    class="order-return-entry"
+    data-return-entry="{{ return_request.pk }}"
+>
+    <div class="order-return-item">
+
+        <div class="order-return-item-header">
+            <div>
+                <div class="order-return-reference">
+                    İade kodu: {{ return_request.reference }}
+                </div>
+
+                <div class="order-return-meta">
+                    {{ return_request.unit_number }}. adet
+                    · {{ return_request.get_reason_display }}
+                </div>
+            </div>
+
+            <span class="order-return-status">
+                {{ return_request.get_status_display }}
+            </span>
+        </div>
+
+        <div class="order-return-meta">
+
+            <div>
+                <strong>Talep tarihi:</strong>
+                {{ return_request.created_at|localtime|date:"d.m.Y H:i" }}
+            </div>
+
+            {% if return_request.customer_note %}
+                <div>
+                    <strong>Açıklama:</strong>
+                    {{ return_request.customer_note }}
+                </div>
+            {% endif %}
+
+            {% if return_request.return_tracking_number %}
+                <div>
+                    <strong>Kargo takip numarası:</strong>
+                    {{ return_request.return_tracking_number }}
+                </div>
+            {% endif %}
+
+            {% if return_request.return_shipped_at %}
+                <div>
+                    <strong>Kargoya veriliş:</strong>
+                    {{ return_request.return_shipped_at|localtime|date:"d.m.Y H:i" }}
+                </div>
+            {% endif %}
+
+            {% if return_request.delivered_at %}
+                <div>
+                    <strong>Teslim alınma:</strong>
+                    {{ return_request.delivered_at|localtime|date:"d.m.Y H:i" }}
+                </div>
+            {% endif %}
+
+            {% if return_request.payment_refund %}
+                <div>
+                    <strong>İade tutarı:</strong>
+                    {{ return_request.payment_refund.amount|floatformat:2 }}
+                    {{ order.currency }}
+                </div>
+
+                <div>
+                    <strong>Para iadesi:</strong>
+                    {{ return_request.payment_refund.get_status_display }}
+                </div>
+            {% endif %}
+
+        </div>
+
+        {% if return_request.status == "authorized" %}
+            <button
+                type="button"
+                class="order-return-secondary-button"
+                data-return-modal-open="return-shipment-modal-{{ return_request.pk }}"
+            >
+                <i class="fa-solid fa-truck"></i>
+                Kargo bilgilerini gir
+            </button>
+        {% endif %}
+
+    </div>
+
+    {% if return_request.status == "authorized" %}
+
+        <div
+            class="order-return-modal"
+            id="return-shipment-modal-{{ return_request.pk }}"
+            hidden
+        >
+            <div
+                class="order-return-modal-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="shipment-modal-title-{{ return_request.pk }}"
+            >
+                <div class="order-return-modal-header">
+                    <h3 id="shipment-modal-title-{{ return_request.pk }}">
+                        İade kargo bilgileri
+                    </h3>
+
+                    <button
+                        type="button"
+                        class="order-return-close"
+                        data-return-modal-close
+                        aria-label="Kapat"
+                    >
+                        &times;
+                    </button>
+                </div>
+
+                <p class="order-return-description">
+                    İade kodunuz:
+                    <strong>{{ return_request.reference }}</strong>
+                </p>
+
+                <form
+                    method="post"
+                    action="{% url 'accounts:customer_return_shipment' order_number=order.order_number return_request_id=return_request.pk %}"
+                    class="order-return-form"
+                    data-ajax-return-form
+                    data-return-form-kind="shipment"
+                >
+                    {% csrf_token %}
+
+                    <div class="order-return-field">
+                        <label for="cargo-{{ return_request.pk }}">
+                            Kargo firması
+                        </label>
+
+                        <select
+                            name="cargo_company"
+                            id="cargo-{{ return_request.pk }}"
+                            required
+                        >
+                            <option value="">Kargo firması seçin</option>
+
+                            {% for value, label in cargo_company_choices %}
+                                <option value="{{ value }}">
+                                    {{ label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="order-return-field">
+                        <label for="tracking-{{ return_request.pk }}">
+                            Kargo takip numarası
+                        </label>
+
+                        <input
+                            type="text"
+                            name="tracking_number"
+                            id="tracking-{{ return_request.pk }}"
+                            maxlength="100"
+                            required
+                            placeholder="Takip numaranızı girin"
+                        >
+                    </div>
+
+                    <button
+                        type="submit"
+                        class="order-return-submit"
+                    >
+                        Kargo bilgilerini kaydet
+                    </button>
+                </form>
+            </div>
+        </div>
+
+    {% endif %}
+</div>

@@ -5,6 +5,7 @@ from .views import (
     StoreQuestionsListView, StoreAnswerQuestionAPIView,
     StoreOrderListView, StoreOrderDetailView, StoreOrderStatusUpdateView,
     StoreOrderCancellationView,
+    StoreReturnDeliveryConfirmView, StoreReturnApproveView, StoreReturnDisputeView
     )
 from products.views.api import ProductQAAnswerDeleteAPIView
 
@@ -31,6 +32,15 @@ urlpatterns = [
     path('<slug:store_slug>/orders/', StoreOrderListView.as_view(), name="store_orders",),
     path('<slug:store_slug>/orders/<str:suborder_number>/', StoreOrderDetailView.as_view(), name="store_order_detail",),
     path("stores/<slug:store_slug>/orders/<str:suborder_number>/status/", StoreOrderStatusUpdateView.as_view(), name="store_order_status_update",),
+
+    # Returns
+    path('<slug:store_slug>/orders/<str:suborder_number>/returns/' 
+         '<int:return_request_id>/confirm-delivery/', StoreReturnDeliveryConfirmView.as_view(), name='store_return_delivery_confirm',),
+    path('<slug:store_slug>/orders/<str:suborder_number>/returns/' 
+         '<int:return_request_id>/approve/', StoreReturnApproveView.as_view(), name='store_return_approve',),
+    path(
+    '<slug:store_slug>/orders/<str:suborder_number>/returns/'
+    '<int:return_request_id>/dispute/', StoreReturnDisputeView.as_view(), name='store_return_dispute',),
 
     path("stores/<slug:store_slug>/orders/<str:suborder_number>/cancel/", StoreOrderCancellationView.as_view(), name="store_order_cancel",),
 

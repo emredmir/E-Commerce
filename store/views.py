@@ -22,14 +22,17 @@ from orders.models import (
     InvoiceItem,
     CargoCompany,
     RefundStatus,
+    ReturnReason, ReturnRequest, ReturnStatus, ReturnDeliverySource,
+    SubOrderItemCancellationUnit,
 )
 from orders.services.order import OrderService
 from orders.services.cancellation import CancellationService
 from orders.services.shipping import ShippingService
 from orders.services.refund import RefundService, RefundError
+from orders.services.returns import ReturnService
 from orders.exceptions import (
     OrderNotFoundError, InvalidSubOrderStatusTransitionError, InvoiceAlreadyExistsError, InvoiceCreationError,
-    ShippingOperationError, CancellationError
+    ShippingOperationError, CancellationError, ReturnOperationError
 )
 
 from products.mixins import (
@@ -838,19 +841,76 @@ class StoreOrderDetailView(
         except Invoice.DoesNotExist:
             invoice = None
 
-        can_cancel = suborder.status in {
-            SubOrderStatus.PENDING,
-            SubOrderStatus.PREPARING,
-        }
+        items = list(
+            suborder.items.all().order_by("pk")
+        )
+
+        # Daha önce iptal edilmiş birim sayıları
+        cancelled_counts = dict(
+            SubOrderItemCancellationUnit.objects
+            .filter(order_item__sub_order_id=suborder.pk)
+            .values("order_item_id")
+            .annotate(total=Count("pk"))
+            .values_list("order_item_id", "total")
+        )
+
+        # İade sürecinde bulunan veya iadesi tamamlanmış birimler
+        return_counts = dict(
+            ReturnRequest.objects
+            .filter(
+                order_item__sub_order_id=suborder.pk,
+                status__in=CancellationService.RESERVED_RETURN_STATUSES,
+            )
+            .values("order_item_id")
+            .annotate(total=Count("pk"))
+            .values_list("order_item_id", "total")
+        )
+
+        for item in items:
+            item.cancellable_quantity = max(
+                item.quantity
+                - cancelled_counts.get(item.pk, 0)
+                - return_counts.get(item.pk, 0),
+                0,
+            )
+
+        can_cancel = (
+            suborder.status in {
+                SubOrderStatus.PENDING,
+                SubOrderStatus.PREPARING,
+            }
+            and any(
+                item.cancellable_quantity > 0
+                for item in items
+            )
+        )
+
+        return_requests = (
+            ReturnRequest.objects
+            .filter(
+                order_item__sub_order_id=suborder.pk,
+            )
+            .select_related(
+                "order_item",
+                "requested_by",
+                "payment_refund",
+                "seller_approved_by",
+                "delivery_confirmed_by",
+                "disputed_by",
+            )
+            .order_by("-created_at", "-pk")
+        )
 
         context = {
             "store": store,
             "suborder": suborder,
             "main_order": suborder.order,
-            "items": list(suborder.items.all()),
+            "items": items,
             "invoice": invoice,
             "cargo_company_choices": CargoCompany.choices,
             "can_cancel": can_cancel,
+            "return_requests": list(return_requests),
+            "return_status_choices": ReturnStatus.choices,
         }
 
         return render(
@@ -858,6 +918,234 @@ class StoreOrderDetailView(
             self.template_name,
             context,
         )
+
+class StoreReturnDeliveryConfirmView(
+    SellerRequiredMixin,
+    StoreOwnerMixin,
+    View,
+):
+    """
+    Satıcı, kendi mağazasına ait iade paketini teslim alındı
+    olarak işaretler.
+    """
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        store = self.get_store()
+
+        try:
+            suborder = OrderService.get_suborder_for_store(
+                store=store,
+                suborder_number=kwargs["suborder_number"],
+            )
+        except OrderNotFoundError as exc:
+            raise Http404(str(exc)) from exc
+
+        return_request = (
+            ReturnRequest.objects
+            .filter(
+                pk=kwargs["return_request_id"],
+                order_item__sub_order_id=suborder.pk,
+            )
+            .first()
+        )
+
+        if return_request is None:
+            raise Http404("İade talebi bulunamadı.")
+
+        try:
+            ReturnService.confirm_return_delivered(
+                return_request_id=return_request.pk,
+                source=ReturnDeliverySource.SELLER,
+                store=store,
+                confirmed_by=request.user,
+            )
+
+        except ReturnOperationError as exc:
+            messages.error(request, str(exc))
+
+        else:
+            messages.success(
+                request,
+                "İade paketi teslim alınmış olarak kaydedildi.",
+            )
+
+        return redirect(
+            "store:store_order_detail",
+            store_slug=store.slug,
+            suborder_number=suborder.suborder_number,
+        )
+
+class StoreReturnApproveView(
+    SellerRequiredMixin,
+    StoreOwnerMixin,
+    View,
+):
+    """
+    Satıcı, kendi mağazasına ait iade talebini onaylar
+    ve hazırlanan para iadesini işler.
+    """
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        store = self.get_store()
+
+        try:
+            suborder = OrderService.get_suborder_for_store(
+                store=store,
+                suborder_number=kwargs["suborder_number"],
+            )
+        except OrderNotFoundError as exc:
+            raise Http404(str(exc)) from exc
+
+        return_request = (
+            ReturnRequest.objects
+            .filter(
+                pk=kwargs["return_request_id"],
+                order_item__sub_order_id=suborder.pk,
+            )
+            .first()
+        )
+
+        if return_request is None:
+            raise Http404("İade talebi bulunamadı.")
+
+        try:
+            approved_return = ReturnService.approve_return(
+                return_request_id=return_request.pk,
+                store=store,
+                approved_by=request.user,
+            )
+
+        except (ReturnOperationError, RefundError) as exc:
+            messages.error(request, str(exc))
+            return self._redirect(store, suborder)
+
+        payment_refund_id = approved_return.payment_refund_id
+
+        if payment_refund_id is None:
+            messages.error(
+                request,
+                "İade onaylandı ancak para iadesi kaydı bulunamadı.",
+            )
+            return self._redirect(store, suborder)
+
+        try:
+            refund = RefundService.process_refund(
+                payment_refund_id=payment_refund_id,
+            )
+
+        except RefundError as exc:
+            messages.warning(
+                request,
+                (
+                    "İade talebi onaylandı ancak ödeme iadesi "
+                    f"tamamlanamadı: {exc}"
+                ),
+            )
+            return self._redirect(store, suborder)
+
+        if refund.status == RefundStatus.SUCCESS:
+            messages.success(
+                request,
+                "İade onaylandı ve ücret başarıyla iade edildi.",
+            )
+
+        elif refund.status == RefundStatus.RECONCILIATION_REQUIRED:
+            messages.warning(
+                request,
+                (
+                    "İade onaylandı ancak ödeme sağlayıcısındaki "
+                    "sonuç doğrulanamadı. Kontrol gerekiyor."
+                ),
+            )
+
+        elif refund.status == RefundStatus.PENDING:
+            messages.info(
+                request,
+                "İade onaylandı. Para iadesi işlemi beklemede.",
+            )
+
+        elif refund.status == RefundStatus.FAILED:
+            messages.error(
+                request,
+                "İade onaylandı ancak para iadesi başarısız oldu.",
+            )
+
+        return self._redirect(store, suborder)
+
+    @staticmethod
+    def _redirect(store, suborder):
+        return redirect(
+            "store:store_order_detail",
+            store_slug=store.slug,
+            suborder_number=suborder.suborder_number,
+        )
+
+
+class StoreReturnDisputeView(
+    SellerRequiredMixin,
+    StoreOwnerMixin,
+    View,
+):
+    """
+    Satıcı, kendi mağazasına ait ve incelemede olan
+    iade talebine gerekçeli olarak itiraz eder.
+    """
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        store = self.get_store()
+
+        try:
+            suborder = OrderService.get_suborder_for_store(
+                store=store,
+                suborder_number=kwargs["suborder_number"],
+            )
+        except OrderNotFoundError as exc:
+            raise Http404(str(exc)) from exc
+
+        return_request = (
+            ReturnRequest.objects
+            .filter(
+                pk=kwargs["return_request_id"],
+                order_item__sub_order_id=suborder.pk,
+            )
+            .first()
+        )
+
+        if return_request is None:
+            raise Http404("İade talebi bulunamadı.")
+
+        reason = request.POST.get("reason", "")
+
+        try:
+            ReturnService.dispute_return(
+                return_request_id=return_request.pk,
+                store=store,
+                disputed_by=request.user,
+                reason=reason,
+            )
+
+        except ReturnOperationError as exc:
+            messages.error(request, str(exc))
+
+        else:
+            messages.success(
+                request,
+                "İade talebine itirazınız kaydedildi. "
+                "İade yönetici incelemesi bekliyor.",
+            )
+
+        return redirect(
+            "store:store_order_detail",
+            store_slug=store.slug,
+            suborder_number=suborder.suborder_number,
+        )
+
 
 class StoreOrderCancellationView(
     SellerRequiredMixin,
@@ -880,7 +1168,7 @@ class StoreOrderCancellationView(
         OrderService.get_suborder_for_store()
 
     Business logic:
-        CancellationService.cancel_suborder()
+        CancellationService.cancel_items()
     """
 
     http_method_names = ["post"]
@@ -892,7 +1180,6 @@ class StoreOrderCancellationView(
         **kwargs,
     ):
         store = self.get_store()
-        print("CANCEL POST:", request.POST)
 
         suborder_number = kwargs["suborder_number"]
 
@@ -918,7 +1205,6 @@ class StoreOrderCancellationView(
             "",
         ).strip()
 
-        print("CANCEL REASON:", repr(reason))
 
         if not reason:
             messages.error(
@@ -933,28 +1219,64 @@ class StoreOrderCancellationView(
             )
 
         # --------------------------------------------------------------
-        # CANCELLATION SERVICE
+        # SELECTED ITEMS
         # --------------------------------------------------------------
-        print(
-            "CALLING CANCELLATION SERVICE:",
-            suborder_number,
-            reason,
-        )
-        try:
-            cancellation = (
-                CancellationService.cancel_suborder(
-                    suborder=suborder,
-                    cancelled_by=request.user,
-                    reason=reason,
-                )
-            )
 
-        except CancellationError as exc:
+        selected_items = {}
+        quantity_prefix = "quantity_"
+
+        for key in request.POST:
+            if not key.startswith(quantity_prefix):
+                continue
+            
+            raw_item_id = key[len(quantity_prefix):]
+            values = request.POST.getlist(key)
+
+            try:
+                if len(values) != 1:
+                    raise ValueError
+
+                order_item_id = int(raw_item_id)
+                raw_quantity = values[0].strip()
+
+                if not raw_quantity:
+                    continue
+                
+                quantity = int(raw_quantity)
+
+            except (TypeError, ValueError):
+                messages.error(
+                    request,
+                    "Ürün veya iptal miktarı geçersiz.",
+                )
+                return redirect(
+                    "store:store_order_detail",
+                    store_slug=store.slug,
+                    suborder_number=suborder.suborder_number,
+                )
+
+            if order_item_id <= 0 or quantity < 0:
+                messages.error(
+                    request,
+                    "Ürün veya iptal miktarı geçersiz.",
+                )
+                return redirect(
+                    "store:store_order_detail",
+                    store_slug=store.slug,
+                    suborder_number=suborder.suborder_number,
+                )
+
+            # Sıfır seçilmeyen ürün anlamına gelir.
+            if quantity == 0:
+                continue
+            
+            selected_items[order_item_id] = quantity
+
+        if not selected_items:
             messages.error(
                 request,
-                str(exc),
+                "İptal etmek istediğiniz en az bir ürün ve adet seçmelisiniz.",
             )
-
             return redirect(
                 "store:store_order_detail",
                 store_slug=store.slug,
@@ -962,17 +1284,48 @@ class StoreOrderCancellationView(
             )
 
         # --------------------------------------------------------------
+        # CANCELLATION SERVICE
+        # --------------------------------------------------------------
+
+        try:
+            cancellation_records = CancellationService.cancel_items(
+                suborder=suborder,
+                items=selected_items,
+                cancelled_by=request.user,
+                reason=reason,
+            )
+
+        except CancellationError as exc:
+            messages.error(
+                request,
+                str(exc),
+            )
+            return redirect(
+                "store:store_order_detail",
+                store_slug=store.slug,
+                suborder_number=suborder.suborder_number,
+            )
+
+        # Bu iptal çağrısındaki kayıtlar aynı PaymentRefund kaydını paylaşır.
+        payment_refund = next(
+            (
+                record.payment_refund
+                for record in cancellation_records
+                if record.payment_refund_id is not None
+            ),
+            None,
+        )
+
+        # --------------------------------------------------------------
         # Cancellation transaction burada commit edilmiştir.
         #
         # Artık provider refund işlenebilir.
         # --------------------------------------------------------------
 
-        payment_refund = cancellation.payment_refund
-
         if payment_refund is None:
             messages.success(
                 request,
-                "Sipariş başarıyla iptal edildi.",
+                "Seçilen ürünler başarıyla iptal edildi.",
             )
 
             return redirect(
@@ -990,7 +1343,7 @@ class StoreOrderCancellationView(
             messages.warning(
                 request,
                 (
-                    "Sipariş iptal edildi ancak "
+                    "Seçilen ürünler iptal edildi ancak "
                     f"iade işlemi tamamlanamadı: {exc}"
                 ),
             )
@@ -999,14 +1352,14 @@ class StoreOrderCancellationView(
             if refund.status == RefundStatus.SUCCESS:
                 messages.success(
                     request,
-                    "Sipariş iptal edildi ve ücret başarıyla iade edildi.",
+                    "Seçilen ürünler iptal edildi ve ücret başarıyla iade edildi.",
                 )
 
             elif refund.status == RefundStatus.RECONCILIATION_REQUIRED:
                 messages.warning(
                     request,
                     (
-                        "Sipariş iptal edildi ancak iade sonucu "
+                        "Seçilen ürünler iptal edildi ancak iade sonucu "
                         "doğrulanamadı. İade kontrolü gerekiyor."
                     ),
                 )
@@ -1015,7 +1368,7 @@ class StoreOrderCancellationView(
                 messages.info(
                     request,
                     (
-                        "Sipariş iptal edildi. "
+                        "Seçilen ürünler iptal edildi. "
                         "İade işlemi başlatıldı ve işleniyor."
                     ),
                 )
@@ -1024,7 +1377,7 @@ class StoreOrderCancellationView(
                 messages.error(
                     request,
                     (
-                        "Sipariş iptal edildi ancak ödeme iadesi "
+                        "Seçilen ürünler iptal edildi ancak ödeme iadesi "
                         "başarısız oldu."
                     ),
                 )
